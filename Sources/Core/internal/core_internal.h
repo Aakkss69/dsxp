@@ -282,7 +282,7 @@ typedef struct {
 /* Commands from the UI into the core (applied on the core thread). */
 typedef enum {
     CMD_NONE = 0, CMD_BIND, CMD_AXIS, CMD_TUNE, CMD_LIGHT, CMD_TRIGGER, CMD_FXMODE,
-    CMD_RUMBLE, CMD_RUMBLEMODE, CMD_RUMBLEPATH, CMD_SUSPEND
+    CMD_RUMBLE, CMD_RUMBLEMODE, CMD_RUMBLEPATH
 } cmd_kind_t;
 
 enum { LF_R = 1, LF_G = 2, LF_B = 4, LF_ON = 8, LF_PATTERN = 16, LF_SPEED = 32,
@@ -402,6 +402,7 @@ void core_on_device(core_t *c, bool bluetooth, bool added);
 void core_set_gate(core_t *c, bool bt, bool usb, bool xp, const char *xp_exe, double now);
 bool core_gate_due(const core_t *c, double now, double last_gate);
 void core_apply_cmd(core_t *c, const cmd_t *cmd, double now);
+void core_set_suspended(core_t *c, bool suspended, double now);
 void core_tick(core_t *c, double now);
 void core_snapshot(const core_t *c, dsxp_snap_t *out);
 void core_mark_dirty(core_t *c, double now);
@@ -426,6 +427,7 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
 
 /* core_thread.c */
 double now_sec(void);                       /* monotonic seconds */
+extern bool runtime_test_disable_hid;       /* tests: run without IOKit HID */
 
 /* fileio.c */
 char *file_read_all(const char *path, size_t max, size_t *len);

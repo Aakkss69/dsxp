@@ -67,9 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
-        CoreBridge.shared.stop()            // releases X-Plane, quiets the controller, saves
-        dsxp_guard_release(guardFD)         // clean exit: the guard leaves quietly
-        guardFD = -1
+        // releases X-Plane, quiets the controller, saves
+        if CoreBridge.shared.stop() {
+            dsxp_guard_release(guardFD)     // clean exit: the guard leaves quietly
+            guardFD = -1
+        }
+        // otherwise the pipe closes when the process exits and the guard cleans up
     }
 
     // MARK: status

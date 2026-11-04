@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,22 +23,23 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static volatile sig_atomic_t g_stop;
-static long g_capture_left;
+/* written by the signal handler and the core thread, read by main (F26) */
+static atomic_bool g_stop;
+static atomic_long g_capture_left;
 static bool g_verify;
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static ds_state_t g_view;
 static gesture_t g_gest;
 static tuning_t g_tune = { 0.06, 1.0, 0.5 };
 
-static void on_signal(int s) { (void)s; g_stop = 1; }
+static void on_signal(int s) { (void)s; atomic_store(&g_stop, true); }   /* lock-free: signal-safe */
 
 static void raw_cb(void *ctx, const unsigned char *r, long len) {
     (void)ctx;
-    if (g_capture_left > 0) {
+    if (atomic_load(&g_capture_left) > 0) {
         for (long i = 0; i < len; i++) printf("%02x%s", r[i], i + 1 < len ? " " : "\n");
         fflush(stdout);
-        if (--g_capture_left == 0) g_stop = 1;
+        if (atomic_fetch_sub(&g_capture_left, 1) == 1) atomic_store(&g_stop, true);
     }
     if (g_verify) {
         pthread_mutex_lock(&g_lock);
@@ -72,11 +74,21 @@ int main(int argc, char **argv) {
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--verify")) g_verify = true;
-        else if (!strcmp(argv[i], "--capture") && i + 1 < argc) g_capture_left = atol(argv[++i]);
+        else if (!strcmp(argv[i], "--capture") && i + 1 < argc) {
+            /* a typo must not silently turn a passive capture into live driving */
+            char *e; errno = 0;
+            long n = strtol(argv[++i], &e, 10);
+            if (*e || e == argv[i] || errno || n < 1 || n > 1000000) { usage(argv[0]); return 2; }
+            atomic_store(&g_capture_left, n);
+        }
         else if (!strcmp(argv[i], "--data") && i + 1 < argc) snprintf(data, sizeof data, "%s", argv[++i]);
         else if (!strcmp(argv[i], "--logs") && i + 1 < argc) snprintf(logs, sizeof logs, "%s", argv[++i]);
         else if (!strcmp(argv[i], "--commands") && i + 1 < argc) snprintf(cmds, sizeof cmds, "%s", argv[++i]);
-        else if (!strcmp(argv[i], "--run-for") && i + 1 < argc) run_for = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--run-for") && i + 1 < argc) {
+            char *e; errno = 0;
+            run_for = strtod(argv[++i], &e);
+            if (*e || e == argv[i] || errno || !(run_for > 0)) { usage(argv[0]); return 2; }
+        }
         else if (!strcmp(argv[i], "-v")) verbose = true;
         else { usage(argv[0]); return 2; }
     }
@@ -101,16 +113,17 @@ int main(int argc, char **argv) {
     cfg.log_dir = logs;
     cfg.commands_path = access(cmds, R_OK) == 0 ? cmds : "";
     cfg.log_retention_days = 14;
-    cfg.verbose = verbose || (!g_verify && g_capture_left == 0);
-    cfg.dry_run = g_verify || g_capture_left > 0;
+    long capture = atomic_load(&g_capture_left);
+    cfg.verbose = verbose || (!g_verify && capture == 0);
+    cfg.dry_run = g_verify || capture > 0;
     cfg.on_raw_report = raw_cb;
     if (dsxp_start(&cfg) != 0) { fprintf(stderr, "dsxp_start failed\n"); return 1; }
 
     double t0 = now_sec();
-    while (!g_stop) {
+    while (!atomic_load(&g_stop)) {
         usleep(g_verify ? 100000 : 500000);
         if (run_for > 0 && now_sec() - t0 >= run_for) break;
-        if (g_capture_left > 0) continue;
+        if (atomic_load(&g_capture_left) > 0) continue;
         dsxp_status_t st;
         dsxp_get_status(&st);
         if (g_verify) {

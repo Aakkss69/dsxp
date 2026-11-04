@@ -64,7 +64,9 @@ typedef struct {
 /* Start / stop. dsxp_stop releases X-Plane's controls, quiets the controller
  * and flushes settings before it returns (or after timeout_sec at most). */
 int  dsxp_start(const dsxp_config_t *cfg);   /* 0 on success */
-void dsxp_stop(double timeout_sec);          /* idempotent   */
+/* Returns false if the core did not finish within timeout_sec (0.1-10 s): the
+ * crash guard should then be left to clean up, and dsxp_start will refuse. */
+bool dsxp_stop(double timeout_sec);          /* idempotent   */
 bool dsxp_is_running(void);
 
 void dsxp_get_status(dsxp_status_t *out);

@@ -21,6 +21,7 @@
 #include <dispatch/dispatch.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -75,12 +76,15 @@ typedef struct {
     pthread_mutex_t w_lock;
     pthread_cond_t  w_cv;
     unsigned char w_rep[OUT_REPORT_LEN];
-    bool w_pending, w_stop, sync_out;
+    bool w_pending, w_stop, w_done, sync_out;
     IOHIDDeviceRef w_dev;
 
     dispatch_queue_t io;
     int hid_open_result;
     bool imported;
+    bool zombie;                /* a stop timed out: threads may still be alive */
+    atomic_int want_suspend;    /* -1 none, 0 resume, 1 suspend (F21) */
+    atomic_uint cmds_gen;       /* bumped on every catalogue load (F17) */
 } runtime_t;
 
 static runtime_t R = {
@@ -89,7 +93,10 @@ static runtime_t R = {
     .cmds_lock = PTHREAD_RWLOCK_INITIALIZER,
     .w_lock = PTHREAD_MUTEX_INITIALIZER, .w_cv = PTHREAD_COND_INITIALIZER,
     .sock = -1,
+    .want_suspend = -1,
 };
+
+bool runtime_test_disable_hid = false;   /* tests: run the core without IOKit HID */
 
 static unsigned char g_bt_buf[512];   /* input buffer of the one Bluetooth device */
 
@@ -155,7 +162,12 @@ static void *writer_main(void *arg) {
     for (;;) {
         pthread_mutex_lock(&R.w_lock);
         while (!R.w_pending && !R.w_stop) pthread_cond_wait(&R.w_cv, &R.w_lock);
-        if (R.w_stop) { pthread_mutex_unlock(&R.w_lock); break; }
+        if (!R.w_pending) {                 /* stop requested, nothing left to send */
+            R.w_done = true;
+            pthread_cond_broadcast(&R.w_cv);
+            pthread_mutex_unlock(&R.w_lock);
+            break;
+        }
         unsigned char rep[OUT_REPORT_LEN];
         memcpy(rep, R.w_rep, sizeof rep);
         R.w_pending = false;
@@ -325,10 +337,21 @@ static void publish(core_t *c, double now) {
     st.hid_open_result = R.hid_open_result;
     st.report_hz = c->report_hz;
     snprintf(st.xp_exe_path, sizeof st.xp_exe_path, "%s", c->xp_exe);
-    pthread_rwlock_rdlock(&R.cmds_lock);
-    st.ncmds = R.ncmds;
-    snprintf(st.commands_path, sizeof st.commands_path, "%s", R.commands_path);
-    pthread_rwlock_unlock(&R.cmds_lock);
+    /* the catalogue changes rarely: take its lock only when the generation moved,
+     * not 60 times a second (F17) */
+    static unsigned seen_gen = (unsigned)-1;
+    static int cached_ncmds;
+    static char cached_path[1024];
+    unsigned gen = atomic_load(&R.cmds_gen);
+    if (gen != seen_gen) {
+        pthread_rwlock_rdlock(&R.cmds_lock);
+        cached_ncmds = R.ncmds;
+        snprintf(cached_path, sizeof cached_path, "%s", R.commands_path);
+        pthread_rwlock_unlock(&R.cmds_lock);
+        seen_gen = gen;
+    }
+    st.ncmds = cached_ncmds;
+    snprintf(st.commands_path, sizeof st.commands_path, "%s", cached_path);
 
     pthread_mutex_lock(&R.snap_lock);
     R.snap = snap;
@@ -354,14 +377,29 @@ static void shutdown_core(void) {
     xp_disengage(c, now_sec());
     telemetry_unsubscribe(c);
 
-    /* stop the writer, then send the quiet report synchronously */
+    /* The quiet report goes through the writer like any other; then the writer is
+     * asked to finish. A Bluetooth write can block (weak link, controller out of
+     * range), so it gets 0.3 s and is then left behind instead of holding up quit;
+     * the crash guard covers the controller in that case (F1). */
+    out_quiet(c);
     pthread_mutex_lock(&R.w_lock);
     R.w_stop = true;
-    R.sync_out = true;
-    pthread_cond_signal(&R.w_cv);
+    pthread_cond_broadcast(&R.w_cv);
+    double deadline = now_sec() + 0.3;
+    while (!R.w_done) {
+        double left = deadline - now_sec();
+        if (left <= 0) break;
+        struct timespec rel = { (time_t)left, (long)((left - (double)(time_t)left) * 1e9) };
+        pthread_cond_timedwait_relative_np(&R.w_cv, &R.w_lock, &rel);
+    }
+    bool writer_done = R.w_done;
     pthread_mutex_unlock(&R.w_lock);
-    pthread_join(R.out_th, NULL);
-    out_quiet(c);
+    if (writer_done) pthread_join(R.out_th, NULL);
+    else {
+        pthread_detach(R.out_th);
+        R.zombie = true;
+        dsxp_log("a controller write was still blocked at quit; left it behind");
+    }
 
     /* drain queued saves, then write the final state synchronously */
     dispatch_sync_f(R.io, NULL, noop);
@@ -386,6 +424,8 @@ static void timer_cb(CFRunLoopTimerRef t, void *info) {
     core_t *c = &R.core;
     drain_udp(c, now);
     drain_cmds(c, now);
+    int ws = atomic_exchange(&R.want_suspend, -1);
+    if (ws >= 0) core_set_suspended(c, ws == 1, now);
     if (core_gate_due(c, now, R.last_gate)) {
         R.last_gate = now;
         bool bt, usb;
@@ -393,6 +433,13 @@ static void timer_cb(CFRunLoopTimerRef t, void *info) {
         char exe[1024];
         bool xp = gate_xplane_running(exe, sizeof exe);
         atomic_store(&R.access, (int)check_access());
+        /* Input Monitoring granted after launch: open the HID manager now instead of
+         * waiting for a relaunch (F22) */
+        if (R.hid_open_result != 0 && R.mgr && atomic_load(&R.access) == DSXP_ACCESS_GRANTED) {
+            IOReturn r = IOHIDManagerOpen(R.mgr, kIOHIDOptionsTypeNone);
+            R.hid_open_result = (int)r;
+            if (r == kIOReturnSuccess) dsxp_log("input access granted - controller access opened");
+        }
         core_set_gate(c, bt, usb, xp, exe, now);
     }
     core_tick(c, now);
@@ -405,7 +452,7 @@ static void *core_main(void *arg) {
     pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
     R.rl = (CFRunLoopRef)CFRetain(CFRunLoopGetCurrent());
 
-    R.mgr = open_hid(R.rl, &R.hid_open_result);
+    R.mgr = runtime_test_disable_hid ? NULL : open_hid(R.rl, &R.hid_open_result);
 
     CFRunLoopTimerContext tc = { 0 };
     R.timer = CFRunLoopTimerCreate(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + 0.01,
@@ -454,6 +501,7 @@ static void load_commands_now(const char *path) {
     R.ncmds = n;
     snprintf(R.commands_path, sizeof R.commands_path, "%s", n > 0 ? path : "");
     pthread_rwlock_unlock(&R.cmds_lock);
+    atomic_fetch_add(&R.cmds_gen, 1);
     free(old);
 
     if (n > 0) dsxp_log("loaded %d X-Plane commands from %s", n, path);
@@ -477,13 +525,20 @@ static bool open_udp(void) {
     fcntl(R.sock, F_SETFD, FD_CLOEXEC);
     fcntl(R.sock, F_SETFL, fcntl(R.sock, F_GETFL) | O_NONBLOCK);
     /*
-     * Deliberately NOT binding a fixed source port: 49010 belongs to X-Plane's
-     * own RakNet stack, and taking it makes the sim fail with "Failed to
-     * initialize UDP RakNet connectivity". An ephemeral port is correct; X-Plane
-     * replies to whatever source it sees.
+     * Bound to 127.0.0.1 with an ephemeral port: only this Mac can send to it,
+     * and no fixed port is taken - 49010 belongs to X-Plane's own RakNet stack,
+     * and taking it makes the sim fail with "Failed to initialize UDP RakNet
+     * connectivity". X-Plane replies to whatever source it sees. The system's
+     * default receive buffer (net.inet.udp.recvspace) is already larger than
+     * the 256 KB the prototype asked for, so it is left alone (F16).
      */
-    int rcv = 256 * 1024;   /* room for a burst of RREF replies */
-    setsockopt(R.sock, SOL_SOCKET, SO_RCVBUF, &rcv, sizeof rcv);
+    struct sockaddr_in me;
+    memset(&me, 0, sizeof me);
+    me.sin_family = AF_INET;
+    me.sin_port = 0;
+    me.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (bind(R.sock, (const struct sockaddr *)&me, sizeof me) != 0)
+        dsxp_log("cannot bind the UDP socket to loopback");
     memset(&R.xp, 0, sizeof R.xp);
     R.xp.sin_family = AF_INET;
     R.xp.sin_port = htons(XP_PORT);
@@ -491,10 +546,23 @@ static bool open_udp(void) {
     return true;
 }
 
+/* Undo what a failed start opened (F20). */
+static void start_rollback(void) {
+    if (R.sock >= 0) { close(R.sock); R.sock = -1; }
+    log_shutdown();
+}
+
 int dsxp_start(const dsxp_config_t *cfg) {
     if (!cfg || !cfg->data_dir || !cfg->log_dir) return -1;
     pthread_mutex_lock(&R.life);
     if (R.running) { pthread_mutex_unlock(&R.life); return -2; }
+    if (R.zombie) { pthread_mutex_unlock(&R.life); return -5; }   /* earlier stop timed out */
+    /* paths that would be cut short would point at the wrong files (F19) */
+    if (strlen(cfg->data_dir) + sizeof "/bindings.conf.tmp.4294967295" >= sizeof R.data_dir ||
+        strlen(cfg->log_dir) + 32 >= sizeof R.log_dir) {
+        pthread_mutex_unlock(&R.life);
+        return -1;
+    }
 
     atomic_store(&R.stop_req, false);
     R.thread_ready = R.thread_done = false;
@@ -502,7 +570,8 @@ int dsxp_start(const dsxp_config_t *cfg) {
     R.seq = 0;
     R.status_sig[0] = 0;
     R.bt_dev = NULL;
-    R.w_pending = R.w_stop = R.sync_out = false;
+    R.w_pending = R.w_stop = R.w_done = R.sync_out = false;
+    atomic_store(&R.want_suspend, -1);
     R.w_dev = NULL;
     R.imported = false;
     R.hid_open_result = 0;
@@ -576,6 +645,7 @@ int dsxp_start(const dsxp_config_t *cfg) {
 
     if (pthread_create(&R.out_th, NULL, writer_main, NULL) != 0) {
         dsxp_log("cannot start the output thread");
+        start_rollback();
         pthread_mutex_unlock(&R.life);
         return -3;
     }
@@ -590,8 +660,9 @@ int dsxp_start(const dsxp_config_t *cfg) {
         R.w_stop = true;
         pthread_cond_signal(&R.w_cv);
         pthread_mutex_unlock(&R.w_lock);
-        pthread_mutex_unlock(&R.life);
         pthread_join(R.out_th, NULL);
+        start_rollback();
+        pthread_mutex_unlock(&R.life);
         return -4;
     }
     while (!R.thread_ready) pthread_cond_wait(&R.life_cv, &R.life);
@@ -600,22 +671,27 @@ int dsxp_start(const dsxp_config_t *cfg) {
     return 0;
 }
 
-void dsxp_stop(double timeout_sec) {
+bool dsxp_stop(double timeout_sec) {
     pthread_mutex_lock(&R.life);
-    if (!R.running) { pthread_mutex_unlock(&R.life); return; }
+    if (!R.running) { pthread_mutex_unlock(&R.life); return !R.zombie; }
     atomic_store(&R.stop_req, true);
     if (R.rl) CFRunLoopWakeUp(R.rl);
 
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    double secs = timeout_sec > 0 ? timeout_sec : 1.0;
-    ts.tv_sec += (time_t)secs;
-    ts.tv_nsec += (long)((secs - (double)(time_t)secs) * 1e9);
-    if (ts.tv_nsec >= 1000000000L) { ts.tv_sec++; ts.tv_nsec -= 1000000000L; }
-    while (!R.thread_done)
-        if (pthread_cond_timedwait(&R.life_cv, &R.life, &ts) == ETIMEDOUT) break;
+    /* Relative waits on the monotonic clock: a wall-clock step during quit can
+     * neither cut the wait short nor stretch it (F13). */
+    double secs = isfinite(timeout_sec) ? timeout_sec : 1.0;
+    if (secs < 0.1) secs = 0.1;
+    if (secs > 10.0) secs = 10.0;
+    double deadline = now_sec() + secs;
+    while (!R.thread_done) {
+        double left = deadline - now_sec();
+        if (left <= 0) break;
+        struct timespec rel = { (time_t)left, (long)((left - (double)(time_t)left) * 1e9) };
+        pthread_cond_timedwait_relative_np(&R.life_cv, &R.life, &rel);
+    }
     bool done = R.thread_done;
     R.running = false;
+    if (!done) R.zombie = true;
     pthread_mutex_unlock(&R.life);
 
     if (done) {
@@ -626,6 +702,7 @@ void dsxp_stop(double timeout_sec) {
         dsxp_log("core thread did not stop within %.1f s", secs);
     }
     log_shutdown();
+    return done && !R.zombie;
 }
 
 bool dsxp_is_running(void) {
@@ -662,9 +739,9 @@ static bool runtime_submit(void *ctx, const cmd_t *cmd) {
 }
 
 void dsxp_set_suspended(bool suspended) {
-    cmd_t c = { .kind = CMD_SUSPEND };
-    c.u.flag = suspended;
-    runtime_submit(NULL, &c);
+    /* an atomic, not the command ring: a full ring must never lose a resume (F21) */
+    atomic_store(&R.want_suspend, suspended ? 1 : 0);
+    if (R.rl) CFRunLoopWakeUp(R.rl);
 }
 
 dsxp_access_t dsxp_input_access(bool request) {

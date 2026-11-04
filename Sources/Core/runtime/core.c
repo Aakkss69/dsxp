@@ -154,6 +154,24 @@ static void apply_light(light_t *L, const light_t *v, unsigned m) {
     if (m & LF_MODE) L->mode = v->mode == LM_SIM ? LM_SIM : LM_MANUAL;
 }
 
+/* System sleep: hand X-Plane its controls back and quiet the controller. */
+void core_set_suspended(core_t *c, bool suspended, double now) {
+    if (suspended && !c->suspended) {
+        c->suspended = true;
+        xp_disengage(c, now);
+        c->rumble.left = c->rumble.right = 0;
+        c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+        out_mark(c);
+        dsxp_log("suspended (system sleep)");
+    } else if (!suspended && c->suspended) {
+        c->suspended = false;
+        c->force_gate = true;
+        if (c->s.fxmode == FXM_MANUAL) { c->fx_out[0] = c->s.fx_manual[0]; c->fx_out[1] = c->s.fx_manual[1]; }
+        out_mark(c);
+        dsxp_log("resumed");
+    }
+}
+
 void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
     settings_t *s = &c->s;
     switch (cmd->kind) {
@@ -248,22 +266,6 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         core_mark_dirty(c, now);
         out_mark(c);
         dsxp_log("rumble path -> %s", s->rumble_v2 ? "v2" : "classic");
-        break;
-    case CMD_SUSPEND:
-        if (cmd->u.flag && !c->suspended) {
-            c->suspended = true;
-            xp_disengage(c, now);
-            c->rumble.left = c->rumble.right = 0;
-            c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
-            out_mark(c);
-            dsxp_log("suspended (system sleep)");
-        } else if (!cmd->u.flag && c->suspended) {
-            c->suspended = false;
-            c->force_gate = true;
-            if (s->fxmode == FXM_MANUAL) { c->fx_out[0] = s->fx_manual[0]; c->fx_out[1] = s->fx_manual[1]; }
-            out_mark(c);
-            dsxp_log("resumed");
-        }
         break;
     default:
         break;

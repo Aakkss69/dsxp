@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <dispatch/dispatch.h>
 #include <os/log.h>
+#include <stdatomic.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +23,7 @@
 #define LOG_FILE_CAP (5L * 1024 * 1024)
 
 static struct {
-    bool on, echo;
+    atomic_bool on, echo;     /* read from every thread that logs (F18) */
     char dir[1024];
     int  retention_days;
     int  last_yday, last_year;
@@ -88,7 +89,7 @@ static void append_job(void *arg) {
 }
 
 static void enqueue(const char *prefix, const char *line) {
-    if (!L.on || !L.q) return;
+    if (!atomic_load(&L.on) || !L.q) return;
     log_job_t *j = malloc(sizeof *j);
     if (!j) return;
     j->prefix = prefix;
@@ -100,20 +101,20 @@ static void enqueue(const char *prefix, const char *line) {
 void log_init(const char *dir, int retention_days, bool echo_stderr) {
     snprintf(L.dir, sizeof L.dir, "%s", dir ? dir : "");
     L.retention_days = retention_days > 0 ? retention_days : 14;
-    L.echo = echo_stderr;
+    atomic_store(&L.echo, echo_stderr);
     L.last_yday = -1;
     L.last_year = -1;
     if (!L.q) L.q = dispatch_queue_create("dsxp.log", DISPATCH_QUEUE_SERIAL);
     if (!L.ol) L.ol = os_log_create("io.github.aakkss69.DSXP", "core");
-    L.on = L.dir[0] != 0;
-    if (L.on) dispatch_async_f(L.q, NULL, sweep_job);
+    atomic_store(&L.on, L.dir[0] != 0);
+    if (atomic_load(&L.on)) dispatch_async_f(L.q, NULL, sweep_job);
 }
 
 static void noop(void *arg) { (void)arg; }
 
 void log_shutdown(void) {
     if (L.q) dispatch_sync_f(L.q, NULL, noop);   /* flush pending lines */
-    L.on = false;
+    atomic_store(&L.on, false);
 }
 
 void dsxp_log(const char *fmt, ...) {
@@ -122,8 +123,8 @@ void dsxp_log(const char *fmt, ...) {
     va_start(ap, fmt);
     vsnprintf(msg, sizeof msg, fmt, ap);
     va_end(ap);
-    if (L.echo) fprintf(stderr, "[dsxp] %s\n", msg);
-    if (!L.on) return;
+    if (atomic_load(&L.echo)) fprintf(stderr, "[dsxp] %s\n", msg);
+    if (!atomic_load(&L.on)) return;
     /* the SDK's os_log macro carries an attribute this clang warns about */
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-attributes"
@@ -133,6 +134,6 @@ void dsxp_log(const char *fmt, ...) {
 }
 
 void log_report_line(const char *line) {
-    if (L.echo) fprintf(stderr, "[dsxp] %s\n", line);
+    if (atomic_load(&L.echo)) fprintf(stderr, "[dsxp] %s\n", line);
     enqueue("reports", line);
 }

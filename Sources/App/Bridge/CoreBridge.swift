@@ -69,7 +69,9 @@ final class CoreBridge {
         return rc
     }
 
-    func stop() { dsxp_stop(1.0) }
+    /// False when the core did not finish in time; the crash guard must then clean up.
+    @discardableResult
+    func stop() -> Bool { dsxp_stop(1.0) }
 
     func refresh() {
         var s = dsxp_status_t()

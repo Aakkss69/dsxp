@@ -1,7 +1,10 @@
 /* Core behaviour with a fake clock and captured packets: the gate, the override
  * planner, input staleness, telemetry, wind vs manual triggers, saves, output. */
 #include "tests.h"
+#include <ftw.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef struct { unsigned char d[520]; size_t n; } pkt_t;
 static pkt_t P[8192];
@@ -381,13 +384,11 @@ static void suspend_and_dry_run(void) {
     feed(&C, 128, 0x08, 1.0); tele(&C, 1.0);
     core_set_gate(&C, true, false, true, "X-Plane", 1.0);
     CHECK(C.engaged);
-    cmd_t sp = { .kind = CMD_SUSPEND }; sp.u.flag = true;
-    core_apply_cmd(&C, &sp, 1.1);
+    core_set_suspended(&C, true, 1.1);
     CHECK(!C.engaged);
     core_set_gate(&C, true, false, true, "X-Plane", 1.1);
     CHECK(!C.engaged);
-    sp.u.flag = false;
-    core_apply_cmd(&C, &sp, 1.2);
+    core_set_suspended(&C, false, 1.2);
     CHECK(C.force_gate);
     feed(&C, 128, 0x08, 1.2);
     core_set_gate(&C, true, false, true, "X-Plane", 1.2);
@@ -402,7 +403,69 @@ static void suspend_and_dry_run(void) {
     CHECK_INT(NP, 0);                                /* not a single packet to X-Plane */
 }
 
+static int rm_entry(const char *p, const struct stat *s, int flag, struct FTW *f) {
+    (void)s; (void)flag; (void)f;
+    return remove(p);
+}
+
+static bool wait_status(bool (*ok)(const dsxp_status_t *), dsxp_status_t *st) {
+    for (int i = 0; i < 200; i++) {               /* up to 2 s */
+        dsxp_get_status(st);
+        if (ok(st)) return true;
+        usleep(10000);
+    }
+    return false;
+}
+static bool st_ticking(const dsxp_status_t *s) { return s->seq > 3; }
+static bool st_suspended(const dsxp_status_t *s) { return s->suspended; }
+static bool st_resumed(const dsxp_status_t *s) { return !s->suspended; }
+
+/* The real runtime (threads, run loop, queue, snapshot), without IOKit HID and
+ * without talking to X-Plane: start, suspend, resume, stop, restart (F1, F21). */
+static void runtime_smoke(void) {
+    const char *tmp = getenv("TMPDIR");
+    char root[1024];
+    snprintf(root, sizeof root, "%s/dsxp-smoke-XXXXXX", tmp && *tmp ? tmp : "/tmp");
+    if (!mkdtemp(root)) { CHECK(!"mkdtemp"); return; }
+    char data[1100], logs[1100];
+    snprintf(data, sizeof data, "%s/data", root);
+    snprintf(logs, sizeof logs, "%s/logs", root);
+
+    runtime_test_disable_hid = true;
+    dsxp_config_t cfg;
+    memset(&cfg, 0, sizeof cfg);
+    cfg.data_dir = data;
+    cfg.log_dir = logs;
+    cfg.commands_path = "";
+    cfg.dry_run = true;
+    dsxp_status_t st;
+    CHECK_INT(dsxp_start(&cfg), 0);
+    CHECK(dsxp_is_running());
+    CHECK(wait_status(st_ticking, &st));
+    dsxp_set_suspended(true);
+    CHECK(wait_status(st_suspended, &st));
+    dsxp_set_suspended(false);
+    CHECK(wait_status(st_resumed, &st));
+    CHECK(dsxp_stop(2.0));
+    CHECK(!dsxp_is_running());
+    CHECK(access(data, F_OK) == 0);
+    CHECK_INT(dsxp_start(&cfg), 0);                  /* restart after a clean stop */
+    CHECK(wait_status(st_ticking, &st));
+    CHECK(dsxp_stop(NAN));                            /* NaN timeout is clamped, not UB */
+
+    char longp[1100];
+    memset(longp, 'a', sizeof longp - 1);
+    longp[0] = '/';
+    longp[sizeof longp - 1] = 0;
+    cfg.data_dir = longp;
+    CHECK_INT(dsxp_start(&cfg), -1);                  /* would be truncated: refused (F19) */
+    CHECK(!dsxp_is_running());
+    runtime_test_disable_hid = false;
+    nftw(root, rm_entry, 16, FTW_DEPTH | FTW_PHYS);
+}
+
 void test_core(void) {
+    runtime_smoke();
     gate_and_overrides();
     staleness();
     telemetry_and_triggers();
