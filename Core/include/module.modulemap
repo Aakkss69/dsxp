@@ -1,0 +1,4 @@
+module DSXPCore {
+    header "dsxp_core.h"
+    export *
+}

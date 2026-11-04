@@ -1,159 +1,189 @@
-/* X-Plane side: UDP DREF/CMND packets, override handling, per-frame push. */
-#include "dsxp.h"
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <stdlib.h>
+/*
+ * X-Plane side: override handling, per-frame push of axes and commands.
+ * Pure: packets go out through c->sinks.udp_send.
+ */
+#include "core_internal.h"
 #include <string.h>
-#include <errno.h>
 
-/* Writable datarefs, all confirmed against
- * X-Plane 12/Resources/plugins/DataRefs.txt (writable column = "y"). */
+/* Writable datarefs, confirmed against X-Plane 12 Resources/plugins/DataRefs.txt
+ * (writable column = "y"). */
 #define DR_PITCH   "sim/joystick/yoke_pitch_ratio"
 #define DR_ROLL    "sim/joystick/yoke_roll_ratio"
 #define DR_HEADING "sim/joystick/yoke_heading_ratio"
 #define DR_THROTL  "sim/cockpit2/engine/actuators/throttle_ratio_all"
 #define DR_LBRAKE  "sim/cockpit2/controls/left_brake_ratio"
 #define DR_RBRAKE  "sim/cockpit2/controls/right_brake_ratio"
-#define OV_PITCH   "sim/operation/override/override_joystick_pitch"
-#define OV_ROLL    "sim/operation/override/override_joystick_roll"
-#define OV_HEADING "sim/operation/override/override_joystick_heading"
-#define OV_BRAKES  "sim/operation/override/override_toe_brakes"
 
-static int g_sock = -1;
-static struct sockaddr_in g_xp;
-static bool   g_prev_btn[B_COUNT];
-static double g_last_cmd_time[B_COUNT];
+static const char *OV_PATH[OV_COUNT] = {
+    "sim/operation/override/override_joystick_pitch",
+    "sim/operation/override/override_joystick_roll",
+    "sim/operation/override/override_joystick_heading",
+    "sim/operation/override/override_toe_brakes",
+};
 
-void xp_udp_open(void) {
-    g_sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (g_sock < 0) { perror("socket"); exit(1); }
-
-    /*
-     * Deliberately NOT binding a fixed source port.
-     *
-     * An earlier version bound 49010 to give X-Plane a stable peer identity.
-     * That port belongs to X-Plane's own RakNet stack: taking it made the sim
-     * fail with "Failed to initialize UDP RakNet connectivity (port 49010).
-     * Local networking will be disabled." - i.e. squatting anywhere in its range
-     * breaks the very thing we are trying to talk to. An ephemeral port is
-     * correct here; X-Plane replies to whatever source it sees.
-     */
-
-    /* a bigger receive buffer so a burst of RREF replies is not dropped */
-    int rcv = 256 * 1024;
-    setsockopt(g_sock, SOL_SOCKET, SO_RCVBUF, &rcv, sizeof rcv);
-
-    memset(&g_xp, 0, sizeof g_xp);
-    g_xp.sin_family = AF_INET;
-    g_xp.sin_port   = htons(XP_PORT);
-    inet_pton(AF_INET, XP_IP, &g_xp.sin_addr);
+void xp_send_dref(core_t *c, const char *path, float value) {
+    if (!c->sinks.udp_send) return;
+    unsigned char p[DREF_LEN];
+    size_t n = xp_build_dref(p, path, value);
+    c->sinks.udp_send(c->sinks.ctx, p, n);
 }
 
-/* DREF packet: "DREF" + 0x00 + float32 value + 500-byte NUL-padded path = 509 */
-void xp_send_dref(const char *path, float value) {
-    unsigned char pkt[509];
-    memset(pkt, 0, sizeof pkt);
-    memcpy(pkt, "DREF", 4);
-    memcpy(pkt + 5, &value, 4);
-    strncpy((char *)(pkt + 9), path, 499);
-    sendto(g_sock, pkt, sizeof pkt, 0, (struct sockaddr *)&g_xp, sizeof g_xp);
+void xp_send_cmnd(core_t *c, const char *cmd) {
+    if (!c->sinks.udp_send) return;
+    unsigned char p[CMND_MAX];
+    size_t n = xp_build_cmnd(p, cmd);
+    c->sinks.udp_send(c->sinks.ctx, p, n);
 }
 
-/* CMND packet: "CMND" + 0x00 + command path */
-void xp_send_cmnd(const char *cmd) {
-    unsigned char pkt[512];
-    size_t n = strlen(cmd);
-    if (n > 500) n = 500;
-    memset(pkt, 0, sizeof pkt);
-    memcpy(pkt, "CMND", 4);
-    memcpy(pkt + 5, cmd, n);
-    sendto(g_sock, pkt, 5 + n, 0, (struct sockaddr *)&g_xp, sizeof g_xp);
-}
-
-int xp_socket(void) { return g_sock; }
-const void *xp_addr(void) { return &g_xp; }
-
-bool xp_axis_in_use(int target) {
-    for (int i = 0; i < S_COUNT; i++) if (g_axis[i].target == target) return true;
+bool xp_axis_in_use(const settings_t *s, int target) {
+    for (int i = 0; i < S_COUNT; i++) if (s->axis[i].target == target) return true;
     return false;
 }
 
-/* Only assert the overrides an axis actually needs, so anything unmapped stays
- * under X-Plane's own control instead of being frozen at zero. */
-void xp_engage(void) {
-    if (g_engaged) return;
-    if (xp_axis_in_use(AX_PITCH)) xp_send_dref(OV_PITCH, 1.0f);
-    if (xp_axis_in_use(AX_ROLL))  xp_send_dref(OV_ROLL,  1.0f);
-    if (xp_axis_in_use(AX_YAW) || xp_axis_in_use(AX_RUDD_L) || xp_axis_in_use(AX_RUDD_R))
-        xp_send_dref(OV_HEADING, 1.0f);
-    if (xp_axis_in_use(AX_BRAKE_L) || xp_axis_in_use(AX_BRAKE_R))
-        xp_send_dref(OV_BRAKES, 1.0f);
-    g_engaged = true;
-    fprintf(stderr, "[dsxp] ENGAGED - streaming to %s:%d\n", XP_IP, XP_PORT);
+/* Only the overrides an axis actually needs, so anything unmapped stays under
+ * X-Plane's own control instead of being frozen. */
+void xp_wanted_overrides(const settings_t *s, bool want[OV_COUNT]) {
+    want[OV_PITCH_I]   = xp_axis_in_use(s, AX_PITCH);
+    want[OV_ROLL_I]    = xp_axis_in_use(s, AX_ROLL);
+    want[OV_HEADING_I] = xp_axis_in_use(s, AX_YAW) || xp_axis_in_use(s, AX_RUDD_L) ||
+                         xp_axis_in_use(s, AX_RUDD_R);
+    want[OV_BRAKES_I]  = xp_axis_in_use(s, AX_BRAKE_L) || xp_axis_in_use(s, AX_BRAKE_R);
 }
 
-/* Centre the controls before releasing, so nothing is left deflected. */
-void xp_disengage(void) {
-    if (!g_engaged) return;
-    xp_send_dref(DR_PITCH, 0.0f); xp_send_dref(DR_ROLL, 0.0f); xp_send_dref(DR_HEADING, 0.0f);
-    xp_send_dref(OV_PITCH, 0.0f); xp_send_dref(OV_ROLL, 0.0f); xp_send_dref(OV_HEADING, 0.0f);
-    xp_send_dref(OV_BRAKES, 0.0f);
-    g_engaged = false;
-    memset(g_prev_btn, 0, sizeof g_prev_btn);
-    fprintf(stderr, "[dsxp] DISENGAGED - X-Plane has controls back\n");
+/* Neutral value for the control an override covers, sent before releasing it. */
+static void centre_for(core_t *c, int ov) {
+    switch (ov) {
+    case OV_PITCH_I:   xp_send_dref(c, DR_PITCH, 0.0f);   break;
+    case OV_ROLL_I:    xp_send_dref(c, DR_ROLL, 0.0f);    break;
+    case OV_HEADING_I: xp_send_dref(c, DR_HEADING, 0.0f); break;
+    case OV_BRAKES_I:  xp_send_dref(c, DR_LBRAKE, 0.0f);
+                       xp_send_dref(c, DR_RBRAKE, 0.0f);  break;
+    default: break;
+    }
 }
 
-void xp_push(void) {
-    if (!g_have_report) return;
-    pthread_mutex_lock(&g_lock);
+void xp_engage(core_t *c, double now) {
+    (void)now;
+    if (c->engaged || c->dry_run) return;
+    c->engaged = true;
+    memset(c->ov_on, 0, sizeof c->ov_on);
+    memset(c->ov_release_left, 0, sizeof c->ov_release_left);
+    memset(c->prev_btn, 0, sizeof c->prev_btn);
+    dsxp_log("ENGAGED - streaming to %s:%d", XP_IP, XP_PORT);
+    /* the overrides themselves are asserted by xp_push's planner, every tick */
+}
+
+/* Centre the controls and release every override, twice: UDP can drop. */
+void xp_disengage(core_t *c) {
+    if (!c->engaged) return;
+    for (int k = 0; k < 2; k++) {
+        xp_send_dref(c, DR_PITCH, 0.0f);
+        xp_send_dref(c, DR_ROLL, 0.0f);
+        xp_send_dref(c, DR_HEADING, 0.0f);
+        for (int i = 0; i < OV_COUNT; i++) xp_send_dref(c, OV_PATH[i], 0.0f);
+    }
+    c->engaged = false;
+    memset(c->prev_btn, 0, sizeof c->prev_btn);
+    memset(c->ov_on, 0, sizeof c->ov_on);
+    memset(c->ov_release_left, 0, sizeof c->ov_release_left);
+    dsxp_log("DISENGAGED - X-Plane has controls back");
+}
+
+/*
+ * Override planner. A wanted override is re-asserted every second: X-Plane may
+ * not be listening yet when the process first appears, and it resets overrides
+ * on an aircraft reload. An override that stops being wanted (its axis was
+ * unmapped) gets a centred value, then "off", repeated a few times, so the axis
+ * goes straight back to X-Plane instead of freezing where it was.
+ */
+static void plan_overrides(core_t *c, double now) {
+    bool want[OV_COUNT];
+    xp_wanted_overrides(&c->s, want);
+    for (int k = 0; k < OV_COUNT; k++) {
+        if (want[k]) {
+            if (!c->ov_on[k] || now - c->ov_last[k] >= OVERRIDE_REASSERT_SEC) {
+                xp_send_dref(c, OV_PATH[k], 1.0f);
+                c->ov_on[k] = true;
+                c->ov_last[k] = now;
+                c->ov_release_left[k] = 0;
+            }
+        } else if (c->ov_on[k]) {
+            centre_for(c, k);
+            xp_send_dref(c, OV_PATH[k], 0.0f);
+            c->ov_on[k] = false;
+            c->ov_release_left[k] = OVERRIDE_RELEASE_REPEAT;
+            c->ov_release_at[k] = now + OVERRIDE_REASSERT_SEC;
+        } else if (c->ov_release_left[k] > 0 && now >= c->ov_release_at[k]) {
+            xp_send_dref(c, OV_PATH[k], 0.0f);
+            c->ov_release_left[k]--;
+            c->ov_release_at[k] = now + OVERRIDE_REASSERT_SEC;
+        }
+    }
+}
+
+void xp_push(core_t *c, double now) {
+    if (!c->engaged) return;
+    plan_overrides(c, now);
+
+    const settings_t *s = &c->s;
+    /* No fresh input (Bluetooth hiccup, controller switched off): hold every
+     * axis neutral and release every button rather than replaying stale values. */
+    bool live = c->have_report && (now - c->last_report_at) <= INPUT_STALE_SEC;
 
     double roll = 0, pitch = 0, yaw = 0, thr = -1, lb = -1, rb = -1;
-    for (int i = 0; i < S_COUNT; i++) {
-        double v = g_state.val[i];       /* -1..1 for sticks, 0..1 for triggers */
-        double u = g_state.raw01[i];     /* always 0..1                          */
-        if (g_axis[i].invert) { v = -v; u = 1.0 - u; }
-        /* a stick used as a unipolar control needs its centred value remapped */
-        double uni = (i >= S_L2) ? u : (v + 1.0) / 2.0;
-        switch (g_axis[i].target) {
-        case AX_ROLL:     roll  += v;   break;
-        case AX_PITCH:    pitch += v;   break;
-        case AX_YAW:      yaw   += v;   break;
-        case AX_THROTTLE: thr = (i >= S_L2) ? u : (1.0 - u); break;
-        case AX_RUDD_L:   yaw -= uni;   break;
-        case AX_RUDD_R:   yaw += uni;   break;
-        case AX_BRAKE_L:  lb   = uni;   break;
-        case AX_BRAKE_R:  rb   = uni;   break;
-        default: break;
+    if (live) {
+        for (int i = 0; i < S_COUNT; i++) {
+            double v = c->state.val[i];       /* -1..1 for sticks, 0..1 for triggers */
+            double u = c->state.raw01[i];     /* always 0..1                          */
+            if (s->axis[i].invert) { v = -v; u = 1.0 - u; }
+            /* a stick used as a unipolar control needs its centred value remapped */
+            double uni = (i >= S_L2) ? u : (v + 1.0) / 2.0;
+            switch (s->axis[i].target) {
+            case AX_ROLL:     roll  += v;   break;
+            case AX_PITCH:    pitch += v;   break;
+            case AX_YAW:      yaw   += v;   break;
+            case AX_THROTTLE: thr = (i >= S_L2) ? u : (1.0 - u); break;
+            case AX_RUDD_L:   yaw -= uni;   break;
+            case AX_RUDD_R:   yaw += uni;   break;
+            case AX_BRAKE_L:  lb   = uni;   break;
+            case AX_BRAKE_R:  rb   = uni;   break;
+            default: break;
+            }
         }
+    } else {
+        /* throttle is left where it is (thr stays -1); X-Plane holds the value */
+        if (xp_axis_in_use(s, AX_BRAKE_L)) lb = 0;
+        if (xp_axis_in_use(s, AX_BRAKE_R)) rb = 0;
     }
-    if (roll  >  1) roll  =  1; if (roll  < -1) roll  = -1;
-    if (pitch >  1) pitch =  1; if (pitch < -1) pitch = -1;
-    if (yaw   >  1) yaw   =  1; if (yaw   < -1) yaw   = -1;
+    if (roll  >  1) roll  =  1;
+    if (roll  < -1) roll  = -1;
+    if (pitch >  1) pitch =  1;
+    if (pitch < -1) pitch = -1;
+    if (yaw   >  1) yaw   =  1;
+    if (yaw   < -1) yaw   = -1;
 
-    if (xp_axis_in_use(AX_ROLL))  xp_send_dref(DR_ROLL,  (float)roll);
-    if (xp_axis_in_use(AX_PITCH)) xp_send_dref(DR_PITCH, (float)pitch);
-    if (xp_axis_in_use(AX_YAW) || xp_axis_in_use(AX_RUDD_L) || xp_axis_in_use(AX_RUDD_R))
-        xp_send_dref(DR_HEADING, (float)yaw);
-    if (thr >= 0) xp_send_dref(DR_THROTL, (float)thr);
-    if (lb  >= 0) xp_send_dref(DR_LBRAKE, (float)lb);
-    if (rb  >= 0) xp_send_dref(DR_RBRAKE, (float)rb);
+    bool want[OV_COUNT];
+    xp_wanted_overrides(s, want);
+    if (want[OV_ROLL_I])    xp_send_dref(c, DR_ROLL,    (float)roll);
+    if (want[OV_PITCH_I])   xp_send_dref(c, DR_PITCH,   (float)pitch);
+    if (want[OV_HEADING_I]) xp_send_dref(c, DR_HEADING, (float)yaw);
+    if (thr >= 0) xp_send_dref(c, DR_THROTL, (float)thr);
+    if (lb  >= 0) xp_send_dref(c, DR_LBRAKE, (float)lb);
+    if (rb  >= 0) xp_send_dref(c, DR_RBRAKE, (float)rb);
 
-    double t = now_sec();
     for (int i = 0; i < B_COUNT; i++) {
-        if (!g_bind[i].cmd[0]) { g_prev_btn[i] = g_state.btn[i]; continue; }
-        bool down = g_state.btn[i], was = g_prev_btn[i];
+        bool down = live && c->state.btn[i];
+        if (!s->bind[i].cmd[0]) { c->prev_btn[i] = down; continue; }
+        bool was = c->prev_btn[i];
         if (down && !was) {
-            xp_send_cmnd(g_bind[i].cmd);
-            g_last_cmd_time[i] = t;
-            if (g_verbose) fprintf(stderr, "[dsxp] %s -> %s\n", BTN_NAME[i], g_bind[i].cmd);
-        } else if (down && was && g_bind[i].repeat &&
-                   t - g_last_cmd_time[i] >= 1.0 / CMD_REPEAT_HZ) {
-            xp_send_cmnd(g_bind[i].cmd);
-            g_last_cmd_time[i] = t;
+            xp_send_cmnd(c, s->bind[i].cmd);
+            c->last_cmd_time[i] = now;
+            if (c->verbose) dsxp_log("%s -> %s", BTN_NAME[i], s->bind[i].cmd);
+        } else if (down && was && s->bind[i].repeat &&
+                   now - c->last_cmd_time[i] >= 1.0 / CMD_REPEAT_HZ) {
+            xp_send_cmnd(c, s->bind[i].cmd);
+            c->last_cmd_time[i] = now;
         }
-        g_prev_btn[i] = down;
+        c->prev_btn[i] = down;
     }
-    pthread_mutex_unlock(&g_lock);
 }

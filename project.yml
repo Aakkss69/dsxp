@@ -1,0 +1,110 @@
+# XcodeGen spec - the source of truth for DSXP.xcodeproj.
+# Regenerate with:  xcodegen generate   (or Scripts/bootstrap.sh)
+name: DSXP
+options:
+  bundleIdPrefix: io.github.aakkss69
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+
+targets:
+  DSXPCore:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Core/src
+      - path: Core/include
+    settings:
+      base:
+        PRODUCT_NAME: DSXPCore
+        HEADER_SEARCH_PATHS: $(SRCROOT)/Core/include $(SRCROOT)/Core/src
+        WARNING_CFLAGS: $(DSXP_C_WARNINGS)
+        SKIP_INSTALL: YES
+        CODE_SIGNING_ALLOWED: NO
+
+  DSXP:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+        excludes:
+          - "Resources/web"
+          - "Resources/web/**"
+      - path: App/Resources/web
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: DSXPCore
+      - sdk: IOKit.framework
+      - sdk: CoreFoundation.framework
+      - sdk: WebKit.framework
+      - sdk: ServiceManagement.framework
+    settings:
+      base:
+        PRODUCT_NAME: DSXP
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: App/DSXP.entitlements
+        SWIFT_INCLUDE_PATHS: $(SRCROOT)/Core/include
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+
+  CoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/CoreTests
+        excludes:
+          - "main.c"
+    dependencies:
+      - target: DSXPCore
+      - sdk: IOKit.framework
+      - sdk: CoreFoundation.framework
+    settings:
+      base:
+        PRODUCT_NAME: CoreTests
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.aakkss69.DSXP.CoreTests
+        HEADER_SEARCH_PATHS: $(SRCROOT)/Core/include $(SRCROOT)/Core/src
+        GENERATE_INFOPLIST_FILE: YES
+        WARNING_CFLAGS: $(DSXP_C_WARNINGS)
+
+  dsxp-cli:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Tools/dsxp-cli
+    dependencies:
+      - target: DSXPCore
+      - sdk: IOKit.framework
+      - sdk: CoreFoundation.framework
+    settings:
+      base:
+        PRODUCT_NAME: dsxp-cli
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.aakkss69.DSXP.cli
+        HEADER_SEARCH_PATHS: $(SRCROOT)/Core/include $(SRCROOT)/Core/src
+        WARNING_CFLAGS: $(DSXP_C_WARNINGS)
+
+schemes:
+  DSXP:
+    build:
+      targets:
+        DSXP: all
+        CoreTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - CoreTests
+    archive:
+      config: Release
+  dsxp-cli:
+    build:
+      targets:
+        dsxp-cli: all
+    run:
+      config: Debug

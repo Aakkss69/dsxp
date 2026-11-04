@@ -1,0 +1,357 @@
+/*
+ * The mapper UI's JSON API. Same routes and fields as the prototype's HTTP
+ * server, now transport-independent: the app serves it through a WKWebView
+ * custom-scheme handler, so no TCP port is ever opened.
+ *
+ *   GET  /api/init         command catalogue + slot/source/target vocabulary
+ *   GET  /api/state        live axes, buttons, gate, bindings, tuning, app info
+ *   POST /api/bind         ?i=<slot>&cmd=<path>&repeat=<0|1>   (empty cmd clears)
+ *   POST /api/axis         ?k=<source>&t=<target>&inv=<0|1>
+ *   POST /api/tune         ?deadzone=<f>&curve=<f>&gesture=<f>
+ *   POST /api/light        ?r=&g=&b=&on=<0|1>&pattern=<0-5>&speed=<f>&player=<0-31>&bright=<f>&lmode=<manual|sim>
+ *   POST /api/trigger      ?side=<l|r>&mode=<0-3>&start=&end=&strength=   (manual mode only)
+ *   POST /api/fxmode       ?mode=<manual|wind>
+ *   POST /api/rumble       ?left=&right=                                  (manual mode only)
+ *   POST /api/rumblemode   ?mode=<manual|sim>
+ *   POST /api/rumblepath   ?v2=<0|1>
+ * /api/quit, /api/pickxp and /api/openaccess are handled by the app itself.
+ */
+#include "core_internal.h"
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+
+static const char *CT_JSON = "application/json";
+static const char *CT_TEXT = "text/plain; charset=utf-8";
+
+static void respond(dsxp_response_t *out, int status, const char *ctype, const char *body) {
+    size_t n = strlen(body);
+    out->status = status;
+    out->content_type = ctype;
+    out->body = malloc(n + 1);
+    if (out->body) { memcpy(out->body, body, n + 1); out->len = n; }
+    else out->len = 0;
+}
+
+static void respond_json(dsxp_response_t *out, jbuf_t *j) {
+    if (j->oom || !j->b) { jb_free(j); respond(out, 500, CT_TEXT, "out of memory"); return; }
+    out->status = 200;
+    out->content_type = CT_JSON;
+    out->body = j->b;
+    out->len = j->len;
+    j->b = NULL;
+}
+
+static void ok(dsxp_response_t *out) { respond(out, 200, CT_JSON, "{\"ok\":true}"); }
+
+static bool get_long(const char *qs, const char *key, long *v) {
+    char buf[64];
+    if (!qs_get(qs, key, buf, sizeof buf) || !buf[0]) return false;
+    char *e;
+    long x = strtol(buf, &e, 10);
+    if (e == buf) return false;
+    *v = x;
+    return true;
+}
+
+static bool get_double(const char *qs, const char *key, double *v) {
+    char buf[64];
+    if (!qs_get(qs, key, buf, sizeof buf) || !buf[0]) return false;
+    char *e;
+    double x = strtod(buf, &e);
+    if (e == buf || !isfinite(x)) return false;
+    *v = x;
+    return true;
+}
+
+static void submit(const api_env_t *env, const cmd_t *cmd, dsxp_response_t *out) {
+    if (env->submit && env->submit(env->ctx, cmd)) ok(out);
+    else respond(out, 503, CT_TEXT, "busy");
+}
+
+/* ------------------------------------------------------------- GET routes */
+
+typedef struct { jbuf_t *j; } init_arg_t;
+
+static void init_commands(void *arg, const xcmd_t *cmds, int n) {
+    jbuf_t *j = ((init_arg_t *)arg)->j;
+    for (int i = 0; i < n; i++) {
+        jb_printf(j, "%s{\"c\":", i ? "," : "");
+        jb_str(j, cmds[i].path);
+        jb_printf(j, ",\"d\":");
+        jb_str(j, cmds[i].desc);
+        jb_printf(j, "}");
+    }
+}
+
+static void api_init(const api_env_t *env, dsxp_response_t *out) {
+    jbuf_t j;
+    jb_init(&j, 512 * 1024);
+    jb_printf(&j, "{\"commands\":[");
+    init_arg_t arg = { &j };
+    if (env->catalogue) env->catalogue(env->ctx, init_commands, &arg);
+    jb_printf(&j, "],\"slots\":[");
+    for (int i = 0; i < B_COUNT; i++) {
+        jb_printf(&j, "%s{\"i\":%d,\"n\":", i ? "," : "", i);
+        jb_str(&j, BTN_NAME[i]);
+        jb_printf(&j, "}");
+    }
+    jb_printf(&j, "],\"sources\":[");
+    for (int i = 0; i < S_COUNT; i++) {
+        jb_printf(&j, "%s{\"k\":", i ? "," : "");
+        jb_str(&j, SRC_KEY[i]);
+        jb_printf(&j, ",\"n\":");
+        jb_str(&j, SRC_LABEL[i]);
+        jb_printf(&j, "}");
+    }
+    jb_printf(&j, "],\"targets\":[");
+    for (int i = 0; i < AX_TARGET_COUNT; i++) {
+        jb_printf(&j, "%s{\"k\":", i ? "," : "");
+        jb_str(&j, AX_KEY[i]);
+        jb_printf(&j, ",\"n\":");
+        jb_str(&j, AX_LABEL[i]);
+        jb_printf(&j, "}");
+    }
+    jb_printf(&j, "]}");
+    respond_json(out, &j);
+}
+
+static void api_state(const api_env_t *env, dsxp_response_t *out) {
+    dsxp_snap_t *s = calloc(1, sizeof *s);
+    if (!s) { respond(out, 500, CT_TEXT, "out of memory"); return; }
+    if (env->snapshot) env->snapshot(env->ctx, s);
+
+    jbuf_t j;
+    jb_init(&j, 24 * 1024);
+    jb_printf(&j, "{\"connected\":%s,\"reports\":%ld,\"total\":%ld,",
+              s->connected ? "true" : "false", s->reports, s->total);
+    jb_printf(&j, "\"tune\":{\"deadzone\":%.4f,\"curve\":%.4f,\"gesture\":%.3f},",
+              s->tune.deadzone, s->tune.curve, s->tune.gesture);
+    jb_printf(&j, "\"light\":{\"r\":%d,\"g\":%d,\"b\":%d,\"on\":%d,\"pattern\":%d,"
+                  "\"speed\":%.3f,\"player\":%d,\"bright\":%.3f,\"lmode\":\"%s\",\"lnote\":",
+              s->light.r, s->light.g, s->light.b, s->light.on ? 1 : 0, s->light.pattern,
+              s->light.speed, s->light.player, s->light.bright,
+              s->light.mode == LM_SIM ? "sim" : "manual");
+    jb_str(&j, s->lnote);
+    jb_printf(&j, "},\"fx\":[");
+    for (int i = 0; i < 2; i++)
+        jb_printf(&j, "%s{\"mode\":%d,\"start\":%d,\"end\":%d,\"strength\":%d}", i ? "," : "",
+                  s->fx[i].mode, s->fx[i].start, s->fx[i].end, s->fx[i].strength);
+    jb_printf(&j, "],\"fxmode\":\"%s\",", s->fxmode == FXM_WIND ? "wind" : "manual");
+    jb_printf(&j, "\"wx\":{\"live\":%d,\"ias\":%.1f,\"wind\":%.1f,\"dir\":%.0f,\"hdg\":%.0f,"
+                  "\"turb\":%.2f,\"xwind\":%.1f,\"load\":%.3f,\"note\":",
+              s->wx.live ? 1 : 0, s->wx.ias, s->wx.wind_ms, s->wx.wind_dir, s->wx.heading,
+              s->wx.turb, s->wx.crosswind, s->wx.load);
+    jb_str(&j, s->wx.note);
+    jb_printf(&j, ",\"stall_l\":%.3f,\"stall_r\":%.3f,\"stall\":%.3f,\"gn\":%.2f,\"crashed\":%d},",
+              s->wx.stall_l, s->wx.stall_r, s->wx.stall_ratio, s->wx.gn, s->wx.crashed ? 1 : 0);
+    jb_printf(&j, "\"rmode\":\"%s\",\"rnote\":", s->rmode == RM_SIM ? "sim" : "manual");
+    jb_str(&j, s->rnote);
+    jb_printf(&j, ",\"rumble\":{\"left\":%d,\"right\":%d,\"v2\":%d},",
+              s->rumble.left, s->rumble.right, s->rumble_v2 ? 1 : 0);
+    jb_printf(&j, "\"gate\":{\"bt\":%d,\"usb\":%d,\"xp\":%d,\"engaged\":%d},",
+              s->bt, s->usb, s->xp, s->engaged);
+    jb_printf(&j, "\"axes\":[");
+    for (int i = 0; i < S_COUNT; i++) jb_printf(&j, "%s%.4f", i ? "," : "", s->axes[i]);
+    jb_printf(&j, "],\"raw\":[");
+    for (int i = 0; i < S_COUNT; i++) jb_printf(&j, "%s%.4f", i ? "," : "", s->raw[i]);
+    jb_printf(&j, "],\"btn\":[");
+    for (int i = 0; i < B_COUNT; i++) jb_printf(&j, "%s%d", i ? "," : "", s->btn[i] ? 1 : 0);
+    jb_printf(&j, "],\"bind\":[");
+    for (int i = 0; i < B_COUNT; i++) {
+        jb_printf(&j, "%s{\"c\":", i ? "," : "");
+        jb_str(&j, s->bind[i].cmd);
+        jb_printf(&j, ",\"r\":%d}", s->bind[i].repeat ? 1 : 0);
+    }
+    jb_printf(&j, "],\"axismap\":[");
+    for (int i = 0; i < S_COUNT; i++) {
+        int t = s->axis[i].target;
+        if (t < 0 || t >= AX_TARGET_COUNT) t = AX_NONE;
+        jb_printf(&j, "%s{\"t\":\"%s\",\"inv\":%d}", i ? "," : "", AX_KEY[t], s->axis[i].invert ? 1 : 0);
+    }
+    jb_printf(&j, "],\"touch\":[");
+    for (int i = 0; i < 2; i++)
+        jb_printf(&j, "%s{\"on\":%d,\"x\":%.4f,\"y\":%.4f}", i ? "," : "",
+                  s->touch[i].active ? 1 : 0, s->touch[i].x, s->touch[i].y);
+    jb_printf(&j, "],\"app\":");
+    if (env->app_info) env->app_info(env->ctx, &j);
+    else jb_printf(&j, "{}");
+    jb_printf(&j, "}");
+    free(s);
+    respond_json(out, &j);
+}
+
+/* ------------------------------------------------------------ POST routes */
+
+static void api_bind(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+    long slot = -1, rep = 0;
+    if (!get_long(qs, "i", &slot) || slot < 0 || slot >= B_COUNT) {
+        respond(out, 400, CT_TEXT, "bad slot"); return;
+    }
+    get_long(qs, "repeat", &rep);
+    char cmdbuf[1024];
+    qs_get(qs, "cmd", cmdbuf, sizeof cmdbuf);
+    if (cmdbuf[0] && !cmd_valid(cmdbuf)) { respond(out, 400, CT_TEXT, "bad command"); return; }
+    cmd_t c = { .kind = CMD_BIND, .key = (int)slot };
+    memcpy(c.u.bind.cmd, cmdbuf, strlen(cmdbuf) + 1);
+    c.u.bind.repeat = rep != 0;
+    submit(env, &c, out);
+}
+
+static void api_axis(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+    char k[32], t[32];
+    qs_get(qs, "k", k, sizeof k);
+    qs_get(qs, "t", t, sizeof t);
+    long inv = 0;
+    get_long(qs, "inv", &inv);
+    int si = -1, ti = -1;
+    for (int i = 0; i < S_COUNT; i++) if (!strcmp(k, SRC_KEY[i])) si = i;
+    for (int i = 0; i < AX_TARGET_COUNT; i++) if (!strcmp(t, AX_KEY[i])) ti = i;
+    if (si < 0 || ti < 0) { respond(out, 400, CT_TEXT, "bad axis"); return; }
+    cmd_t c = { .kind = CMD_AXIS, .key = si };
+    c.u.axis = (axis_map_t){ ti, inv != 0 };
+    submit(env, &c, out);
+}
+
+static void api_tune(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+    cmd_t c = { .kind = CMD_TUNE };
+    c.u.tune.has_dz = get_double(qs, "deadzone", &c.u.tune.dz);
+    c.u.tune.has_cv = get_double(qs, "curve", &c.u.tune.cv);
+    c.u.tune.has_gs = get_double(qs, "gesture", &c.u.tune.gs);
+    submit(env, &c, out);
+}
+
+static void api_light(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+    cmd_t c = { .kind = CMD_LIGHT };
+    light_t *v = &c.u.light.v;
+    unsigned m = 0;
+    long x; double d;
+    if (get_long(qs, "r", &x)) { v->r = (unsigned char)clampi(x, 0, 255); m |= LF_R; }
+    if (get_long(qs, "g", &x)) { v->g = (unsigned char)clampi(x, 0, 255); m |= LF_G; }
+    if (get_long(qs, "b", &x)) { v->b = (unsigned char)clampi(x, 0, 255); m |= LF_B; }
+    if (get_long(qs, "on", &x)) { v->on = x != 0; m |= LF_ON; }
+    if (get_long(qs, "pattern", &x)) {
+        v->pattern = (x < 0 || x >= LP_COUNT) ? LP_SOLID : (int)x; m |= LF_PATTERN;
+    }
+    if (get_double(qs, "speed", &d)) { v->speed = clampd(d, 0, 1, 0.5); m |= LF_SPEED; }
+    /* five lamps, so only the low five bits mean anything */
+    if (get_long(qs, "player", &x)) { v->player = (unsigned char)(clampi(x, 0, 255) & 0x1F); m |= LF_PLAYER; }
+    if (get_double(qs, "bright", &d)) { v->bright = clampd(d, 0, 1, 1.0); m |= LF_BRIGHT; }
+    char mode[16];
+    if (qs_get(qs, "lmode", mode, sizeof mode)) {
+        v->mode = strcmp(mode, "sim") == 0 ? LM_SIM : LM_MANUAL; m |= LF_MODE;
+    }
+    c.u.light.mask = m;
+    submit(env, &c, out);
+}
+
+/* Adaptive trigger effect. Parameters mean different things per mode:
+ *   RESIST  start = where resistance begins, strength = how hard
+ *   WEAPON  start/end = the resisting band, strength = break-through force
+ *   VIBRATE start = threshold, strength = amplitude, end = frequency (Hz) */
+static void api_trigger(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
+                        dsxp_response_t *out) {
+    char side[8];
+    qs_get(qs, "side", side, sizeof side);
+    int si = !strcmp(side, "l") ? 0 : !strcmp(side, "r") ? 1 : -1;
+    if (si < 0) { respond(out, 400, CT_TEXT, "bad side"); return; }
+    if (snap->fxmode == FXM_WIND) { respond(out, 409, CT_TEXT, "wind mode"); return; }
+    cmd_t c = { .kind = CMD_TRIGGER, .key = si };
+    unsigned m = 0;
+    long x;
+    if (get_long(qs, "mode", &x)) {
+        c.u.trig.v.mode = (x < TFX_OFF || x > TFX_VIBRATE) ? TFX_OFF : (int)x; m |= TF_MODE;
+    }
+    if (get_long(qs, "start", &x))    { c.u.trig.v.start    = (unsigned char)clampi(x, 0, 255); m |= TF_START; }
+    if (get_long(qs, "end", &x))      { c.u.trig.v.end      = (unsigned char)clampi(x, 0, 255); m |= TF_END; }
+    if (get_long(qs, "strength", &x)) { c.u.trig.v.strength = (unsigned char)clampi(x, 0, 255); m |= TF_STRENGTH; }
+    c.u.trig.mask = m;
+    submit(env, &c, out);
+}
+
+static void api_fxmode(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+    char v[16];
+    if (!qs_get(qs, "mode", v, sizeof v) || !v[0]) { respond(out, 400, CT_TEXT, "no mode"); return; }
+    cmd_t c = { .kind = CMD_FXMODE };
+    c.u.mode = strcmp(v, "wind") == 0 ? FXM_WIND : FXM_MANUAL;
+    submit(env, &c, out);
+}
+
+static void api_rumble(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
+                       dsxp_response_t *out) {
+    if (snap->rmode == RM_SIM) { respond(out, 409, CT_TEXT, "sim mode"); return; }
+    cmd_t c = { .kind = CMD_RUMBLE };
+    long x;
+    if (get_long(qs, "left", &x))  { c.u.rumble.l = (unsigned char)clampi(x, 0, 255); c.u.rumble.has_l = true; }
+    if (get_long(qs, "right", &x)) { c.u.rumble.r = (unsigned char)clampi(x, 0, 255); c.u.rumble.has_r = true; }
+    submit(env, &c, out);
+}
+
+static void api_rumblemode(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+    char v[16];
+    if (!qs_get(qs, "mode", v, sizeof v) || !v[0]) { respond(out, 400, CT_TEXT, "no mode"); return; }
+    cmd_t c = { .kind = CMD_RUMBLEMODE };
+    c.u.mode = strcmp(v, "sim") == 0 ? RM_SIM : RM_MANUAL;
+    submit(env, &c, out);
+}
+
+static void api_rumblepath(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+    long x;
+    if (!get_long(qs, "v2", &x)) { ok(out); return; }
+    cmd_t c = { .kind = CMD_RUMBLEPATH };
+    c.u.flag = x != 0;
+    submit(env, &c, out);
+}
+
+/* --------------------------------------------------------------- router */
+
+void api_handle(const api_env_t *env, const char *method, const char *path,
+                const char *query, dsxp_response_t *out) {
+    memset(out, 0, sizeof *out);
+    if (!method) method = "";
+    if (!path) path = "";
+    if (!query) query = "";
+    bool get = !strcmp(method, "GET"), post = !strcmp(method, "POST");
+
+    if (!strcmp(path, "/api/init")) {
+        if (!get) { respond(out, 405, CT_TEXT, "method not allowed"); return; }
+        api_init(env, out);
+        return;
+    }
+    if (!strcmp(path, "/api/state")) {
+        if (!get) { respond(out, 405, CT_TEXT, "method not allowed"); return; }
+        api_state(env, out);
+        return;
+    }
+
+    static const char *POST_ROUTES[] = {
+        "/api/bind", "/api/axis", "/api/tune", "/api/light", "/api/trigger",
+        "/api/fxmode", "/api/rumble", "/api/rumblemode", "/api/rumblepath",
+    };
+    int route = -1;
+    for (int i = 0; i < (int)(sizeof POST_ROUTES / sizeof POST_ROUTES[0]); i++)
+        if (!strcmp(path, POST_ROUTES[i])) route = i;
+    if (route < 0) { respond(out, 404, CT_TEXT, "no route"); return; }
+    if (!post) { respond(out, 405, CT_TEXT, "method not allowed"); return; }
+
+    /* the two mode-guarded routes need the current modes */
+    dsxp_snap_t *snap = NULL;
+    if (route == 4 || route == 6) {
+        snap = calloc(1, sizeof *snap);
+        if (!snap) { respond(out, 500, CT_TEXT, "out of memory"); return; }
+        if (env->snapshot) env->snapshot(env->ctx, snap);
+    }
+    switch (route) {
+    case 0: api_bind(env, query, out); break;
+    case 1: api_axis(env, query, out); break;
+    case 2: api_tune(env, query, out); break;
+    case 3: api_light(env, query, out); break;
+    case 4: api_trigger(env, snap, query, out); break;
+    case 5: api_fxmode(env, query, out); break;
+    case 6: api_rumble(env, snap, query, out); break;
+    case 7: api_rumblemode(env, query, out); break;
+    case 8: api_rumblepath(env, query, out); break;
+    default: respond(out, 404, CT_TEXT, "no route"); break;
+    }
+    free(snap);
+}

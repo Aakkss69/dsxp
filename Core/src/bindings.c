@@ -1,38 +1,31 @@
-/* Binding defaults, persistence, and the X-Plane command catalogue. */
-#include "dsxp.h"
+/* Settings: profile defaults, and the bindings.conf text format. Pure. */
+#include "core_internal.h"
+#include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-
-static void bindings_path(char *out, size_t n) {
-    snprintf(out, n, "%s/bindings.conf", g_dir);
-}
 
 /*
- * Defaults transcribed VERBATIM from the user's own saved profile:
- *   X-Plane 12/Output/preferences/control profiles/final - Joysticks.prf
- * device slot 0 - the one whose _joy_location0 reads
- *   Bluetooth_054c_0ce6_<controller-bt-address>_<id>_0001_0005
- * i.e. the Bluetooth DualSense's own on-file mapping, which is the device this
- * bridge drives. Slot 0 uses _joy_AXIS_use0.. and _joy_BUTN_use0.. directly (the
- * 25-axis / 160-button per-device stride only shifts slot 1 and above).
+ * Defaults transcribed from the author's own saved X-Plane profile
+ * (Output/preferences/control profiles/final - Joysticks.prf, device slot 0 =
+ * the Bluetooth DualSense). Slot 0 uses _joy_AXIS_use0.. and _joy_BUTN_use0..
+ * directly (the 25-axis / 160-button per-device stride only shifts slot 1+).
  *
- * Nothing here is merged or invented. D-pad Up is deliberately left unbound
- * because the profile leaves _joy_BUTN_use0 at sim/none/none.
+ * D-pad Up is deliberately left unbound: the profile leaves _joy_BUTN_use0 at
+ * sim/none/none.
  *
  * Axis values on file are 2, 1, 3, 52, 74, 75. The enum was recovered from the
- * ordered string table inside the X-Plane binary itself, because the published
- * docs table stops at 66:
+ * ordered string table inside the X-Plane binary, because the published docs
+ * table stops at 66:
  *     1 = joy_use_ptch    3 = joy_use_hdng   52 = joy_use_commands
  *     2 = joy_use_roll   74 = joy_use_rudd_lft   75 = joy_use_rudd_rgt
  * So L2/R2 are differential RUDDER, not toe brakes. Axis 3 is joy_use_commands
- * with all four _joy_AXIS_cmnd12..15 slots at sim/none/none, i.e. cleared.
+ * with all four command slots cleared, i.e. unassigned.
  */
-static void load_defaults(void) {
-    memset(g_bind, 0, sizeof g_bind);
+void load_defaults(settings_t *s) {
+    memset(s, 0, sizeof *s);
     struct { int i; const char *c; bool rep; } d[] = {
-        /* _joy_BUTN_use0 is sim/none/none on file - D-pad Up stays unbound */
         { B_DP_UR,    "sim/general/hat_switch_up_right",       true  },
         { B_DP_R,     "sim/flight_controls/landing_gear_down", false },
         { B_DP_DR,    "sim/general/hat_switch_down_right",     true  },
@@ -50,160 +43,184 @@ static void load_defaults(void) {
         { B_R3,       "sim/flight_controls/pitch_trim_up",     true  },
     };
     for (size_t k = 0; k < sizeof d / sizeof d[0]; k++) {
-        strncpy(g_bind[d[k].i].cmd, d[k].c, CMD_PATH_MAX - 1);
-        g_bind[d[k].i].repeat = d[k].rep;
+        snprintf(s->bind[d[k].i].cmd, CMD_PATH_MAX, "%s", d[k].c);
+        s->bind[d[k].i].repeat = d[k].rep;
     }
-    g_axis[S_LX] = (axis_map_t){ AX_ROLL,   false };
-    g_axis[S_LY] = (axis_map_t){ AX_PITCH,  false };
-    g_axis[S_RX] = (axis_map_t){ AX_YAW,    false };
-    g_axis[S_RY] = (axis_map_t){ AX_NONE,   false };  /* profile cleared it */
-    g_axis[S_L2] = (axis_map_t){ AX_RUDD_L, false };
-    g_axis[S_R2] = (axis_map_t){ AX_RUDD_R, false };
+    s->axis[S_LX] = (axis_map_t){ AX_ROLL,   false };
+    s->axis[S_LY] = (axis_map_t){ AX_PITCH,  false };
+    s->axis[S_RX] = (axis_map_t){ AX_YAW,    false };
+    s->axis[S_RY] = (axis_map_t){ AX_NONE,   false };  /* profile cleared it */
+    s->axis[S_L2] = (axis_map_t){ AX_RUDD_L, false };
+    s->axis[S_R2] = (axis_map_t){ AX_RUDD_R, false };
+
+    /* Deadzone 0.06: measured drift at rest on the author's controller was about
+     * 5% (rx +0.0315, ry -0.0472), and the override datarefs bypass X-Plane's own
+     * null zone, so nothing else would filter it. */
+    s->tune = (tuning_t){ 0.06, 1.00, 0.5 };
+    /* centre lamp only is the DualSense's "player 1" indicator */
+    s->light = (light_t){ 0, 90, 255, true, LP_SOLID, 0.5, 1.0, LM_MANUAL, 0x04 };
+    s->fx_manual[0] = s->fx_manual[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+    s->fxmode = FXM_MANUAL;
+    s->rmode = RM_MANUAL;
+    /* v2 produced no rumble at all on the author's controller; classic works */
+    s->rumble_v2 = false;
 }
 
-void bindings_save(void) {
-    char p[PATH_MAX]; bindings_path(p, sizeof p);
-    FILE *f = fopen(p, "w");
-    if (!f) { fprintf(stderr, "[dsxp] cannot write %s: %s\n", p, strerror(errno)); return; }
-    fprintf(f, "# dsxp bindings - rewritten by the mapper UI\n");
-    fprintf(f, "tune deadzone %.4f\n", g_tune.deadzone);
-    fprintf(f, "tune curve %.4f\n",    g_tune.curve);
-    fprintf(f, "tune gesture %.4f\n",  g_tune.gesture);
-    fprintf(f, "light %d %d %d %d %d %.3f %d %.3f %d\n", g_light.r, g_light.g, g_light.b,
-            g_light.on ? 1 : 0, g_light.pattern, g_light.speed, g_light.player,
-            g_light.bright, g_light.mode);
-    fprintf(f, "fxmode %s\n", g_fxmode == FXM_WIND ? "wind" : "manual");
-    fprintf(f, "rumblemode %s\n", g_rmode == RM_SIM ? "sim" : "manual");
-    fprintf(f, "rumblepath %s\n", g_rumble_v2 ? "v2" : "classic");
+/* X-Plane command paths look like sim/flight_controls/flaps_up. Restricting the
+ * alphabet keeps quotes, spaces and newlines out of the config file and JSON. */
+bool cmd_valid(const char *cmd) {
+    size_t n = 0;
+    for (const char *p = cmd; *p; p++, n++) {
+        char ch = *p;
+        bool ok = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                  (ch >= '0' && ch <= '9') || ch == '_' || ch == '/' || ch == '.' ||
+                  ch == '+' || ch == '-';
+        if (!ok) return false;
+    }
+    return n >= 1 && n < CMD_PATH_MAX;
+}
+
+double clampd(double v, double lo, double hi, double dflt) {
+    if (!isfinite(v)) return dflt;
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+int clampi(long v, int lo, int hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return (int)v;
+}
+
+static void parse_line(settings_t *s, const char *line) {
+    char what[32];
+    if (sscanf(line, "%31s", what) != 1) return;
+
+    if (!strcmp(what, "tune")) {
+        char key[32]; double v;
+        if (sscanf(line, "%*s %31s %lf", key, &v) == 2) {
+            if (!strcmp(key, "deadzone"))     s->tune.deadzone = clampd(v, 0, 0.45, s->tune.deadzone);
+            else if (!strcmp(key, "curve"))   s->tune.curve    = clampd(v, 0.4, 3.0, s->tune.curve);
+            else if (!strcmp(key, "gesture")) s->tune.gesture  = clampd(v, 0, 1, s->tune.gesture);
+        }
+    } else if (!strcmp(what, "light")) {
+        long r, g, b, on, pat = LP_SOLID, pl = 0x04, lm = LM_MANUAL;
+        double sp = 0.5, bright = 1.0;
+        /* extra fields were appended over time, so older lines still load */
+        int got = sscanf(line, "%*s %ld %ld %ld %ld %ld %lf %ld %lf %ld",
+                         &r, &g, &b, &on, &pat, &sp, &pl, &bright, &lm);
+        if (got >= 4) {
+            s->light.r = (unsigned char)clampi(r, 0, 255);
+            s->light.g = (unsigned char)clampi(g, 0, 255);
+            s->light.b = (unsigned char)clampi(b, 0, 255);
+            s->light.on = on != 0;
+        }
+        if (got >= 5) s->light.pattern = (pat < 0 || pat >= LP_COUNT) ? LP_SOLID : (int)pat;
+        if (got >= 6) s->light.speed   = clampd(sp, 0, 1, 0.5);
+        if (got >= 7) s->light.player  = (unsigned char)(clampi(pl, 0, 255) & 0x1F);
+        if (got >= 8) s->light.bright  = clampd(bright, 0, 1, 1.0);
+        if (got >= 9) s->light.mode    = lm == LM_SIM ? LM_SIM : LM_MANUAL;
+    } else if (!strcmp(what, "fxmode")) {
+        char m[16] = "";
+        if (sscanf(line, "%*s %15s", m) == 1)
+            s->fxmode = strcmp(m, "wind") == 0 ? FXM_WIND : FXM_MANUAL;
+    } else if (!strcmp(what, "rumblemode")) {
+        char m[16] = "";
+        if (sscanf(line, "%*s %15s", m) == 1)
+            s->rmode = strcmp(m, "sim") == 0 ? RM_SIM : RM_MANUAL;
+    } else if (!strcmp(what, "rumblepath")) {
+        char m[16] = "";
+        if (sscanf(line, "%*s %15s", m) == 1) s->rumble_v2 = strcmp(m, "v2") == 0;
+    } else if (!strcmp(what, "trigger")) {
+        char sd[4]; long m, st, en, sg;
+        if (sscanf(line, "%*s %3s %ld %ld %ld %ld", sd, &m, &st, &en, &sg) == 5 &&
+            (!strcmp(sd, "l") || !strcmp(sd, "r"))) {
+            int i = sd[0] == 'r' ? 1 : 0;
+            s->fx_manual[i] = (trigger_fx_t){
+                (m < TFX_OFF || m > TFX_VIBRATE) ? TFX_OFF : (int)m,
+                (unsigned char)clampi(st, 0, 255),
+                (unsigned char)clampi(en, 0, 255),
+                (unsigned char)clampi(sg, 0, 255) };
+        }
+    } else if (!strcmp(what, "axis")) {
+        char src[32], tgt[32]; int inv = 0;
+        if (sscanf(line, "%*s %31s %31s %d", src, tgt, &inv) < 2) return;
+        for (int i = 0; i < S_COUNT; i++) if (!strcmp(src, SRC_KEY[i]))
+            for (int t = 0; t < AX_TARGET_COUNT; t++) if (!strcmp(tgt, AX_KEY[t]))
+                s->axis[i] = (axis_map_t){ t, inv != 0 };
+    } else if (!strcmp(what, "button")) {
+        long slot = -1, rep = 0; char cmd[CMD_PATH_MAX] = "";
+        if (sscanf(line, "%*s %ld %ld %255s", &slot, &rep, cmd) < 3) return;
+        if (slot < 0 || slot >= B_COUNT || !cmd_valid(cmd)) return;
+        snprintf(s->bind[slot].cmd, CMD_PATH_MAX, "%s", cmd);
+        s->bind[slot].repeat = rep != 0;
+    }
+}
+
+/* Parse bindings.conf text over whatever is already in *s (normally the
+ * defaults). A file on disk is authoritative for buttons, so they start empty
+ * rather than letting defaults leak into slots the user deliberately cleared. */
+bool bindings_parse(settings_t *s, const char *text, size_t len) {
+    if (!text) return false;
+    memset(s->bind, 0, sizeof s->bind);
+    size_t i = 0;
+    while (i < len) {
+        size_t start = i;
+        while (i < len && text[i] != '\n') i++;
+        size_t n = i - start;
+        if (i < len) i++;                          /* skip the newline */
+        if (n == 0 || n >= 1024) continue;         /* empty or oversized: skip */
+        char line[1024];
+        memcpy(line, text + start, n);
+        line[n] = 0;
+        if (strlen(line) != n) continue;           /* embedded NUL: reject the line */
+        if (n && line[n - 1] == '\r') line[--n] = 0;
+        if (!n || line[0] == '#') continue;
+        parse_line(s, line);
+    }
+    return true;
+}
+
+static void put(char *b, size_t cap, size_t *o, const char *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
+static void put(char *b, size_t cap, size_t *o, const char *fmt, ...) {
+    if (cap == 0 || *o >= cap - 1) return;
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(b + *o, cap - *o, fmt, ap);
+    va_end(ap);
+    if (n < 0) return;
+    *o += (size_t)n;
+    if (*o > cap - 1) *o = cap - 1;
+}
+
+size_t bindings_format(const settings_t *s, char *b, size_t cap) {
+    size_t o = 0;
+    put(b, cap, &o, "# dsxp bindings v2 - rewritten by DSXP\n");
+    put(b, cap, &o, "tune deadzone %.4f\n", s->tune.deadzone);
+    put(b, cap, &o, "tune curve %.4f\n",    s->tune.curve);
+    put(b, cap, &o, "tune gesture %.4f\n",  s->tune.gesture);
+    put(b, cap, &o, "light %d %d %d %d %d %.3f %d %.3f %d\n", s->light.r, s->light.g, s->light.b,
+        s->light.on ? 1 : 0, s->light.pattern, s->light.speed, s->light.player,
+        s->light.bright, s->light.mode);
+    put(b, cap, &o, "fxmode %s\n", s->fxmode == FXM_WIND ? "wind" : "manual");
+    put(b, cap, &o, "rumblemode %s\n", s->rmode == RM_SIM ? "sim" : "manual");
+    put(b, cap, &o, "rumblepath %s\n", s->rumble_v2 ? "v2" : "classic");
+    /* always the hand-set effects: wind mode computes its own and never saves them */
     for (int i = 0; i < 2; i++)
-        fprintf(f, "trigger %c %d %d %d %d\n", i ? 'r' : 'l',
-                g_fx[i].mode, g_fx[i].start, g_fx[i].end, g_fx[i].strength);
-    fprintf(f, "# axis <source> <target> <invert>\n");
-    for (int i = 0; i < S_COUNT; i++)
-        fprintf(f, "axis %s %s %d\n", SRC_KEY[i], AX_KEY[g_axis[i].target],
-                g_axis[i].invert ? 1 : 0);
-    fprintf(f, "# button <slot> <repeat> <command>\n");
+        put(b, cap, &o, "trigger %c %d %d %d %d\n", i ? 'r' : 'l',
+            s->fx_manual[i].mode, s->fx_manual[i].start, s->fx_manual[i].end,
+            s->fx_manual[i].strength);
+    put(b, cap, &o, "# axis <source> <target> <invert>\n");
+    for (int i = 0; i < S_COUNT; i++) {
+        int t = s->axis[i].target;
+        if (t < 0 || t >= AX_TARGET_COUNT) t = AX_NONE;
+        put(b, cap, &o, "axis %s %s %d\n", SRC_KEY[i], AX_KEY[t], s->axis[i].invert ? 1 : 0);
+    }
+    put(b, cap, &o, "# button <slot> <repeat> <command>\n");
     for (int i = 0; i < B_COUNT; i++)
-        if (g_bind[i].cmd[0])
-            fprintf(f, "button %d %d %s\n", i, g_bind[i].repeat ? 1 : 0, g_bind[i].cmd);
-    fclose(f);
-}
-
-void bindings_load(void) {
-    load_defaults();
-    char p[PATH_MAX]; bindings_path(p, sizeof p);
-    FILE *f = fopen(p, "r");
-    if (!f) {
-        /* materialise the defaults so the file is there to inspect and hand-edit */
-        bindings_save();
-        fprintf(stderr, "[dsxp] no bindings.conf - wrote profile defaults to %s\n", p);
-        return;
-    }
-    /* A config on disk is authoritative, so start from empty buttons rather than
-     * letting defaults leak through for slots the user deliberately cleared. */
-    memset(g_bind, 0, sizeof g_bind);
-    char line[1024];
-    while (fgets(line, sizeof line, f)) {
-        if (line[0] == '#' || line[0] == '\n') continue;
-        char what[32];
-        if (sscanf(line, "%31s", what) != 1) continue;
-        if (!strcmp(what, "tune")) {
-            char key[32]; double v;
-            if (sscanf(line, "%*s %31s %lf", key, &v) == 2) {
-                if (!strcmp(key, "deadzone")) g_tune.deadzone = v;
-                else if (!strcmp(key, "curve")) g_tune.curve = v;
-                else if (!strcmp(key, "gesture")) g_tune.gesture = v;
-            }
-        } else if (!strcmp(what, "light")) {
-            int r, g, b, on, pat = LP_SOLID, pl = 0x04;
-            double sp = 0.5;
-            double bright = 1.0;
-            int lm = LM_MANUAL;
-            /* extra fields are appended, so older config lines still load */
-            int got = sscanf(line, "%*s %d %d %d %d %d %lf %d %lf %d",
-                             &r, &g, &b, &on, &pat, &sp, &pl, &bright, &lm);
-            if (got >= 4) {
-                g_light.r = (unsigned char)r;
-                g_light.g = (unsigned char)g;
-                g_light.b = (unsigned char)b;
-                g_light.on = on != 0;
-            }
-            if (got >= 5) g_light.pattern = (pat < 0 || pat >= LP_COUNT) ? LP_SOLID : pat;
-            if (got >= 6) g_light.speed   = sp < 0 ? 0 : (sp > 1 ? 1 : sp);
-            if (got >= 7) g_light.player  = (unsigned char)(pl & 0x1F);
-            if (got >= 8) g_light.bright  = bright < 0 ? 0 : (bright > 1 ? 1 : bright);
-            if (got >= 9) g_light.mode    = lm == LM_SIM ? LM_SIM : LM_MANUAL;
-        } else if (!strcmp(what, "fxmode")) {
-            char m[16] = "";
-            if (sscanf(line, "%*s %15s", m) == 1)
-                g_fxmode = strcmp(m, "wind") == 0 ? FXM_WIND : FXM_MANUAL;
-        } else if (!strcmp(what, "rumblemode")) {
-            char m[16] = "";
-            if (sscanf(line, "%*s %15s", m) == 1)
-                g_rmode = strcmp(m, "sim") == 0 ? RM_SIM : RM_MANUAL;
-        } else if (!strcmp(what, "rumblepath")) {
-            char m[16] = "";
-            if (sscanf(line, "%*s %15s", m) == 1) g_rumble_v2 = strcmp(m, "v2") == 0;
-        } else if (!strcmp(what, "trigger")) {
-            char sd; int m, st, en, sg;
-            if (sscanf(line, "%*s %c %d %d %d %d", &sd, &m, &st, &en, &sg) == 5) {
-                int i = (sd == 'r') ? 1 : 0;
-                g_fx[i] = (trigger_fx_t){ m, (unsigned char)st,
-                                          (unsigned char)en, (unsigned char)sg };
-            }
-        } else if (!strcmp(what, "axis")) {
-            char src[32], tgt[32]; int inv = 0;
-            if (sscanf(line, "%*s %31s %31s %d", src, tgt, &inv) < 2) continue;
-            for (int i = 0; i < S_COUNT; i++) if (!strcmp(src, SRC_KEY[i]))
-                for (int t = 0; t < AX_TARGET_COUNT; t++) if (!strcmp(tgt, AX_KEY[t]))
-                    g_axis[i] = (axis_map_t){ t, inv != 0 };
-        } else if (!strcmp(what, "button")) {
-            int slot = -1, rep = 0; char cmd[CMD_PATH_MAX] = "";
-            if (sscanf(line, "%*s %d %d %255s", &slot, &rep, cmd) < 3) continue;
-            if (slot < 0 || slot >= B_COUNT) continue;
-            strncpy(g_bind[slot].cmd, cmd, CMD_PATH_MAX - 1);
-            g_bind[slot].repeat = rep != 0;
-        }
-    }
-    fclose(f);
-    fprintf(stderr, "[dsxp] loaded bindings from %s\n", p);
-}
-
-/*
- * X-Plane ships every command with a human-readable description in
- * Resources/plugins/Commands.txt, formatted as <path> space-padded then <text>.
- * That file is what makes the mapper searchable in plain English.
- */
-void commands_load(void) {
-    const char *candidates[] = {
-        /* (a hard-coded absolute install path was removed on import) */
-        "Commands.txt"
-    };
-    FILE *f = NULL;
-    for (size_t i = 0; i < sizeof candidates / sizeof candidates[0] && !f; i++)
-        f = fopen(candidates[i], "r");
-    if (!f) { fprintf(stderr, "[dsxp] Commands.txt not found - UI list will be empty\n"); return; }
-
-    g_cmds = calloc(MAX_CMDS, sizeof(xcmd_t));
-    if (!g_cmds) { fclose(f); return; }
-    char line[1024];
-    while (fgets(line, sizeof line, f) && g_ncmds < MAX_CMDS) {
-        char *nl = strpbrk(line, "\r\n"); if (nl) *nl = 0;
-        if (!line[0]) continue;
-        char *sp = strstr(line, "  ");
-        if (!sp) {
-            strncpy(g_cmds[g_ncmds].path, line, CMD_PATH_MAX - 1);
-            g_cmds[g_ncmds].desc[0] = 0;
-        } else {
-            size_t plen = (size_t)(sp - line);
-            if (plen >= CMD_PATH_MAX) plen = CMD_PATH_MAX - 1;
-            memcpy(g_cmds[g_ncmds].path, line, plen);
-            g_cmds[g_ncmds].path[plen] = 0;
-            while (*sp == ' ') sp++;
-            strncpy(g_cmds[g_ncmds].desc, sp, CMD_DESC_MAX - 1);
-        }
-        g_ncmds++;
-    }
-    fclose(f);
-    fprintf(stderr, "[dsxp] loaded %d X-Plane commands\n", g_ncmds);
+        if (s->bind[i].cmd[0] && cmd_valid(s->bind[i].cmd))
+            put(b, cap, &o, "button %d %d %s\n", i, s->bind[i].repeat ? 1 : 0, s->bind[i].cmd);
+    return o;
 }

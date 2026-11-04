@@ -1,0 +1,23 @@
+// Shared build settings for every target. Local signing settings go in
+// Config/Local.xcconfig (gitignored); see Local.xcconfig.example.
+
+MACOSX_DEPLOYMENT_TARGET = 14.0
+PRODUCT_BUNDLE_IDENTIFIER = io.github.aakkss69.DSXP
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 1
+
+// Ad-hoc ("Sign to Run Locally") by default so a fresh clone builds. For daily
+// use set a real identity in Local.xcconfig: macOS ties the Input Monitoring
+// permission to the signature, and an ad-hoc one changes on every build.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+PROVISIONING_PROFILE_SPECIFIER =
+ENABLE_HARDENED_RUNTIME = YES
+
+SWIFT_VERSION = 6.0
+GCC_C_LANGUAGE_STANDARD = c17
+CLANG_ENABLE_OBJC_ARC = YES
+DSXP_C_WARNINGS = -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes
+
+#include? "Local.xcconfig"

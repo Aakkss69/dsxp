@@ -1,0 +1,5 @@
+-std=c17
+-ICore/include
+-ICore/src
+-Wall
+-Wextra
