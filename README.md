@@ -1,7 +1,7 @@
 # DSXP
 
 Use a PS5 DualSense controller over **Bluetooth** in **X-Plane 12** on macOS, with a
-live mapper for every X-Plane command, adaptive triggers driven by the airflow, rumble
+live mapper for every X-Plane command, adaptive triggers that feel the airflow, rumble
 for stalls and crashes, and a light bar that works as an annunciator.
 
 DSXP is a small menu-bar app. Over USB-C X-Plane already reads the controller
@@ -16,7 +16,7 @@ buttons. X-Plane deliberately ignores vendor-page elements, so it sees the
 controller but never receives a stick movement or a button press. Over USB the
 real axes arrive in report `0x01`, which is why the cable works.
 
-DSXP reads report `0x31` itself, decodes it, and drives X-Plane through X-Plane's
+DSXP reads report `0x31` itself, decodes it, and flies X-Plane through X-Plane's
 own UDP interface: the override datarefs for the yoke and rudder, and commands
 for the buttons.
 
@@ -76,7 +76,7 @@ macOS treats every rebuild as a new app and asks for permissions again.
    `~/X-Plane/X-Plane 12` and `/Applications/X-Plane 12`, and at a running
    X-Plane), click **Choose…** in the mapper and pick your X-Plane 12 folder.
 3. Turn on the controller. The menu shows *Controller: Bluetooth, 62 Hz* or so.
-4. Start X-Plane. Once a flight is loaded the menu shows *Bridge: Driving X-Plane*.
+4. Start X-Plane. Once a flight is loaded the menu shows *Flight controls: Active*.
 5. If the controller is connected but no input arrives, the mapper and the menu
    offer **Allow Input Monitoring…**, which opens *Privacy & Security › Input
    Monitoring*.

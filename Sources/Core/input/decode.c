@@ -66,8 +66,8 @@ void detect_gestures_cfg(const ds_state_t *st, gesture_t *g, double sens,
         double dt = now - g->st;
         if (!isfinite(sens) || sens < 0) sens = 0;
         if (sens > 1) sens = 1;
-        double swipe_min = gc->swipe_at0 + (gc->swipe_at100 - gc->swipe_at0) * sens;
-        double tap_max   = gc->wander_at0 + (gc->wander_at100 - gc->wander_at0) * sens;
+        double swipe_min = gc->swipe_length_at0 + (gc->swipe_length_at100 - gc->swipe_length_at0) * sens;
+        double tap_max   = gc->tap_wander_at0 + (gc->tap_wander_at100 - gc->tap_wander_at0) * sens;
 
         if (dist >= swipe_min) {
             /* eight 45-degree sectors, starting at "right" and going clockwise
@@ -118,14 +118,14 @@ bool ds_decode_report_cfg(ds_state_t *st, gesture_t *g, const tuning_t *tune,
     st->btn[B_TRIANGLE] = (b0 & 0x80) != 0;
     st->btn[B_L1]       = (b1 & 0x01) != 0;
     st->btn[B_R1]       = (b1 & 0x02) != 0;
-    st->btn[B_L2D]      = (b1 & 0x04) != 0;
-    st->btn[B_R2D]      = (b1 & 0x08) != 0;
+    st->btn[B_L2_CLICK]      = (b1 & 0x04) != 0;
+    st->btn[B_R2_CLICK]      = (b1 & 0x08) != 0;
     st->btn[B_CREATE]   = (b1 & 0x10) != 0;
     st->btn[B_OPTIONS]  = (b1 & 0x20) != 0;
     st->btn[B_L3]       = (b1 & 0x40) != 0;
     st->btn[B_R3]       = (b1 & 0x80) != 0;
     st->btn[B_PS]       = (b2 & 0x01) != 0;
-    st->btn[B_TOUCHPAD] = (b2 & 0x02) != 0;
+    st->btn[B_TOUCHPAD_CLICK] = (b2 & 0x02) != 0;
     st->btn[B_MUTE]     = (b2 & 0x04) != 0;
 
     decode_touch(st, r);

@@ -92,9 +92,9 @@
 enum {
     B_DP_UP = 0, B_DP_UR, B_DP_R, B_DP_DR, B_DP_DOWN, B_DP_DL, B_DP_L, B_DP_UL,
     B_SQUARE = 8, B_CROSS, B_CIRCLE, B_TRIANGLE,
-    B_L1, B_R1, B_L2D, B_R2D,
+    B_L1, B_R1, B_L2_CLICK, B_R2_CLICK,
     B_CREATE, B_OPTIONS, B_L3, B_R3,
-    B_PS, B_TOUCHPAD, B_MUTE,
+    B_PS, B_TOUCHPAD_CLICK, B_MUTE,
     /* Touchpad gestures, appended after the physical controls so slots 0-22
      * stay stable and existing bindings.conf files still load. */
     B_TP_TAP = 23, B_TP_TAP2,
@@ -106,7 +106,7 @@ enum {
 /* Analog sources */
 enum { S_LX = 0, S_LY, S_RX, S_RY, S_L2, S_R2, S_COUNT };
 
-/* What an analog source drives */
+/* The X-Plane control an analog source moves */
 enum {
     AX_NONE = 0, AX_ROLL, AX_PITCH, AX_YAW, AX_THROTTLE,
     AX_RUDD_L, AX_RUDD_R, AX_BRAKE_L, AX_BRAKE_R, AX_TARGET_COUNT
@@ -120,14 +120,14 @@ typedef struct { double deadzone; double curve; double gesture; } tuning_t;
 /* Light bar: a static color, or an animated pattern built from it. */
 typedef enum { LP_SOLID = 0, LP_BREATHE, LP_PULSE, LP_STROBE, LP_RAINBOW, LP_ALERT,
                LP_COUNT } lpat_t;
-typedef enum { LM_MANUAL = 0, LM_SIM } lmode_t;
+typedef enum { LIGHT_SRC_MANUAL = 0, LIGHT_SRC_SIM } light_source_t;
 typedef struct {
     unsigned char r, g, b;
     bool on;
     int  pattern;          /* lpat_t */
     double speed;          /* 0..1 */
     double bright;         /* 0..1, scales the emitted color */
-    int  mode;             /* lmode_t - sim mode drives color and pattern */
+    int  source;           /* light_source_t - the simulator sets color and pattern */
     unsigned char player;  /* player-indicator LED bitmask, 5 lamps */
 } light_t;
 typedef enum { TFX_OFF = 0, TFX_RESIST, TFX_WEAPON, TFX_VIBRATE } tfx_mode_t;
@@ -137,9 +137,9 @@ typedef struct { int mode; unsigned char start, end, strength; } trigger_fx_t;  
 typedef struct { int mode; unsigned char start, end, strength, freq; } trig_manual_t;
 typedef struct { bool active; double x, y; } touch_t;
 
-/* Trigger effects are either hand-set or driven from the sim, never both. */
-typedef enum { FXM_MANUAL = 0, FXM_WIND } fxmode_t;
-typedef enum { RM_MANUAL = 0, RM_SIM } rmode_t;
+/* Trigger effects are either hand-set or set by the wind, never both. */
+typedef enum { TRIGGER_SRC_MANUAL = 0, TRIGGER_SRC_WIND } trigger_source_t;
+typedef enum { RUMBLE_SRC_MANUAL = 0, RUMBLE_SRC_SIM } rumble_source_t;
 typedef struct { unsigned char left, right; } rumble_t;
 
 typedef struct {
@@ -159,7 +159,7 @@ typedef struct {
     double elev_m;       /* aircraft elevation MSL, meters                 */
     double last_rx;
     bool   live;
-    char   note[64];
+    char   trigger_note[64];   /* trigger effects status (wind source) */
 } wx_t;
 typedef struct { char path[CMD_PATH_MAX]; char desc[CMD_DESC_MAX]; } xcmd_t;
 
@@ -185,13 +185,13 @@ typedef struct {
     tuning_t     tune;
     light_t      light;
     trig_manual_t fx_manual[2]; /* [0] = L2, [1] = R2: what the user set by hand */
-    int          fxmode;        /* fxmode_t */
-    int          rmode;         /* rmode_t  */
+    int          trigger_source;        /* trigger_source_t */
+    int          rumble_source;         /* rumble_source_t  */
     bool         rumble_v2;
     gesture_cfg_t  gesture;     /* controls.conf: gesture thresholds  */
     wind_cfg_t     wind;        /* feedback.conf: wind trigger model  */
     rumble_cfg_t   rumble;      /* feedback.conf: sim rumble model    */
-    lightsim_cfg_t lsim;        /* feedback.conf: light bar sim cues  */
+    light_sim_cfg_t light_sim;        /* feedback.conf: light bar sim cues  */
 } settings_t;
 
 /* X-Plane 12 telemetry (RREF ids). Weather is published per layer: 13 layers of
@@ -260,7 +260,7 @@ typedef struct core {
     /* controller output */
     trigger_fx_t fx_out[2];
     rumble_t     rumble;
-    char         rnote[64], lnote[64];
+    char         rumble_note[64], light_note[64];
     unsigned char eff_r, eff_g, eff_b;
     double       light_last;
     bool         out_dirty;
@@ -279,9 +279,9 @@ typedef struct core {
 /* Snapshot of everything /api/state shows, copied out under a short lock. */
 typedef struct {
     bool connected; long reports, total; double report_hz;
-    tuning_t tune; light_t light; char lnote[64];
-    trigger_fx_t fx[2]; trig_manual_t fxm[2]; int fxmode;
-    wx_t wx; int rmode; char rnote[64]; rumble_t rumble; bool rumble_v2;
+    tuning_t tune; light_t light; char light_note[64];
+    trigger_fx_t fx[2]; trig_manual_t trigger_manual[2]; int trigger_source;
+    wx_t wx; int rumble_source; char rumble_note[64]; rumble_t rumble; bool rumble_v2;
     bool bt, usb, xp, engaged, suspended, imported;
     double axes[S_COUNT], raw[S_COUNT];
     bool btn[B_COUNT];
@@ -293,12 +293,12 @@ typedef struct {
 
 /* Commands from the UI into the core (applied on the core thread). */
 typedef enum {
-    CMD_NONE = 0, CMD_BIND, CMD_AXIS, CMD_TUNE, CMD_LIGHT, CMD_TRIGGER, CMD_FXMODE,
-    CMD_RUMBLE, CMD_RUMBLEMODE, CMD_RUMBLEPATH
+    CMD_NONE = 0, CMD_BIND, CMD_AXIS, CMD_TUNE, CMD_LIGHT, CMD_TRIGGER, CMD_TRIGGER_SOURCE,
+    CMD_RUMBLE, CMD_RUMBLE_SOURCE, CMD_RUMBLEPATH
 } cmd_kind_t;
 
 enum { LF_R = 1, LF_G = 2, LF_B = 4, LF_ON = 8, LF_PATTERN = 16, LF_SPEED = 32,
-       LF_PLAYER = 64, LF_BRIGHT = 128, LF_MODE = 256 };
+       LF_PLAYER = 64, LF_BRIGHT = 128, LF_SOURCE = 256 };
 enum { TF_MODE = 1, TF_START = 2, TF_END = 4, TF_STRENGTH = 8, TF_FREQ = 16 };
 
 typedef struct {
@@ -310,7 +310,7 @@ typedef struct {
         struct { bool has_dz, has_cv, has_gs; double dz, cv, gs; } tune;
         struct { light_t v; unsigned mask; } light;
         struct { trig_manual_t v; unsigned mask; } trig;
-        int mode;
+        int source;              /* CMD_TRIGGER_SOURCE, CMD_RUMBLE_SOURCE */
         struct { bool has_l, has_r; unsigned char l, r; } rumble;
         bool flag;
     } u;
@@ -362,7 +362,7 @@ void rumble_apply(const wx_t *wx, rumble_t *out, char *note, size_t note_n,
 void hsv(double h, double s, double v, unsigned char *R, unsigned char *G, unsigned char *B);
 void light_sim(const wx_t *wx, int *pat, unsigned char *r, unsigned char *g,
                unsigned char *b, double *rate, char *note, size_t note_n,
-               const lightsim_cfg_t *cfg);
+               const light_sim_cfg_t *cfg);
 bool light_tick(core_t *c, double now);     /* true if the emitted color changed */
 
 /* xp_packets.c - X-Plane UDP wire formats */
@@ -426,8 +426,8 @@ void core_tick(core_t *c, double now);
 void core_snapshot(const core_t *c, dsxp_snap_t *out);
 void core_mark_dirty(core_t *c, double now, unsigned files);
 unsigned core_save_due(core_t *c, double now);      /* CFB_* mask due for saving, cleared */
-void core_set_fxmode(core_t *c, int mode, double now);
-void core_set_rmode(core_t *c, int mode, double now);
+void core_set_trigger_source(core_t *c, int mode, double now);
+void core_set_rumble_source(core_t *c, int mode, double now);
 void out_tick(core_t *c, double now);
 void out_quiet(core_t *c);
 void out_mark(core_t *c);

@@ -101,7 +101,7 @@ void telemetry_unsubscribe(core_t *c) {
 }
 
 /*
- * Sim-driven effects latch on the controller: the last report sent stays in
+ * Simulator-set effects latch on the controller: the last report sent stays in
  * force until another one replaces it. So when telemetry stops - X-Plane quits,
  * or the link drops - the computed values must be cleared, or a crash rumble
  * carries on after the sim is gone.
@@ -113,13 +113,13 @@ void sim_release(core_t *c, const char *why) {
     c->wx.stall_l = c->wx.stall_r = c->wx.stall_ratio = 0;
     c->wx.ias = c->wx.turb = c->wx.gn = 0;
     memset(c->stall_el, 0, sizeof c->stall_el);
-    if (c->s.rmode == RM_SIM) c->rumble.left = c->rumble.right = 0;
-    if (c->s.fxmode == FXM_WIND) {
+    if (c->s.rumble_source == RUMBLE_SRC_SIM) c->rumble.left = c->rumble.right = 0;
+    if (c->s.trigger_source == TRIGGER_SRC_WIND) {
         c->fx_out[0] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
         c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
     }
-    snprintf(c->wx.note, sizeof c->wx.note, "%s", why);
-    if (c->s.rmode == RM_SIM) snprintf(c->rnote, sizeof c->rnote, "%s", why);
+    snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "%s", why);
+    if (c->s.rumble_source == RUMBLE_SRC_SIM) snprintf(c->rumble_note, sizeof c->rumble_note, "%s", why);
     out_mark(c);
 }
 
@@ -190,10 +190,10 @@ void telemetry_tick(core_t *c, double now) {
     }
     if (!want) {
         if (c->wx.live) sim_release(c, "X-Plane closed");
-        snprintf(c->wx.note, sizeof c->wx.note, "%s",
-                 c->s.fxmode == FXM_WIND ? "Waiting for X-Plane" : "Manual");
-        if (c->s.rmode == RM_SIM)
-            snprintf(c->rnote, sizeof c->rnote, "Waiting for X-Plane");
+        snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "%s",
+                 c->s.trigger_source == TRIGGER_SRC_WIND ? "Waiting for X-Plane" : "Manual");
+        if (c->s.rumble_source == RUMBLE_SRC_SIM)
+            snprintf(c->rumble_note, sizeof c->rumble_note, "Waiting for X-Plane");
         return;
     }
     /* X-Plane does not always keep subscriptions (observed across reloads; not
@@ -211,18 +211,18 @@ void telemetry_tick(core_t *c, double now) {
 
     if (c->wx.live && c->wx.paused) {
         /* paused: the sim keeps answering, but nothing should buzz or resist */
-        if (c->s.rmode == RM_SIM && (c->rumble.left || c->rumble.right)) {
+        if (c->s.rumble_source == RUMBLE_SRC_SIM && (c->rumble.left || c->rumble.right)) {
             c->rumble.left = c->rumble.right = 0;
             out_mark(c);
         }
-        if (c->s.fxmode == FXM_WIND && (c->fx_out[0].mode != TFX_OFF || c->fx_out[1].mode != TFX_OFF)) {
+        if (c->s.trigger_source == TRIGGER_SRC_WIND && (c->fx_out[0].mode != TFX_OFF || c->fx_out[1].mode != TFX_OFF)) {
             c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
             out_mark(c);
         }
-        snprintf(c->wx.note, sizeof c->wx.note, "Paused");
-        if (c->s.rmode == RM_SIM) snprintf(c->rnote, sizeof c->rnote, "Paused");
+        snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Paused");
+        if (c->s.rumble_source == RUMBLE_SRC_SIM) snprintf(c->rumble_note, sizeof c->rumble_note, "Paused");
     } else if (c->wx.live) {
-        if (c->s.fxmode == FXM_WIND) {
+        if (c->s.trigger_source == TRIGGER_SRC_WIND) {
             trigger_fx_t before[2] = { c->fx_out[0], c->fx_out[1] };
             wind_apply(&c->wx, c->fx_out, &c->s.wind);
             if (!fx_equal(&before[0], &c->fx_out[0]) || !fx_equal(&before[1], &c->fx_out[1])) out_mark(c);
@@ -230,9 +230,9 @@ void telemetry_tick(core_t *c, double now) {
             trigger_fx_t scratch[2];
             wind_apply(&c->wx, scratch, &c->s.wind);     /* keeps load/crosswind readouts live */
         }
-        if (c->s.rmode == RM_SIM) {
+        if (c->s.rumble_source == RUMBLE_SRC_SIM) {
             rumble_t before = c->rumble;
-            rumble_apply(&c->wx, &c->rumble, c->rnote, sizeof c->rnote, &c->s.rumble, now - c->crash_at);
+            rumble_apply(&c->wx, &c->rumble, c->rumble_note, sizeof c->rumble_note, &c->s.rumble, now - c->crash_at);
             if (before.left != c->rumble.left || before.right != c->rumble.right) out_mark(c);
         }
     } else if (was_live) {
@@ -240,8 +240,8 @@ void telemetry_tick(core_t *c, double now) {
          * networking turned off. Do not leave anything latched. */
         sim_release(c, "Telemetry lost");
     } else {
-        snprintf(c->wx.note, sizeof c->wx.note, "Waiting for X-Plane");
-        if (c->s.rmode == RM_SIM)
-            snprintf(c->rnote, sizeof c->rnote, "Waiting for X-Plane");
+        snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Waiting for X-Plane");
+        if (c->s.rumble_source == RUMBLE_SRC_SIM)
+            snprintf(c->rumble_note, sizeof c->rumble_note, "Waiting for X-Plane");
     }
 }

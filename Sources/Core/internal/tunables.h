@@ -34,8 +34,8 @@ typedef struct {
 typedef struct {
     double tap_time_s;              /* a tap must lift within this time        */
     double pulse_s;                 /* how long a gesture "button" stays down  */
-    double swipe_at0, swipe_at100;  /* shortest swipe (pad fraction) at sensitivity 0 / 1 */
-    double wander_at0, wander_at100;/* largest tap movement at sensitivity 0 / 1 */
+    double swipe_length_at0, swipe_length_at100;  /* shortest swipe (pad fraction) at sensitivity 0 / 1 */
+    double tap_wander_at0, tap_wander_at100;/* largest tap movement at sensitivity 0 / 1 */
 } gesture_cfg_t;
 
 /* feedback.conf: wind-mode trigger model */
@@ -45,12 +45,12 @@ typedef struct {
     double free_play;               /* trigger travel before force starts      */
     double base_force;              /* force at any airflow                    */
     double airspeed_force;          /* extra force at full_force_kt            */
-    double xwind_full_kt;           /* crosswind giving full left/right bias   */
-    double xwind_bias;              /* how far a full crosswind shifts force   */
-    double buffet_turb;             /* turbulence (0-10) where buffet takes over */
+    double crosswind_full_kt;           /* crosswind giving full left/right bias   */
+    double crosswind_bias;              /* how far a full crosswind shifts force   */
+    double buffet_turbulence;             /* turbulence (0-10) where buffet takes over */
     double buffet_start;            /* trigger travel where buffet starts      */
-    double buffet_str_min, buffet_str_max;
-    double buffet_hz_min, buffet_hz_max;
+    double buffet_strength_min, buffet_strength_max;
+    double buffet_freq_min_hz, buffet_freq_max_hz;
 } wind_cfg_t;
 
 /* feedback.conf: sim-mode rumble model */
@@ -64,13 +64,13 @@ typedef struct {
 typedef struct {
     double stall_alarm, stall_caution;   /* stall warning ratio 0..1 */
     double g_caution;                    /* |g| */
-    double turb_caution;                 /* turbulence 0-10 */
-} lightsim_cfg_t;
+    double turbulence_caution;                 /* turbulence 0-10 */
+} light_sim_cfg_t;
 
 extern const bridge_cfg_t   BRIDGE_DEFAULTS;
 extern const gesture_cfg_t  GESTURE_DEFAULTS;
 extern const wind_cfg_t     WIND_DEFAULTS;
 extern const rumble_cfg_t   RUMBLE_DEFAULTS;
-extern const lightsim_cfg_t LIGHTSIM_DEFAULTS;
+extern const light_sim_cfg_t LIGHT_SIM_DEFAULTS;
 
 #endif /* DSXP_TUNABLES_H */

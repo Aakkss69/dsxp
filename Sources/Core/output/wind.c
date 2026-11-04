@@ -1,5 +1,5 @@
 /*
- * Wind mode: drive the adaptive triggers from X-Plane's own flight state. Pure.
+ * Wind source: set the adaptive triggers from X-Plane's own flight state. Pure.
  *
  * WHY THESE EFFECTS
  *   In the default profile L2/R2 are differential rudder. On a real aeroplane the
@@ -44,33 +44,33 @@ void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg) {
     double xw = wx->wind_ms * sin(rel);
     if (!isfinite(xw)) xw = 0;
     wx->crosswind = xw;
-    double asym = xw / (cfg->xwind_full_kt * KT_TO_MS);
+    double asym = xw / (cfg->crosswind_full_kt * KT_TO_MS);
     if (asym >  1) asym =  1;
     if (asym < -1) asym = -1;
 
     double base = (cfg->base_force + cfg->airspeed_force * q) * 255.0;   /* byte-space force */
     /* wind from the right loads the left rudder, and unloads the right */
-    double fl = base * (1.0 + cfg->xwind_bias * asym);
-    double fr = base * (1.0 - cfg->xwind_bias * asym);
+    double fl = base * (1.0 + cfg->crosswind_bias * asym);
+    double fr = base * (1.0 - cfg->crosswind_bias * asym);
 
-    if (wx->turb > cfg->buffet_turb && cfg->buffet_turb < 10.0) {
-        double t = (wx->turb - cfg->buffet_turb) / (10.0 - cfg->buffet_turb);
+    if (wx->turb > cfg->buffet_turbulence && cfg->buffet_turbulence < 10.0) {
+        double t = (wx->turb - cfg->buffet_turbulence) / (10.0 - cfg->buffet_turbulence);
         if (t > 1) t = 1;
-        unsigned char amp = clamp8((cfg->buffet_str_min + (cfg->buffet_str_max - cfg->buffet_str_min) * t) * 255.0);
-        unsigned char hz  = clamp8(cfg->buffet_hz_min + (cfg->buffet_hz_max - cfg->buffet_hz_min) * t);
+        unsigned char amp = clamp8((cfg->buffet_strength_min + (cfg->buffet_strength_max - cfg->buffet_strength_min) * t) * 255.0);
+        unsigned char hz  = clamp8(cfg->buffet_freq_min_hz + (cfg->buffet_freq_max_hz - cfg->buffet_freq_min_hz) * t);
         unsigned char at  = clamp8(cfg->buffet_start * 255.0);
         if (hz < 1) hz = 1;
         fx[0] = (trigger_fx_t){ TFX_VIBRATE, at, hz, amp };
         fx[1] = (trigger_fx_t){ TFX_VIBRATE, at, hz, amp };
-        snprintf(wx->note, sizeof wx->note, "Buffet, turbulence %.1f", wx->turb);
+        snprintf(wx->trigger_note, sizeof wx->trigger_note, "Buffet, turbulence %.1f", wx->turb);
     } else if (ias < cfg->no_airflow_kt) {
         fx[0] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
         fx[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
-        snprintf(wx->note, sizeof wx->note, "No airflow");
+        snprintf(wx->trigger_note, sizeof wx->trigger_note, "No airflow");
     } else {
         unsigned char free_play = clamp8(cfg->free_play * 255.0);
         fx[0] = (trigger_fx_t){ TFX_RESIST, free_play, 0, clamp8(fl) };
         fx[1] = (trigger_fx_t){ TFX_RESIST, free_play, 0, clamp8(fr) };
-        snprintf(wx->note, sizeof wx->note, "Airflow load %.0f%%", q * 100);
+        snprintf(wx->trigger_note, sizeof wx->trigger_note, "Airflow load %.0f%%", q * 100);
     }
 }

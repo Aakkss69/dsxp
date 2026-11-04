@@ -26,8 +26,8 @@ const bridge_cfg_t BRIDGE_DEFAULTS = {
 /* the prototype's formulas: swipe 0.30 - 0.22*s, tap wander 0.04 + 0.03*(1 - s) */
 const gesture_cfg_t GESTURE_DEFAULTS = {
     .tap_time_s = 0.35, .pulse_s = GESTURE_PULSE_SEC,
-    .swipe_at0 = 0.30, .swipe_at100 = 0.08,
-    .wander_at0 = 0.07, .wander_at100 = 0.04,
+    .swipe_length_at0 = 0.30, .swipe_length_at100 = 0.08,
+    .tap_wander_at0 = 0.07, .tap_wander_at100 = 0.04,
 };
 
 /* The prototype worked in 0-255 trigger bytes: free play 30, force 30 + 200 q,
@@ -37,18 +37,18 @@ const gesture_cfg_t GESTURE_DEFAULTS = {
 const wind_cfg_t WIND_DEFAULTS = {
     .full_force_kt = 160, .no_airflow_kt = 5,
     .free_play = 0.118, .base_force = 0.118, .airspeed_force = 0.784,
-    .xwind_full_kt = 23.3, .xwind_bias = 0.45,
-    .buffet_turb = 1.5, .buffet_start = 0.078,
-    .buffet_str_min = 0.235, .buffet_str_max = 0.941,
-    .buffet_hz_min = 18, .buffet_hz_max = 40,
+    .crosswind_full_kt = 23.3, .crosswind_bias = 0.45,
+    .buffet_turbulence = 1.5, .buffet_start = 0.078,
+    .buffet_strength_min = 0.235, .buffet_strength_max = 0.941,
+    .buffet_freq_min_hz = 18, .buffet_freq_max_hz = 40,
 };
 
 const rumble_cfg_t RUMBLE_DEFAULTS = {
     .stall_floor = 0.60, .jolt_start_g = 2.5, .jolt_full_g = 6.0, .crash_s = 3.0,
 };
 
-const lightsim_cfg_t LIGHTSIM_DEFAULTS = {
-    .stall_alarm = 0.60, .stall_caution = 0.15, .g_caution = 2.5, .turb_caution = 1.5,
+const light_sim_cfg_t LIGHT_SIM_DEFAULTS = {
+    .stall_alarm = 0.60, .stall_caution = 0.15, .g_caution = 2.5, .turbulence_caution = 1.5,
 };
 
 void config_defaults(config_t *c) {

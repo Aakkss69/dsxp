@@ -29,7 +29,7 @@ typedef struct {
     const char *commands_path;     /* X-Plane Resources/plugins/Commands.txt, or "" */
     const char *import_bindings;   /* legacy bindings.conf to import once, or NULL  */
     bool        verbose;           /* also echo log lines to stderr                 */
-    bool        dry_run;           /* decode and drive the controller, never X-Plane */
+    bool        dry_run;           /* read the controller, send nothing to X-Plane  */
     dsxp_event_fn on_event;
     void       *event_ctx;
     dsxp_raw_fn on_raw_report;     /* optional, diagnostics only                    */
@@ -50,7 +50,7 @@ typedef struct {
     bool     input_live;      /* Bluetooth reports arrived in the last 2 s       */
     bool     xp_running;      /* X-Plane 12 process found                        */
     bool     xp_answering;    /* RREF telemetry is arriving                      */
-    bool     engaged;         /* bridge is driving X-Plane                       */
+    bool     engaged;         /* flight controls active: DSXP flies X-Plane       */
     bool     suspended;       /* paused for system sleep                         */
     bool     imported_legacy; /* settings were imported from the old prototype   */
     int      hid_open_result; /* IOReturn of IOHIDManagerOpen, 0 = success       */

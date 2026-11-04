@@ -90,8 +90,8 @@ static void round_trips(void) {
     A.s.bind[B_TP_SWIPE_UL].repeat = true;
     A.s.bind[B_DP_R].cmd[0] = 0;
     A.s.fx_manual[1] = (trig_manual_t){ TFX_VIBRATE, 20, 200, 153, 33 };
-    A.s.fxmode = FXM_WIND; A.s.rmode = RM_SIM; A.s.rumble_v2 = true;
-    A.s.light = (light_t){ 0x12, 0xAB, 0xEF, false, LP_RAINBOW, 0.25, 0.5, LM_SIM, 0x11 };
+    A.s.trigger_source = TRIGGER_SRC_WIND; A.s.rumble_source = RUMBLE_SRC_SIM; A.s.rumble_v2 = true;
+    A.s.light = (light_t){ 0x12, 0xAB, 0xEF, false, LP_RAINBOW, 0.25, 0.5, LIGHT_SRC_SIM, 0x11 };
     A.s.wind.full_force_kt = 250; A.s.rumble.crash_s = 0;
     for (int f = 0; f < CF_COUNT; f++) {
         size_t n = fmt((conf_file_t)f, &A, T1);
@@ -116,7 +116,7 @@ static void round_trips(void) {
     CHECK_INT(B.s.fx_manual[1].mode, TFX_VIBRATE); CHECK_INT(B.s.fx_manual[1].freq, 33);
     CHECK_INT(B.s.fx_manual[1].strength, 153);       /* 60.0 % of 255 */
     CHECK_INT(B.s.light.r, 0x12); CHECK_INT(B.s.light.g, 0xAB); CHECK_INT(B.s.light.b, 0xEF);
-    CHECK_INT(B.s.light.player, 0x11); CHECK_INT(B.s.light.mode, LM_SIM);
+    CHECK_INT(B.s.light.player, 0x11); CHECK_INT(B.s.light.source, LIGHT_SRC_SIM);
     CHECK_INT(B.s.light.pattern, LP_RAINBOW); CHECK(!B.s.light.on);
     CHECK_NEAR(B.s.wind.full_force_kt, 250, 1e-9); CHECK_NEAR(B.s.rumble.crash_s, 0, 1e-12);
 
@@ -221,7 +221,7 @@ static void odd_input(void) {
     parse(CF_FEEDBACK, "trigger.source = WIND\nlight.on = Off\nlight.color = #12ab9F   # teal\n"
                        "light.player_lamps = x.x.X\nrumble.path = v2\nlight.pattern = Breathe\n", &A, &w);
     CHECK_INT(w.n, 0);
-    CHECK_INT(A.s.fxmode, FXM_WIND); CHECK(!A.s.light.on);
+    CHECK_INT(A.s.trigger_source, TRIGGER_SRC_WIND); CHECK(!A.s.light.on);
     CHECK_INT(A.s.light.r, 0x12); CHECK_INT(A.s.light.g, 0xAB); CHECK_INT(A.s.light.b, 0x9F);
     CHECK_INT(A.s.light.player, 0x15); CHECK(A.s.rumble_v2); CHECK_INT(A.s.light.pattern, LP_BREATHE);
     parse(CF_FEEDBACK, "light.player_lamps = three\nlight.color = #12ab9\nlight.on = maybe\n"
@@ -310,22 +310,22 @@ static void merge_and_rules(void) {
     CHECK_INT(w[0].n + w[1].n + w[2].n, 0);          /* the defaults obey every rule */
     A.bridge.telemetry_hz = 2; A.bridge.telemetry_timeout_s = 1.0;
     A.bridge.tick_hz = 30; A.s.gesture.pulse_s = 0.02;
-    A.s.gesture.swipe_at0 = 0.05; A.s.gesture.wander_at0 = 0.07;
-    A.s.gesture.swipe_at100 = 0.04; A.s.gesture.wander_at100 = 0.04;
+    A.s.gesture.swipe_length_at0 = 0.05; A.s.gesture.tap_wander_at0 = 0.07;
+    A.s.gesture.swipe_length_at100 = 0.04; A.s.gesture.tap_wander_at100 = 0.04;
     A.s.rumble.jolt_start_g = 4; A.s.rumble.jolt_full_g = 3;
-    A.s.wind.buffet_str_min = 0.5; A.s.wind.buffet_str_max = 0.4;
-    A.s.wind.buffet_hz_min = 30; A.s.wind.buffet_hz_max = 20;
-    A.s.lsim.stall_alarm = 0.5; A.s.lsim.stall_caution = 0.5;
+    A.s.wind.buffet_strength_min = 0.5; A.s.wind.buffet_strength_max = 0.4;
+    A.s.wind.buffet_freq_min_hz = 30; A.s.wind.buffet_freq_max_hz = 20;
+    A.s.light_sim.stall_alarm = 0.5; A.s.light_sim.stall_caution = 0.5;
     config_validate(&A, w);
     CHECK_INT(w[CF_BRIDGE].n, 1); CHECK_INT(w[CF_CONTROLS].n, 3); CHECK_INT(w[CF_FEEDBACK].n, 4);
     CHECK_NEAR(A.bridge.telemetry_timeout_s, 1.5, 1e-12);
     CHECK_NEAR(A.s.gesture.pulse_s, 0.05, 1e-12);
-    CHECK(A.s.gesture.swipe_at0 > A.s.gesture.wander_at0);
-    CHECK(A.s.gesture.swipe_at100 > A.s.gesture.wander_at100);
+    CHECK(A.s.gesture.swipe_length_at0 > A.s.gesture.tap_wander_at0);
+    CHECK(A.s.gesture.swipe_length_at100 > A.s.gesture.tap_wander_at100);
     CHECK_NEAR(A.s.rumble.jolt_full_g, 4.5, 1e-12);
-    CHECK_NEAR(A.s.wind.buffet_str_max, 0.5, 1e-12);
-    CHECK_NEAR(A.s.wind.buffet_hz_max, 30, 1e-12);
-    CHECK(A.s.lsim.stall_caution < A.s.lsim.stall_alarm);
+    CHECK_NEAR(A.s.wind.buffet_strength_max, 0.5, 1e-12);
+    CHECK_NEAR(A.s.wind.buffet_freq_max_hz, 30, 1e-12);
+    CHECK(A.s.light_sim.stall_caution < A.s.light_sim.stall_alarm);
     CHECK(has_warn(&w[CF_FEEDBACK], "rumble.g_jolt_full", 0));
 }
 

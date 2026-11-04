@@ -59,16 +59,16 @@ void load_defaults(settings_t *s) {
      * the override datarefs (observed), so nothing else would filter it. */
     s->tune = (tuning_t){ 0.06, 1.00, 0.5 };
     /* center lamp only is the DualSense's "player 1" indicator */
-    s->light = (light_t){ 0, 90, 255, true, LP_SOLID, 0.5, 1.0, LM_MANUAL, 0x04 };
+    s->light = (light_t){ 0, 90, 255, true, LP_SOLID, 0.5, 1.0, LIGHT_SRC_MANUAL, 0x04 };
     s->fx_manual[0] = s->fx_manual[1] = (trig_manual_t){ TFX_OFF, 70, 160, 200, 40 };
-    s->fxmode = FXM_MANUAL;
-    s->rmode = RM_MANUAL;
+    s->trigger_source = TRIGGER_SRC_MANUAL;
+    s->rumble_source = RUMBLE_SRC_MANUAL;
     /* v2 produced no rumble at all on the author's controller; classic works */
     s->rumble_v2 = false;
     s->gesture = GESTURE_DEFAULTS;
     s->wind = WIND_DEFAULTS;
     s->rumble = RUMBLE_DEFAULTS;
-    s->lsim = LIGHTSIM_DEFAULTS;
+    s->light_sim = LIGHT_SIM_DEFAULTS;
 }
 
 /* X-Plane command paths look like sim/flight_controls/flaps_up. Restricting the
@@ -110,7 +110,7 @@ static void parse_line(settings_t *s, const char *line) {
             else if (!strcmp(key, "gesture")) s->tune.gesture  = clampd(v, 0, 1, s->tune.gesture);
         }
     } else if (!strcmp(what, "light")) {
-        long r, g, b, on, pat = LP_SOLID, pl = 0x04, lm = LM_MANUAL;
+        long r, g, b, on, pat = LP_SOLID, pl = 0x04, lm = LIGHT_SRC_MANUAL;
         double sp = 0.5, bright = 1.0;
         /* extra fields were appended over time, so older lines still load */
         int got = sscanf(line, "%*s %ld %ld %ld %ld %ld %lf %ld %lf %ld",
@@ -125,15 +125,15 @@ static void parse_line(settings_t *s, const char *line) {
         if (got >= 6) s->light.speed   = clampd(sp, 0, 1, 0.5);
         if (got >= 7) s->light.player  = (unsigned char)(clampi(pl, 0, 255) & 0x1F);
         if (got >= 8) s->light.bright  = clampd(bright, 0, 1, 1.0);
-        if (got >= 9) s->light.mode    = lm == LM_SIM ? LM_SIM : LM_MANUAL;
+        if (got >= 9) s->light.source    = lm == LIGHT_SRC_SIM ? LIGHT_SRC_SIM : LIGHT_SRC_MANUAL;
     } else if (!strcmp(what, "fxmode")) {
         char m[16] = "";
         if (sscanf(line, "%*s %15s", m) == 1)
-            s->fxmode = strcmp(m, "wind") == 0 ? FXM_WIND : FXM_MANUAL;
+            s->trigger_source = strcmp(m, "wind") == 0 ? TRIGGER_SRC_WIND : TRIGGER_SRC_MANUAL;
     } else if (!strcmp(what, "rumblemode")) {
         char m[16] = "";
         if (sscanf(line, "%*s %15s", m) == 1)
-            s->rmode = strcmp(m, "sim") == 0 ? RM_SIM : RM_MANUAL;
+            s->rumble_source = strcmp(m, "sim") == 0 ? RUMBLE_SRC_SIM : RUMBLE_SRC_MANUAL;
     } else if (!strcmp(what, "rumblepath")) {
         char m[16] = "";
         if (sscanf(line, "%*s %15s", m) == 1) s->rumble_v2 = strcmp(m, "v2") == 0;

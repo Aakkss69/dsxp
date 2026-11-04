@@ -14,11 +14,11 @@ void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     c->s = *s;
     c->bridge = BRIDGE_DEFAULTS;
     if (sinks) c->sinks = *sinks;
-    snprintf(c->rnote, sizeof c->rnote, "%s", c->s.rmode == RM_SIM ? "Waiting for X-Plane" : "Manual");
-    snprintf(c->lnote, sizeof c->lnote, "Manual");
-    snprintf(c->wx.note, sizeof c->wx.note, "%s",
-             c->s.fxmode == FXM_WIND ? "Waiting for X-Plane" : "Manual");
-    if (c->s.fxmode == FXM_MANUAL) {
+    snprintf(c->rumble_note, sizeof c->rumble_note, "%s", c->s.rumble_source == RUMBLE_SRC_SIM ? "Waiting for X-Plane" : "Manual");
+    snprintf(c->light_note, sizeof c->light_note, "Manual");
+    snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "%s",
+             c->s.trigger_source == TRIGGER_SRC_WIND ? "Waiting for X-Plane" : "Manual");
+    if (c->s.trigger_source == TRIGGER_SRC_MANUAL) {
         c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
         c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
     }
@@ -104,7 +104,7 @@ bool core_gate_due(const core_t *c, double now, double last_gate) {
 }
 
 /*
- * The activation gate. All must hold before anything drives X-Plane:
+ * The activation gate. All must hold before DSXP takes X-Plane's flight controls:
  *   1. a DualSense on Bluetooth, and NOT also on USB - over USB X-Plane's own
  *      HID handling works, so the bridge must stay out of its way
  *   2. its reports are actually arriving
@@ -144,33 +144,33 @@ unsigned core_save_due(core_t *c, double now) {
     return m;
 }
 
-void core_set_fxmode(core_t *c, int mode, double now) {
+void core_set_trigger_source(core_t *c, int mode, double now) {
     (void)now;
-    int want = mode == FXM_WIND ? FXM_WIND : FXM_MANUAL;
-    if (want == c->s.fxmode) return;
-    c->s.fxmode = want;
-    if (want == FXM_MANUAL) {
+    int want = mode == TRIGGER_SRC_WIND ? TRIGGER_SRC_WIND : TRIGGER_SRC_MANUAL;
+    if (want == c->s.trigger_source) return;
+    c->s.trigger_source = want;
+    if (want == TRIGGER_SRC_MANUAL) {
         /* hand-set effects come straight back: wind never touched them */
         if (!c->suspended) { c->fx_out[0] = trig_effect(&c->s.fx_manual[0]); c->fx_out[1] = trig_effect(&c->s.fx_manual[1]); }
-        snprintf(c->wx.note, sizeof c->wx.note, "Manual");
+        snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Manual");
     } else {
         c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
-        snprintf(c->wx.note, sizeof c->wx.note, "Waiting for X-Plane");
+        snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Waiting for X-Plane");
     }
     out_mark(c);
-    dsxp_log("trigger source -> %s", want == FXM_WIND ? "wind" : "manual");
+    dsxp_log("trigger source -> %s", want == TRIGGER_SRC_WIND ? "wind" : "manual");
 }
 
-void core_set_rmode(core_t *c, int mode, double now) {
+void core_set_rumble_source(core_t *c, int mode, double now) {
     (void)now;
-    int want = mode == RM_SIM ? RM_SIM : RM_MANUAL;
-    if (want == c->s.rmode) return;
-    c->s.rmode = want;
+    int want = mode == RUMBLE_SRC_SIM ? RUMBLE_SRC_SIM : RUMBLE_SRC_MANUAL;
+    if (want == c->s.rumble_source) return;
+    c->s.rumble_source = want;
     /* never leave the motors spinning when handing control over */
     c->rumble.left = c->rumble.right = 0;
-    snprintf(c->rnote, sizeof c->rnote, "%s", want == RM_SIM ? "Waiting for X-Plane" : "Manual");
+    snprintf(c->rumble_note, sizeof c->rumble_note, "%s", want == RUMBLE_SRC_SIM ? "Waiting for X-Plane" : "Manual");
     out_mark(c);
-    dsxp_log("rumble source -> %s", want == RM_SIM ? "sim" : "manual");
+    dsxp_log("rumble source -> %s", want == RUMBLE_SRC_SIM ? "sim" : "manual");
 }
 
 void core_get_config(const core_t *c, config_t *out) {
@@ -183,18 +183,18 @@ void core_get_config(const core_t *c, config_t *out) {
 void core_apply_config(core_t *c, const config_t *cfg, unsigned files, double now) {
     static config_t cur;
     core_get_config(c, &cur);
-    int old_fx = cur.s.fxmode, old_rm = cur.s.rmode;
+    int old_fx = cur.s.trigger_source, old_rm = cur.s.rumble_source;
     for (int f = 0; f < CF_COUNT; f++)
         if (files & (1u << f)) config_copy_file(&cur, cfg, (conf_file_t)f);
-    int new_fx = cur.s.fxmode, new_rm = cur.s.rmode;
-    cur.s.fxmode = old_fx;
-    cur.s.rmode = old_rm;
+    int new_fx = cur.s.trigger_source, new_rm = cur.s.rumble_source;
+    cur.s.trigger_source = old_fx;
+    cur.s.rumble_source = old_rm;
     c->s = cur.s;
     c->bridge = cur.bridge;
-    if (new_fx != old_fx) core_set_fxmode(c, new_fx, now);
-    if (new_rm != old_rm) core_set_rmode(c, new_rm, now);
+    if (new_fx != old_fx) core_set_trigger_source(c, new_fx, now);
+    if (new_rm != old_rm) core_set_rumble_source(c, new_rm, now);
     if (files & CFB_FEEDBACK) {
-        if (c->s.fxmode == FXM_MANUAL && !c->suspended) {
+        if (c->s.trigger_source == TRIGGER_SRC_MANUAL && !c->suspended) {
             c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
             c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
         }
@@ -211,7 +211,7 @@ static void apply_light(light_t *L, const light_t *v, unsigned m) {
     if (m & LF_SPEED) L->speed = clampd(v->speed, 0, 1, L->speed);
     if (m & LF_PLAYER) L->player = v->player & 0x1F;
     if (m & LF_BRIGHT) L->bright = clampd(v->bright, 0, 1, L->bright);
-    if (m & LF_MODE) L->mode = v->mode == LM_SIM ? LM_SIM : LM_MANUAL;
+    if (m & LF_SOURCE) L->source = v->source == LIGHT_SRC_SIM ? LIGHT_SRC_SIM : LIGHT_SRC_MANUAL;
 }
 
 /* System sleep: hand X-Plane its controls back and quiet the controller. */
@@ -226,7 +226,7 @@ void core_set_suspended(core_t *c, bool suspended, double now) {
     } else if (!suspended && c->suspended) {
         c->suspended = false;
         c->force_gate = true;
-        if (c->s.fxmode == FXM_MANUAL) {
+        if (c->s.trigger_source == TRIGGER_SRC_MANUAL) {
             c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
             c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
         }
@@ -271,7 +271,7 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         break;
     case CMD_TRIGGER: {
         int i = cmd->key;
-        if (i < 0 || i > 1 || s->fxmode == FXM_WIND) return;   /* wind mode owns them */
+        if (i < 0 || i > 1 || s->trigger_source == TRIGGER_SRC_WIND) return;   /* wind mode owns them */
         trig_manual_t *f = &s->fx_manual[i];
         unsigned m = cmd->u.trig.mask;
         if (m & TF_MODE) {
@@ -287,22 +287,22 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         out_mark(c);
         break;
     }
-    case CMD_FXMODE: {
-        core_set_fxmode(c, cmd->u.mode, now);
+    case CMD_TRIGGER_SOURCE: {
+        core_set_trigger_source(c, cmd->u.source, now);
         core_mark_dirty(c, now, CFB_FEEDBACK);
         out_mark(c);
         break;
     }
     case CMD_RUMBLE:
-        if (s->rmode == RM_SIM || c->suspended) return;        /* sim mode owns the motors */
+        if (s->rumble_source == RUMBLE_SRC_SIM || c->suspended) return;        /* sim mode owns the motors */
         if (cmd->u.rumble.has_l) c->rumble.left  = cmd->u.rumble.l;
         if (cmd->u.rumble.has_r) c->rumble.right = cmd->u.rumble.r;
-        snprintf(c->rnote, sizeof c->rnote, "Manual: left %d%%, right %d%%",
+        snprintf(c->rumble_note, sizeof c->rumble_note, "Manual: left %d%%, right %d%%",
                  c->rumble.left * 100 / 255, c->rumble.right * 100 / 255);
         out_mark(c);
         break;
-    case CMD_RUMBLEMODE: {
-        core_set_rmode(c, cmd->u.mode, now);
+    case CMD_RUMBLE_SOURCE: {
+        core_set_rumble_source(c, cmd->u.source, now);
         core_mark_dirty(c, now, CFB_FEEDBACK);
         out_mark(c);
         break;
@@ -351,7 +351,7 @@ void core_tick(core_t *c, double now) {
 
     /* manual mode: what goes out is exactly what the user set */
     trigger_fx_t want0 = trig_effect(&c->s.fx_manual[0]), want1 = trig_effect(&c->s.fx_manual[1]);
-    if (!c->suspended && c->s.fxmode == FXM_MANUAL &&
+    if (!c->suspended && c->s.trigger_source == TRIGGER_SRC_MANUAL &&
         (!fx_equal(&c->fx_out[0], &want0) || !fx_equal(&c->fx_out[1], &want1))) {
         c->fx_out[0] = want0;
         c->fx_out[1] = want1;
@@ -376,15 +376,15 @@ void core_snapshot(const core_t *c, dsxp_snap_t *o) {
     o->report_hz = c->report_hz;
     o->tune = c->s.tune;
     o->light = c->s.light;
-    memcpy(o->lnote, c->lnote, sizeof o->lnote);
+    memcpy(o->light_note, c->light_note, sizeof o->light_note);
     o->fx[0] = c->fx_out[0];
     o->fx[1] = c->fx_out[1];
-    o->fxm[0] = c->s.fx_manual[0];
-    o->fxm[1] = c->s.fx_manual[1];
-    o->fxmode = c->s.fxmode;
+    o->trigger_manual[0] = c->s.fx_manual[0];
+    o->trigger_manual[1] = c->s.fx_manual[1];
+    o->trigger_source = c->s.trigger_source;
     o->wx = c->wx;
-    o->rmode = c->s.rmode;
-    memcpy(o->rnote, c->rnote, sizeof o->rnote);
+    o->rumble_source = c->s.rumble_source;
+    memcpy(o->rumble_note, c->rumble_note, sizeof o->rumble_note);
     o->rumble = c->rumble;
     o->rumble_v2 = c->s.rumble_v2;
     o->bt = c->bt_present;

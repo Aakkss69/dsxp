@@ -83,7 +83,7 @@ static const conf_key_t BRIDGE_KEYS[] = {
       "you drag a slider."),
 
     SEC("Telemetry", "Flight data X-Plane sends back: airspeed, stall, g-load, turbulence and so on.\n"
-                     "It drives wind-mode triggers, sim rumble and the sim light bar, and its arrival\n"
+                     "It feeds the wind trigger effects, simulator rumble and the simulator light bar, and its arrival\n"
                      "is how DSXP knows X-Plane is answering."),
     K("telemetry.rate", CT_REAL, bridge.telemetry_hz, 1, 30, 0, "Hz",
       "How many times a second X-Plane sends the flight data.\n"
@@ -122,7 +122,7 @@ static const conf_key_t CONTROLS_KEYS[] = {
     SEC("Sticks", NULL),
     K("stick.deadzone", CT_PCT, s.tune.deadzone, 0, 45, 1, "%",
       "How far a stick must leave center before DSXP sends any input to X-Plane.\n"
-      "DSXP drives X-Plane through override datarefs; X-Plane's own null zone setting does not\n"
+      "DSXP sends your stick input to X-Plane through override datarefs; X-Plane's null zone does not\n"
       "apply to them (observed), so this is the only thing filtering stick drift.\n"
       "Raise it if the aircraft rolls or pitches by itself with your thumbs off the sticks\n"
       "(worn sticks rest a few percent off center). Lower it for finer corrections in the\n"
@@ -147,22 +147,22 @@ static const conf_key_t CONTROLS_KEYS[] = {
       "How long a recognized gesture holds its button down. It must last at least 1.5 ticks\n"
       "so the loop sees it. Higher: a gesture bound to a \"hold\" command repeats a few times.\n"
       "Lower: one clean press."),
-    K("gesture.swipe_length_at_0", CT_PCT, s.gesture.swipe_at0, 5, 80, 1, "%",
+    K("gesture.swipe_length_at_0", CT_PCT, s.gesture.swipe_length_at0, 5, 80, 1, "%",
       "Shortest swipe, as a share of the pad width, when gesture.sensitivity is 0 %.\n"
       "Higher: at low sensitivity only long, deliberate strokes count. Lower: shorter ones do."),
-    K("gesture.swipe_length_at_100", CT_PCT, s.gesture.swipe_at100, 2, 50, 1, "%",
+    K("gesture.swipe_length_at_100", CT_PCT, s.gesture.swipe_length_at100, 2, 50, 1, "%",
       "Shortest swipe when gesture.sensitivity is 100 %. Must stay above tap_wander_at_100.\n"
       "Lower: at high sensitivity a small flick is a swipe.\n"
       "Higher: even at high sensitivity a real stroke is needed."),
-    K("gesture.tap_wander_at_0", CT_PCT, s.gesture.wander_at0, 1, 20, 1, "%",
+    K("gesture.tap_wander_at_0", CT_PCT, s.gesture.tap_wander_at0, 1, 20, 1, "%",
       "Largest finger movement that still counts as a tap, at sensitivity 0 %.\n"
       "Higher: sloppy taps still count. Lower: a tap must land and lift in place."),
-    K("gesture.tap_wander_at_100", CT_PCT, s.gesture.wander_at100, 1, 20, 1, "%",
+    K("gesture.tap_wander_at_100", CT_PCT, s.gesture.tap_wander_at100, 1, 20, 1, "%",
       "Largest finger movement that still counts as a tap, at sensitivity 100 %.\n"
       "Must stay below swipe_length_at_100, or every short swipe reads as a tap."),
 
     SEC("Axes",
-        "Each stick axis and analog trigger drives one X-Plane control: none, roll, pitch, yaw,\n"
+        "Each stick axis and analog trigger moves one X-Plane control: none, roll, pitch, yaw,\n"
         "throttle, rudder_left, rudder_right, brake_left or brake_right. Add \"inverted\" to\n"
         "reverse it. rudder_left and rudder_right use the two triggers as differential rudder\n"
         "pedals. An axis set to none is left entirely to X-Plane."),
@@ -179,9 +179,9 @@ static const conf_key_t CONTROLS_KEYS[] = {
     BTN(B_DP_DR, "dpad_down_right"), BTN(B_DP_DOWN, "dpad_down"), BTN(B_DP_DL, "dpad_down_left"),
     BTN(B_DP_L, "dpad_left"), BTN(B_DP_UL, "dpad_up_left"),
     BTN(B_SQUARE, "square"), BTN(B_CROSS, "cross"), BTN(B_CIRCLE, "circle"), BTN(B_TRIANGLE, "triangle"),
-    BTN(B_L1, "l1"), BTN(B_R1, "r1"), BTN(B_L2D, "l2_digital"), BTN(B_R2D, "r2_digital"),
+    BTN(B_L1, "l1"), BTN(B_R1, "r1"), BTN(B_L2_CLICK, "l2_click"), BTN(B_R2_CLICK, "r2_click"),
     BTN(B_CREATE, "create"), BTN(B_OPTIONS, "options"), BTN(B_L3, "l3"), BTN(B_R3, "r3"),
-    BTN(B_PS, "ps"), BTN(B_TOUCHPAD, "touchpad_press"), BTN(B_MUTE, "mute"),
+    BTN(B_PS, "ps"), BTN(B_TOUCHPAD_CLICK, "touchpad_click"), BTN(B_MUTE, "mute"),
     BTN(B_TP_TAP, "tap"), BTN(B_TP_TAP2, "two_finger_tap"),
     BTN(B_TP_SWIPE_L, "swipe_left"), BTN(B_TP_SWIPE_R, "swipe_right"),
     BTN(B_TP_SWIPE_U, "swipe_up"), BTN(B_TP_SWIPE_D, "swipe_down"),
@@ -214,7 +214,7 @@ static const conf_key_t CONTROLS_KEYS[] = {
 
 static const conf_key_t FEEDBACK_KEYS[] = {
     SEC("Adaptive triggers", NULL),
-    KE("trigger.source", CT_ENUM, s.fxmode, FXSRC,
+    KE("trigger.source", CT_ENUM, s.trigger_source, FXSRC,
        "manual: the triggers use the effects set below.\n"
        "wind: X-Plane's airflow sets them (rudder-pedal force, crosswind, buffet); the manual\n"
        "values below are kept and come back when you switch to manual."),
@@ -241,33 +241,33 @@ static const conf_key_t FEEDBACK_KEYS[] = {
     K("wind.airspeed_force", CT_PCT, s.wind.airspeed_force, 0, 100, 1, "%",
       "Extra resistance added at full_force_airspeed. Higher: pedals get much heavier as you\n"
       "speed up. Lower: airspeed changes are felt less."),
-    K("wind.crosswind_full", CT_REAL, s.wind.xwind_full_kt, 2, 60, 1, "kt",
+    K("wind.crosswind_full", CT_REAL, s.wind.crosswind_full_kt, 2, 60, 1, "kt",
       "Crosswind (the part across the nose) that gives the full left/right bias.\n"
       "Lower: even light crosswinds make one pedal clearly heavier. Higher: only strong ones."),
-    K("wind.crosswind_bias", CT_PCT, s.wind.xwind_bias, 0, 100, 1, "%",
+    K("wind.crosswind_bias", CT_PCT, s.wind.crosswind_bias, 0, 100, 1, "%",
       "How far a full crosswind shifts force between the pedals: the pedal into the wind gets\n"
       "this much heavier and the other this much lighter. 0 % turns the bias off."),
-    K("wind.buffet_turbulence", CT_REAL, s.wind.buffet_turb, 0, 10, 1, "",
+    K("wind.buffet_turbulence", CT_REAL, s.wind.buffet_turbulence, 0, 10, 1, "",
       "Turbulence (X-Plane's 0-10 scale, at the aircraft's altitude) above which the triggers\n"
       "buzz instead of resisting. Lower: buffet in light chop. Higher: only in severe turbulence."),
     K("wind.buffet_start", CT_PCT, s.wind.buffet_start, 0, 100, 1, "%",
       "Trigger travel where the buffet vibration begins.\n"
       "Lower: you feel the buffet with the trigger barely pressed. Higher: only when pressed in."),
-    K("wind.buffet_strength_min", CT_PCT, s.wind.buffet_str_min, 0, 100, 1, "%",
+    K("wind.buffet_strength_min", CT_PCT, s.wind.buffet_strength_min, 0, 100, 1, "%",
       "Buffet amplitude just above the turbulence threshold.\n"
       "Higher: even light buffet is felt clearly. Lower: light buffet is a faint tremor."),
-    K("wind.buffet_strength_max", CT_PCT, s.wind.buffet_str_max, 0, 100, 1, "%",
+    K("wind.buffet_strength_max", CT_PCT, s.wind.buffet_strength_max, 0, 100, 1, "%",
       "Buffet amplitude at turbulence 10 (scales between min and max with turbulence).\n"
       "Higher: severe turbulence really shakes the triggers. Lower: a gentler ceiling."),
-    K("wind.buffet_rate_min", CT_REAL, s.wind.buffet_hz_min, 1, 255, 0, "Hz",
+    K("wind.buffet_frequency_min", CT_REAL, s.wind.buffet_freq_min_hz, 1, 255, 0, "Hz",
       "Buffet frequency just above the threshold: low is a slow, heavy shudder."),
-    K("wind.buffet_rate_max", CT_REAL, s.wind.buffet_hz_max, 1, 255, 0, "Hz",
+    K("wind.buffet_frequency_max", CT_REAL, s.wind.buffet_freq_max_hz, 1, 255, 0, "Hz",
       "Buffet frequency at turbulence 10: high is a fast, harsh buzz."),
 
     SEC("Rumble", NULL),
-    KE("rumble.source", CT_ENUM, s.rmode, RSRC,
+    KE("rumble.source", CT_ENUM, s.rumble_source, RSRC,
        "manual: the motors run only from the mapper's test buttons.\n"
-       "sim: X-Plane drives them - stall buffet per wing, g-load jolts, and a crash shake."),
+       "sim: the flight model sets them - stall buffet per wing, g-load jolts, and a crash shake."),
     KE("rumble.path", CT_ENUMB, s.rumble_v2, RPATH,
        "classic works on most DualSense firmware. v2 is the newer vibration path; on some\n"
        "firmware it produces no rumble at all. Try v2 only if classic does nothing."),
@@ -290,7 +290,7 @@ static const conf_key_t FEEDBACK_KEYS[] = {
     SEC("Light bar", NULL),
     KX("light.on", CT_BOOL, s.light.on,
        "yes: DSXP controls the light bar and player lamps. no: both stay dark."),
-    KE("light.source", CT_ENUM, s.light.mode, LSRC,
+    KE("light.source", CT_ENUM, s.light.source, LSRC,
        "manual: the color and pattern below.\n"
        "sim: the bar is an annunciator - green clean, amber caution, red stall, flashing red\n"
        "crash, cyan turbulence."),
@@ -306,16 +306,16 @@ static const conf_key_t FEEDBACK_KEYS[] = {
     KX("light.player_lamps", CT_LAMPS, s.light.player,
        "The five small lamps under the touchpad: off, single (center), two, three, four, all,\n"
        "or a pattern such as x...x (x lit, . dark, left to right)."),
-    K("light.sim.stall_alarm", CT_PCT, s.lsim.stall_alarm, 1, 100, 1, "%",
+    K("light.sim.stall_alarm", CT_PCT, s.light_sim.stall_alarm, 1, 100, 1, "%",
       "Sim mode: stall warning level (X-Plane's stall warning ratio) where the bar pulses red.\n"
       "Lower: red earlier as you approach the stall."),
-    K("light.sim.stall_caution", CT_PCT, s.lsim.stall_caution, 0, 99, 1, "%",
+    K("light.sim.stall_caution", CT_PCT, s.light_sim.stall_caution, 0, 99, 1, "%",
       "Stall warning level where the bar turns amber. Must stay below the alarm level.\n"
       "Lower: amber as soon as the warning starts building. Higher: amber only close to red."),
-    K("light.sim.g_caution", CT_REAL, s.lsim.g_caution, 1, 10, 1, "g",
+    K("light.sim.g_caution", CT_REAL, s.light_sim.g_caution, 1, 10, 1, "g",
       "Load factor, positive or negative, that shows amber (level flight is 1 g).\n"
       "Lower: steep turns and firm pull-ups light it. Higher: only aerobatic loads."),
-    K("light.sim.turbulence_caution", CT_REAL, s.lsim.turb_caution, 0, 10, 1, "",
+    K("light.sim.turbulence_caution", CT_REAL, s.light_sim.turbulence_caution, 0, 10, 1, "",
       "Turbulence (X-Plane's 0-10 scale) that shows cyan.\n"
       "Lower: cyan in light chop. Higher: only in strong turbulence."),
 };

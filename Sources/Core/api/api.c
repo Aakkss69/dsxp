@@ -1,19 +1,19 @@
 /*
- * The mapper UI's JSON API. Same routes and fields as the prototype's HTTP
- * server, now transport-independent: the app serves it through a WKWebView
+ * The mapper UI's JSON API, transport-independent: the app serves it through a WKWebView
  * custom-scheme handler, so no TCP port is ever opened.
  *
- *   GET  /api/init         command catalog + slot/source/target vocabulary
- *   GET  /api/state        live axes, buttons, gate, bindings, tuning, app info
- *   POST /api/bind         ?i=<slot>&cmd=<path>&repeat=<0|1>   (empty cmd clears)
- *   POST /api/axis         ?k=<source>&t=<target>&inv=<0|1>
- *   POST /api/tune         ?deadzone=<f>&curve=<f>&gesture=<f>
- *   POST /api/light        ?r=&g=&b=&on=<0|1>&pattern=<0-5>&speed=<f>&player=<0-31>&bright=<f>&lmode=<manual|sim>
- *   POST /api/trigger      ?side=<l|r>&mode=<0-3>&start=&end=&strength=   (manual mode only)
- *   POST /api/fxmode       ?mode=<manual|wind>
- *   POST /api/rumble       ?left=&right=                                  (manual mode only)
- *   POST /api/rumblemode   ?mode=<manual|sim>
- *   POST /api/rumblepath   ?v2=<0|1>
+ *   GET  /api/init          command catalog + slot/source/target vocabulary
+ *   GET  /api/state         live axes, buttons, gate, bindings, tuning, app info
+ *   POST /api/bind          ?i=<slot>&cmd=<path>&repeat=<0|1>   (empty cmd clears)
+ *   POST /api/axis          ?k=<source>&t=<target>&inv=<0|1>
+ *   POST /api/tune          ?deadzone=<f>&curve=<f>&gesture=<f>
+ *   POST /api/light         ?r=&g=&b=&on=<0|1>&pattern=<0-5>&speed=<f>&player=<0-31>&bright=<f>&source=<manual|sim>
+ *   POST /api/trigger       ?side=<l|r>&mode=<0-3>&start=&end=&strength=&freq=   (manual source only)
+ *   POST /api/triggersource ?source=<manual|wind>
+ *   POST /api/rumble        ?left=&right=                                       (manual source only)
+ *   POST /api/rumblesource  ?source=<manual|sim>
+ *   POST /api/rumblepath    ?v2=<0|1>
+ * The words match the config files: trigger.source, rumble.source, light.source.
  * /api/quit, /api/pickxp and /api/openaccess are handled by the app itself.
  */
 #include "core_internal.h"
@@ -133,30 +133,30 @@ static void api_state(const api_env_t *env, dsxp_response_t *out) {
     jb_printf(&j, "\"tune\":{\"deadzone\":%.4f,\"curve\":%.4f,\"gesture\":%.3f},",
               s->tune.deadzone, s->tune.curve, s->tune.gesture);
     jb_printf(&j, "\"light\":{\"r\":%d,\"g\":%d,\"b\":%d,\"on\":%d,\"pattern\":%d,"
-                  "\"speed\":%.3f,\"player\":%d,\"bright\":%.3f,\"lmode\":\"%s\",\"lnote\":",
+                  "\"speed\":%.3f,\"player\":%d,\"bright\":%.3f,\"source\":\"%s\",\"note\":",
               s->light.r, s->light.g, s->light.b, s->light.on ? 1 : 0, s->light.pattern,
               s->light.speed, s->light.player, s->light.bright,
-              s->light.mode == LM_SIM ? "sim" : "manual");
-    jb_str(&j, s->lnote);
+              s->light.source == LIGHT_SRC_SIM ? "sim" : "manual");
+    jb_str(&j, s->light_note);
     jb_printf(&j, "},\"fx\":[");
     for (int i = 0; i < 2; i++)
         jb_printf(&j, "%s{\"mode\":%d,\"start\":%d,\"end\":%d,\"strength\":%d}", i ? "," : "",
                   s->fx[i].mode, s->fx[i].start, s->fx[i].end, s->fx[i].strength);
-    /* fx = what goes to the controller now; fxm = the hand-set values the panel edits */
-    jb_printf(&j, "],\"fxm\":[");
+    /* fx = what goes to the controller now; trigger_manual = the hand-set values the panel edits */
+    jb_printf(&j, "],\"trigger_manual\":[");
     for (int i = 0; i < 2; i++)
         jb_printf(&j, "%s{\"mode\":%d,\"start\":%d,\"end\":%d,\"strength\":%d,\"freq\":%d}", i ? "," : "",
-                  s->fxm[i].mode, s->fxm[i].start, s->fxm[i].end, s->fxm[i].strength, s->fxm[i].freq);
-    jb_printf(&j, "],\"fxmode\":\"%s\",", s->fxmode == FXM_WIND ? "wind" : "manual");
+                  s->trigger_manual[i].mode, s->trigger_manual[i].start, s->trigger_manual[i].end, s->trigger_manual[i].strength, s->trigger_manual[i].freq);
+    jb_printf(&j, "],\"trigger_source\":\"%s\",", s->trigger_source == TRIGGER_SRC_WIND ? "wind" : "manual");
     jb_printf(&j, "\"wx\":{\"live\":%d,\"ias\":%.1f,\"wind\":%.1f,\"dir\":%.0f,\"hdg\":%.0f,"
-                  "\"turb\":%.2f,\"xwind\":%.1f,\"load\":%.3f,\"note\":",
+                  "\"turb\":%.2f,\"xwind\":%.1f,\"load\":%.3f,\"trigger_note\":",
               s->wx.live ? 1 : 0, s->wx.ias, s->wx.wind_ms, s->wx.wind_dir, s->wx.heading,
               s->wx.turb, s->wx.crosswind, s->wx.load);
-    jb_str(&j, s->wx.note);
+    jb_str(&j, s->wx.trigger_note);
     jb_printf(&j, ",\"stall_l\":%.3f,\"stall_r\":%.3f,\"stall\":%.3f,\"gn\":%.2f,\"crashed\":%d},",
               s->wx.stall_l, s->wx.stall_r, s->wx.stall_ratio, s->wx.gn, s->wx.crashed ? 1 : 0);
-    jb_printf(&j, "\"rmode\":\"%s\",\"rnote\":", s->rmode == RM_SIM ? "sim" : "manual");
-    jb_str(&j, s->rnote);
+    jb_printf(&j, "\"rumble_source\":\"%s\",\"rumble_note\":", s->rumble_source == RUMBLE_SRC_SIM ? "sim" : "manual");
+    jb_str(&j, s->rumble_note);
     jb_printf(&j, ",\"rumble\":{\"left\":%d,\"right\":%d,\"v2\":%d},",
               s->rumble.left, s->rumble.right, s->rumble_v2 ? 1 : 0);
     jb_printf(&j, "\"gate\":{\"bt\":%d,\"usb\":%d,\"xp\":%d,\"engaged\":%d},",
@@ -247,9 +247,9 @@ static void api_light(const api_env_t *env, const char *qs, dsxp_response_t *out
     /* five lamps, so only the low five bits mean anything */
     if (get_long(qs, "player", &x)) { v->player = (unsigned char)(clampi(x, 0, 255) & 0x1F); m |= LF_PLAYER; }
     if (get_double(qs, "bright", &d)) { v->bright = clampd(d, 0, 1, 1.0); m |= LF_BRIGHT; }
-    char mode[16];
-    if (qs_get(qs, "lmode", mode, sizeof mode)) {
-        v->mode = strcmp(mode, "sim") == 0 ? LM_SIM : LM_MANUAL; m |= LF_MODE;
+    char src[16];
+    if (qs_get(qs, "source", src, sizeof src)) {
+        v->source = strcmp(src, "sim") == 0 ? LIGHT_SRC_SIM : LIGHT_SRC_MANUAL; m |= LF_SOURCE;
     }
     c.u.light.mask = m;
     submit(env, &c, out);
@@ -265,7 +265,7 @@ static void api_trigger(const api_env_t *env, const dsxp_snap_t *snap, const cha
     qs_get(qs, "side", side, sizeof side);
     int si = !strcmp(side, "l") ? 0 : !strcmp(side, "r") ? 1 : -1;
     if (si < 0) { respond(out, 400, CT_TEXT, "bad side"); return; }
-    if (snap->fxmode == FXM_WIND) { respond(out, 409, CT_TEXT, "wind mode"); return; }
+    if (snap->trigger_source == TRIGGER_SRC_WIND) { respond(out, 409, CT_TEXT, "Wind sets the triggers now. Switch Trigger effects to Manual to change them."); return; }
     cmd_t c = { .kind = CMD_TRIGGER, .key = si };
     unsigned m = 0;
     long x;
@@ -280,17 +280,17 @@ static void api_trigger(const api_env_t *env, const dsxp_snap_t *snap, const cha
     submit(env, &c, out);
 }
 
-static void api_fxmode(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+static void api_trigger_source(const api_env_t *env, const char *qs, dsxp_response_t *out) {
     char v[16];
-    if (!qs_get(qs, "mode", v, sizeof v) || !v[0]) { respond(out, 400, CT_TEXT, "no mode"); return; }
-    cmd_t c = { .kind = CMD_FXMODE };
-    c.u.mode = strcmp(v, "wind") == 0 ? FXM_WIND : FXM_MANUAL;
+    if (!qs_get(qs, "source", v, sizeof v) || !v[0]) { respond(out, 400, CT_TEXT, "no source"); return; }
+    cmd_t c = { .kind = CMD_TRIGGER_SOURCE };
+    c.u.source = strcmp(v, "wind") == 0 ? TRIGGER_SRC_WIND : TRIGGER_SRC_MANUAL;
     submit(env, &c, out);
 }
 
 static void api_rumble(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
                        dsxp_response_t *out) {
-    if (snap->rmode == RM_SIM) { respond(out, 409, CT_TEXT, "sim mode"); return; }
+    if (snap->rumble_source == RUMBLE_SRC_SIM) { respond(out, 409, CT_TEXT, "The simulator runs the motors now. Switch Rumble to Manual to test them."); return; }
     cmd_t c = { .kind = CMD_RUMBLE };
     long x;
     if (get_long(qs, "left", &x))  { c.u.rumble.l = (unsigned char)clampi(x, 0, 255); c.u.rumble.has_l = true; }
@@ -298,11 +298,11 @@ static void api_rumble(const api_env_t *env, const dsxp_snap_t *snap, const char
     submit(env, &c, out);
 }
 
-static void api_rumblemode(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+static void api_rumble_source(const api_env_t *env, const char *qs, dsxp_response_t *out) {
     char v[16];
-    if (!qs_get(qs, "mode", v, sizeof v) || !v[0]) { respond(out, 400, CT_TEXT, "no mode"); return; }
-    cmd_t c = { .kind = CMD_RUMBLEMODE };
-    c.u.mode = strcmp(v, "sim") == 0 ? RM_SIM : RM_MANUAL;
+    if (!qs_get(qs, "source", v, sizeof v) || !v[0]) { respond(out, 400, CT_TEXT, "no source"); return; }
+    cmd_t c = { .kind = CMD_RUMBLE_SOURCE };
+    c.u.source = strcmp(v, "sim") == 0 ? RUMBLE_SRC_SIM : RUMBLE_SRC_MANUAL;
     submit(env, &c, out);
 }
 
@@ -337,7 +337,7 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
 
     static const char *POST_ROUTES[] = {
         "/api/bind", "/api/axis", "/api/tune", "/api/light", "/api/trigger",
-        "/api/fxmode", "/api/rumble", "/api/rumblemode", "/api/rumblepath",
+        "/api/triggersource", "/api/rumble", "/api/rumblesource", "/api/rumblepath",
     };
     int route = -1;
     for (int i = 0; i < (int)(sizeof POST_ROUTES / sizeof POST_ROUTES[0]); i++)
@@ -345,7 +345,7 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     if (route < 0) { respond(out, 404, CT_TEXT, "no route"); return; }
     if (!post) { respond(out, 405, CT_TEXT, "method not allowed"); return; }
 
-    /* the two mode-guarded routes need the current modes */
+    /* the two source-guarded routes need the current sources */
     dsxp_snap_t *snap = NULL;
     if (route == 4 || route == 6) {
         snap = calloc(1, sizeof *snap);
@@ -358,9 +358,9 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     case 2: api_tune(env, query, out); break;
     case 3: api_light(env, query, out); break;
     case 4: api_trigger(env, snap, query, out); break;
-    case 5: api_fxmode(env, query, out); break;
+    case 5: api_trigger_source(env, query, out); break;
     case 6: api_rumble(env, snap, query, out); break;
-    case 7: api_rumblemode(env, query, out); break;
+    case 7: api_rumble_source(env, query, out); break;
     case 8: api_rumblepath(env, query, out); break;
     default: respond(out, 404, CT_TEXT, "no route"); break;
     }

@@ -12,7 +12,7 @@ static void check_invariants(const settings_t *s) {
     CHECK(s->light.speed >= 0 && s->light.speed <= 1);
     CHECK(s->light.bright >= 0 && s->light.bright <= 1);
     CHECK(s->light.player <= 0x1F);
-    CHECK(s->light.mode == LM_MANUAL || s->light.mode == LM_SIM);
+    CHECK(s->light.source == LIGHT_SRC_MANUAL || s->light.source == LIGHT_SRC_SIM);
     for (int i = 0; i < 2; i++) CHECK(s->fx_manual[i].mode >= TFX_OFF && s->fx_manual[i].mode <= TFX_VIBRATE);
     for (int i = 0; i < S_COUNT; i++) CHECK(s->axis[i].target >= 0 && s->axis[i].target < AX_TARGET_COUNT);
     for (int i = 0; i < B_COUNT; i++) CHECK(!s->bind[i].cmd[0] || cmd_valid(s->bind[i].cmd));
@@ -52,8 +52,8 @@ void test_bindings(void) {
     CHECK_NEAR(b.tune.gesture, 0.75, 1e-9);
     CHECK_INT(b.light.r, 1); CHECK_INT(b.light.g, 2); CHECK_INT(b.light.b, 3);
     CHECK(!b.light.on); CHECK_INT(b.light.pattern, 3); CHECK_NEAR(b.light.speed, 0.25, 1e-9);
-    CHECK_INT(b.light.player, 27); CHECK_NEAR(b.light.bright, 0.5, 1e-9); CHECK_INT(b.light.mode, LM_SIM);
-    CHECK_INT(b.fxmode, FXM_WIND); CHECK_INT(b.rmode, RM_SIM); CHECK(b.rumble_v2);
+    CHECK_INT(b.light.player, 27); CHECK_NEAR(b.light.bright, 0.5, 1e-9); CHECK_INT(b.light.source, LIGHT_SRC_SIM);
+    CHECK_INT(b.trigger_source, TRIGGER_SRC_WIND); CHECK_INT(b.rumble_source, RUMBLE_SRC_SIM); CHECK(b.rumble_v2);
     CHECK_INT(b.fx_manual[0].mode, TFX_OFF);
     CHECK_INT(b.fx_manual[1].mode, TFX_WEAPON); CHECK_INT(b.fx_manual[1].start, 10);  /* F11 clamps at output, not here */
     CHECK_INT(b.fx_manual[1].end, 200); CHECK_INT(b.fx_manual[1].strength, 99);
@@ -79,8 +79,8 @@ void test_bindings(void) {
         "button 25 1 sim/general/rot_left\n");
     CHECK_NEAR(b.tune.deadzone, 0.055, 1e-9);
     CHECK_INT(b.light.r, 139); CHECK_INT(b.light.pattern, LP_ALERT); CHECK_INT(b.light.player, 14);
-    CHECK_INT(b.light.mode, LM_SIM);
-    CHECK_INT(b.fxmode, FXM_WIND);
+    CHECK_INT(b.light.source, LIGHT_SRC_SIM);
+    CHECK_INT(b.trigger_source, TRIGGER_SRC_WIND);
     CHECK_INT(b.fx_manual[0].mode, TFX_RESIST); CHECK_INT(b.fx_manual[0].strength, 120);
     CHECK(!strcmp(b.bind[B_DP_UP].cmd, "sim/flight_controls/flaps_up"));
     CHECK(b.bind[B_TP_SWIPE_L].repeat);
@@ -98,7 +98,7 @@ void test_bindings(void) {
     CHECK_INT(b.light.r, 255); CHECK_INT(b.light.g, 0); CHECK_INT(b.light.b, 255);
     CHECK_INT(b.light.pattern, LP_SOLID); CHECK_NEAR(b.light.speed, 1.0, 1e-12);
     CHECK_INT(b.light.player, 31); CHECK_NEAR(b.light.bright, 0.0, 1e-12);
-    CHECK_INT(b.light.mode, LM_MANUAL);
+    CHECK_INT(b.light.source, LIGHT_SRC_MANUAL);
     /* old files: vibrate's end WAS the frequency; new lines carry both */
     parse_str(&b, "trigger r 3 50 30 200\ntrigger l 2 10 160 90 44\n");
     CHECK_INT(b.fx_manual[1].freq, 30); CHECK_INT(b.fx_manual[1].end, 160);

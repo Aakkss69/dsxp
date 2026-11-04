@@ -23,7 +23,7 @@ Commands.txt
 DataRefs.txt
 *.prf
 
-# Design-time references with unknown licence
+# Design-time references with unknown license
 ref/
 tools/out/
 

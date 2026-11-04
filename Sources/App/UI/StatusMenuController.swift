@@ -11,7 +11,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let menu = NSMenu()
     private let controllerLine = NSMenuItem()
     private let xplaneLine = NSMenuItem()
-    private let bridgeLine = NSMenuItem()
+    private let controlsLine = NSMenuItem()
     private let accessLine = NSMenuItem()
     private let configLine = NSMenuItem()
     private var configProblemFile = ""
@@ -21,7 +21,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         super.init()
         menu.delegate = self
         menu.autoenablesItems = false
-        for line in [controllerLine, xplaneLine, bridgeLine] {
+        for line in [controllerLine, xplaneLine, controlsLine] {
             line.isEnabled = false
             menu.addItem(line)
         }
@@ -60,7 +60,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         image?.isTemplate = true
         item.button?.image = image
         item.button?.appearsDisabled = link == .none
-        item.button?.toolTip = "DSXP: " + (s.engaged ? "Driving X-Plane" : "Idle")
+        item.button?.toolTip = "DSXP: " + (s.engaged ? "Flight controls active" : "Standing by")
 
         switch link {
         case .bluetooth:
@@ -81,8 +81,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             xplaneLine.title = "X-Plane 12: Not answering"
             xplaneLine.toolTip = "X-Plane is running but sends no data back. Check Settings › Network in X-Plane."
         }
-        bridgeLine.title = s.suspended ? "Bridge: Paused while the Mac sleeps"
-            : s.engaged ? "Bridge: Driving X-Plane" : "Bridge: Idle"
+        controlsLine.title = s.suspended ? "Flight controls: Paused while the Mac sleeps"
+            : s.engaged ? "Flight controls: Active" : "Flight controls: Standing by"
         accessLine.isHidden = !accessProblem
 
         // a line in bridge.conf, controls.conf or feedback.conf DSXP could not use

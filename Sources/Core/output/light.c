@@ -1,4 +1,4 @@
-/* Light bar: manual color/patterns, or a sim-driven annunciator. */
+/* Light bar: manual color/patterns, or an annunciator set by the simulator. */
 #include "core_internal.h"
 #include <math.h>
 #include <stdio.h>
@@ -25,8 +25,8 @@ void hsv(double h, double s, double v, unsigned char *R, unsigned char *G, unsig
  * thing can be shown at a time and the worst news should win. */
 void light_sim(const wx_t *wx, int *pat, unsigned char *r, unsigned char *g,
                unsigned char *b, double *rate, char *note, size_t note_n,
-               const lightsim_cfg_t *cfg) {
-    if (!cfg) cfg = &LIGHTSIM_DEFAULTS;
+               const light_sim_cfg_t *cfg) {
+    if (!cfg) cfg = &LIGHT_SIM_DEFAULTS;
     if (!wx->live) {                         /* no telemetry: dim amber standby */
         *pat = LP_BREATHE; *r = 120; *g = 70; *b = 0; *rate = 0.3;
         snprintf(note, note_n, "Waiting for X-Plane");
@@ -44,7 +44,7 @@ void light_sim(const wx_t *wx, int *pat, unsigned char *r, unsigned char *g,
     } else if (fabs(wx->gn) > cfg->g_caution) {
         *pat = LP_SOLID;   *r = 255; *g = 150; *b = 0; *rate = 1.0;
         snprintf(note, note_n, "Load %.1f g", wx->gn);
-    } else if (wx->turb > cfg->turb_caution) {
+    } else if (wx->turb > cfg->turbulence_caution) {
         *pat = LP_BREATHE; *r = 0; *g = 200; *b = 220; *rate = 1.2;
         snprintf(note, note_n, "Turbulence %.1f", wx->turb);
     } else {
@@ -63,9 +63,9 @@ bool light_tick(core_t *c, double now) {
     double k0 = L->bright;
 
     /* sim mode overrides color, pattern and rate; manual mode uses the picker */
-    if (L->mode == LM_SIM) light_sim(&c->wx, &pattern, &br, &bg, &bb, &rate,
-                                     c->lnote, sizeof c->lnote, &c->s.lsim);
-    else snprintf(c->lnote, sizeof c->lnote, "Manual");
+    if (L->source == LIGHT_SRC_SIM) light_sim(&c->wx, &pattern, &br, &bg, &bb, &rate,
+                                     c->light_note, sizeof c->light_note, &c->s.light_sim);
+    else snprintf(c->light_note, sizeof c->light_note, "Manual");
 
     if (!isfinite(k0) || k0 < 0) k0 = 0;
     if (k0 > 1) k0 = 1;

@@ -92,11 +92,11 @@ void test_api(void) {
     CHECK_INT(call("POST", "/api/axis", "k=lx&t=warp"), 400);
 
     /* mode guards */
-    CHECK_INT(call("POST", "/api/fxmode", ""), 400);
-    CHECK_INT(call("POST", "/api/fxmode", "mode=wind"), 200);
+    CHECK_INT(call("POST", "/api/triggersource", ""), 400);
+    CHECK_INT(call("POST", "/api/triggersource", "source=wind"), 200);
     CHECK_INT(call("POST", "/api/trigger", "side=q&mode=1"), 400);
     CHECK_INT(call("POST", "/api/trigger", "side=l&mode=1"), 409);
-    CHECK_INT(call("POST", "/api/fxmode", "mode=manual"), 200);
+    CHECK_INT(call("POST", "/api/triggersource", "source=manual"), 200);
     CHECK_INT(call("POST", "/api/trigger", "side=r&mode=2&start=10&end=999&strength=50"), 200);
     CHECK_INT(AC.s.fx_manual[1].mode, TFX_WEAPON);
     CHECK_INT(AC.s.fx_manual[1].end, 255);
@@ -105,10 +105,10 @@ void test_api(void) {
     CHECK_INT(AC.s.fx_manual[1].freq, 30);
     CHECK_INT(AC.s.fx_manual[1].end, 255);
     CHECK_INT(AC.fx_out[1].end, 30);                  /* on the wire: end carries the Hz */
-    CHECK(body_has("GET", "/api/state", "", "\"fxm\":[", NULL));
-    CHECK_INT(call("POST", "/api/rumblemode", "mode=sim"), 200);
+    CHECK(body_has("GET", "/api/state", "", "\"trigger_manual\":[", NULL));
+    CHECK_INT(call("POST", "/api/rumblesource", "source=sim"), 200);
     CHECK_INT(call("POST", "/api/rumble", "left=10"), 409);
-    CHECK_INT(call("POST", "/api/rumblemode", "mode=manual"), 200);
+    CHECK_INT(call("POST", "/api/rumblesource", "source=manual"), 200);
     CHECK_INT(call("POST", "/api/rumble", "left=300&right=-4"), 200);
     CHECK_INT(AC.rumble.left, 255);
     CHECK_INT(AC.rumble.right, 0);
@@ -116,7 +116,7 @@ void test_api(void) {
     CHECK(AC.s.rumble_v2);
 
     /* state and init are always valid JSON, strings escaped */
-    snprintf(AC.rnote, sizeof AC.rnote, "odd \"note\"\n");
+    snprintf(AC.rumble_note, sizeof AC.rumble_note, "odd \"note\"\n");
     bool valid = false;
     CHECK(body_has("GET", "/api/state", "", "\"app\":{\"access\":\"granted\"}", &valid));
     CHECK(valid);

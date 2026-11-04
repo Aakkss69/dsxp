@@ -508,29 +508,29 @@ void config_validate(config_t *c, conf_warns_t w[CF_COUNT]) {
         conf_warn(&w[CF_CONTROLS], 0, "gesture.pulse", "must last 1.5 ticks; using %.0f ms", min_pulse * 1000);
         c->s.gesture.pulse_s = min_pulse;
     }
-    if (c->s.gesture.swipe_at0 <= c->s.gesture.wander_at0) {
+    if (c->s.gesture.swipe_length_at0 <= c->s.gesture.tap_wander_at0) {
         conf_warn(&w[CF_CONTROLS], 0, "gesture.swipe_length_at_0", "must be longer than tap_wander_at_0");
-        c->s.gesture.swipe_at0 = c->s.gesture.wander_at0 + 0.01;
+        c->s.gesture.swipe_length_at0 = c->s.gesture.tap_wander_at0 + 0.01;
     }
-    if (c->s.gesture.swipe_at100 <= c->s.gesture.wander_at100) {
+    if (c->s.gesture.swipe_length_at100 <= c->s.gesture.tap_wander_at100) {
         conf_warn(&w[CF_CONTROLS], 0, "gesture.swipe_length_at_100", "must be longer than tap_wander_at_100");
-        c->s.gesture.swipe_at100 = c->s.gesture.wander_at100 + 0.01;
+        c->s.gesture.swipe_length_at100 = c->s.gesture.tap_wander_at100 + 0.01;
     }
     if (c->s.rumble.jolt_full_g < c->s.rumble.jolt_start_g + 0.5) {
         conf_warn(&w[CF_FEEDBACK], 0, "rumble.g_jolt_full", "must be at least 0.5 g above g_jolt_start");
         c->s.rumble.jolt_full_g = c->s.rumble.jolt_start_g + 0.5;
     }
-    if (c->s.wind.buffet_str_max < c->s.wind.buffet_str_min) {
+    if (c->s.wind.buffet_strength_max < c->s.wind.buffet_strength_min) {
         conf_warn(&w[CF_FEEDBACK], 0, "wind.buffet_strength_max", "must not be below buffet_strength_min");
-        c->s.wind.buffet_str_max = c->s.wind.buffet_str_min;
+        c->s.wind.buffet_strength_max = c->s.wind.buffet_strength_min;
     }
-    if (c->s.wind.buffet_hz_max < c->s.wind.buffet_hz_min) {
-        conf_warn(&w[CF_FEEDBACK], 0, "wind.buffet_rate_max", "must not be below buffet_rate_min");
-        c->s.wind.buffet_hz_max = c->s.wind.buffet_hz_min;
+    if (c->s.wind.buffet_freq_max_hz < c->s.wind.buffet_freq_min_hz) {
+        conf_warn(&w[CF_FEEDBACK], 0, "wind.buffet_frequency_max", "must not be below buffet_frequency_min");
+        c->s.wind.buffet_freq_max_hz = c->s.wind.buffet_freq_min_hz;
     }
-    if (c->s.lsim.stall_caution >= c->s.lsim.stall_alarm) {
+    if (c->s.light_sim.stall_caution >= c->s.light_sim.stall_alarm) {
         conf_warn(&w[CF_FEEDBACK], 0, "light.sim.stall_caution", "must be below stall_alarm");
-        c->s.lsim.stall_caution = c->s.lsim.stall_alarm - 0.01;
+        c->s.light_sim.stall_caution = c->s.light_sim.stall_alarm - 0.01;
     }
 }
 

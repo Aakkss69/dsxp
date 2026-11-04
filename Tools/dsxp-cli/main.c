@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
         }
         else if (!strcmp(argv[i], "--verify")) g_verify = true;
         else if (!strcmp(argv[i], "--capture") && i + 1 < argc) {
-            /* a typo must not silently turn a passive capture into live driving */
+            /* a typo must not silently turn a passive capture into live flying */
             char *e; errno = 0;
             long n = strtol(argv[++i], &e, 10);
             if (*e || e == argv[i] || errno || n < 1 || n > 1000000) { usage(argv[0]); return 2; }

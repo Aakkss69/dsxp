@@ -194,7 +194,7 @@ static void telemetry_and_triggers(void) {
     t.u.trig.mask = TF_MODE | TF_START | TF_END | TF_STRENGTH;
     core_apply_cmd(&C, &t, 1.0);
     CHECK_INT(C.fx_out[0].strength, 128);
-    cmd_t w = { .kind = CMD_FXMODE }; w.u.mode = FXM_WIND;
+    cmd_t w = { .kind = CMD_TRIGGER_SOURCE }; w.u.source = TRIGGER_SRC_WIND;
     core_apply_cmd(&C, &w, 1.0);
 
     core_set_gate(&C, false, false, true, "X-Plane", 1.0);   /* sim up, no controller */
@@ -216,12 +216,12 @@ static void telemetry_and_triggers(void) {
     const trig_manual_t *fm = &C.s.fx_manual[0];
     CHECK_INT(fm->mode, TFX_RESIST); CHECK_INT(fm->start, 30); CHECK_INT(fm->end, 0);
     CHECK_INT(fm->strength, 128); CHECK_INT(fm->freq, 40);
-    w.u.mode = FXM_MANUAL;
+    w.u.source = TRIGGER_SRC_MANUAL;
     core_apply_cmd(&C, &w, 1.2);
     CHECK_INT(C.fx_out[0].strength, 128);
 
-    /* telemetry stops: everything sim-driven is released */
-    cmd_t rm = { .kind = CMD_RUMBLEMODE }; rm.u.mode = RM_SIM;
+    /* telemetry stops: everything the simulator set is released */
+    cmd_t rm = { .kind = CMD_RUMBLE_SOURCE }; rm.u.source = RUMBLE_SRC_SIM;
     core_apply_cmd(&C, &rm, 1.2);
     int32_t ids2[] = { RR_CRASH, RR_STALL0, RR_STALL0 + 1, RR_STALL0 + 2 };
     float vals2[] = { 1.0f, 1.0f, 1.0f, 1.0f };       /* crashed, left wing stalled */
@@ -234,12 +234,12 @@ static void telemetry_and_triggers(void) {
     CHECK_INT(C.rumble.left, 0);
     CHECK(!C.wx.crashed);
     CHECK_NEAR(C.stall_el[0][0] + C.stall_el[0][1] + C.stall_el[0][2], 0.0, 0);
-    CHECK(!strcmp(C.wx.note, "Telemetry lost"));
+    CHECK(!strcmp(C.wx.trigger_note, "Telemetry lost"));
 }
 
 static void light_sim_alone(void) {
     fresh();
-    C.s.light.mode = LM_SIM;                          /* only the light bar is sim-driven */
+    C.s.light.source = LIGHT_SRC_SIM;                          /* only the light bar follows the simulator */
     core_set_gate(&C, false, false, true, "X-Plane", 1.0);
     core_tick(&C, 1.0);
     CHECK(rrefs(TELEMETRY_HZ) > 0);
@@ -247,7 +247,7 @@ static void light_sim_alone(void) {
     float vals[] = { 80.0f };
     udp_pairs(&C, ids, vals, 1, true, 1.1);
     core_tick(&C, 1.1);
-    CHECK(!strcmp(C.lnote, "Clean"));
+    CHECK(!strcmp(C.light_note, "Clean"));
 
     /* X-Plane quits: unsubscribed (frequency 0) */
     reset_cap();
@@ -277,17 +277,17 @@ static void saves_and_output(void) {
      * and a mode change goes through the same setter as the mapper's */
     core_get_config(&C, &cf);
     cf.s.tune.curve = 2.0;
-    cf.s.fxmode = FXM_WIND;
+    cf.s.trigger_source = TRIGGER_SRC_WIND;
     cf.bridge.telemetry_hz = 20;
     core_apply_config(&C, &cf, CFB_CONTROLS | CFB_FEEDBACK, 21.6);
     CHECK_NEAR(C.s.tune.curve, 2.0, 1e-12);
-    CHECK_INT(C.s.fxmode, FXM_WIND);
-    CHECK(!strcmp(C.wx.note, "Waiting for X-Plane"));
+    CHECK_INT(C.s.trigger_source, TRIGGER_SRC_WIND);
+    CHECK(!strcmp(C.wx.trigger_note, "Waiting for X-Plane"));
     CHECK_NEAR(C.bridge.telemetry_hz, 10, 1e-12);     /* bridge.conf was not in the mask */
     CHECK_INT(core_save_due(&C, 30.0), 0);
-    cf.s.fxmode = FXM_MANUAL;
+    cf.s.trigger_source = TRIGGER_SRC_MANUAL;
     core_apply_config(&C, &cf, CFB_FEEDBACK | CFB_BRIDGE, 21.7);
-    CHECK_INT(C.s.fxmode, FXM_MANUAL);
+    CHECK_INT(C.s.trigger_source, TRIGGER_SRC_MANUAL);
     CHECK_NEAR(C.bridge.telemetry_hz, 20, 1e-12);
     C.bridge = BRIDGE_DEFAULTS;
 
@@ -348,7 +348,7 @@ static void xp12_telemetry(void) {
 
     /* paused: sim rumble and wind triggers let go, still engaged; resume brings them back */
     fresh();
-    C.s.rmode = RM_SIM; C.s.fxmode = FXM_WIND;
+    C.s.rumble_source = RUMBLE_SRC_SIM; C.s.trigger_source = TRIGGER_SRC_WIND;
     feed(&C, 128, 0x08, 1.0);
     int32_t cid[2] = { RR_CRASH, RR_IAS };
     float cv[2] = { 1, 120 };
@@ -365,7 +365,7 @@ static void xp12_telemetry(void) {
     CHECK_INT(C.rumble.left, 0);
     CHECK_INT(C.fx_out[0].mode, TFX_OFF);
     CHECK(C.engaged);
-    CHECK(!strcmp(C.rnote, "Paused"));
+    CHECK(!strcmp(C.rumble_note, "Paused"));
     pv[0] = 0;
     udp_pairs(&C, pid, pv, 1, true, 1.2);
     feed(&C, 128, 0x08, 1.2);

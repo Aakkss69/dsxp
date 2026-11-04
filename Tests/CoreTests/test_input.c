@@ -45,9 +45,9 @@ void test_decode(void) {
 
     struct { int byte, bit, slot; } map[] = {
         { 0, 0x10, B_SQUARE }, { 0, 0x20, B_CROSS }, { 0, 0x40, B_CIRCLE }, { 0, 0x80, B_TRIANGLE },
-        { 1, 0x01, B_L1 }, { 1, 0x02, B_R1 }, { 1, 0x04, B_L2D }, { 1, 0x08, B_R2D },
+        { 1, 0x01, B_L1 }, { 1, 0x02, B_R1 }, { 1, 0x04, B_L2_CLICK }, { 1, 0x08, B_R2_CLICK },
         { 1, 0x10, B_CREATE }, { 1, 0x20, B_OPTIONS }, { 1, 0x40, B_L3 }, { 1, 0x80, B_R3 },
-        { 2, 0x01, B_PS }, { 2, 0x02, B_TOUCHPAD }, { 2, 0x04, B_MUTE },
+        { 2, 0x01, B_PS }, { 2, 0x02, B_TOUCHPAD_CLICK }, { 2, 0x04, B_MUTE },
     };
     for (size_t k = 0; k < sizeof map / sizeof map[0]; k++) {
         int b[3] = { 0x08, 0, 0 };
