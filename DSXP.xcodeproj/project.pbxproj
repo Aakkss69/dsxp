@@ -28,6 +28,7 @@
 		62124E997B1E0271504595BF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC19376167E23340EEADD882 /* main.swift */; };
 		643BE965211C61933980BA71 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFF36B5CC890C9E3D521AB3E /* IOKit.framework */; };
 		697E6EC8EBBF50D884B8D508 /* rumble.c in Sources */ = {isa = PBXBuildFile; fileRef = B5D0080D474B6360E8A70EE7 /* rumble.c */; };
+		70F124BBA31FFFEE94D0D932 /* ConfigFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 290C411DEEE9F484A0A2CB7A /* ConfigFiles.swift */; };
 		7210E72C7C669D1E78BA5EB1 /* runner.c in Sources */ = {isa = PBXBuildFile; fileRef = 60FE23D149AA8EF847C89233 /* runner.c */; };
 		7A6F62E9F9D5BBB68F0FDE89 /* CoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27DA0FD85535B3669D2EB47A /* CoreBridge.swift */; };
 		8278BEB4C8C89F4BAFA8B112 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72A8EDAE4788923AED068B9E /* CoreFoundation.framework */; };
@@ -123,6 +124,7 @@
 		237F0DCEA8ECC2130CBD1956 /* core_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = core_internal.h; sourceTree = "<group>"; };
 		27646B66C3C5AE8DA85A05B2 /* SingleInstance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstance.swift; sourceTree = "<group>"; };
 		27DA0FD85535B3669D2EB47A /* CoreBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreBridge.swift; sourceTree = "<group>"; };
+		290C411DEEE9F484A0A2CB7A /* ConfigFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigFiles.swift; sourceTree = "<group>"; };
 		29B8D41A0362C5ACD1CF73CA /* config_store.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = config_store.c; sourceTree = "<group>"; };
 		2AAB056A375C784B8B7CDE6E /* vocab.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vocab.c; sourceTree = "<group>"; };
 		2E0B58893B7048AD27E33B45 /* json_check.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = json_check.c; sourceTree = "<group>"; };
@@ -401,6 +403,7 @@
 		9B4F5BED6F49B910F77A74E9 /* System */ = {
 			isa = PBXGroup;
 			children = (
+				290C411DEEE9F484A0A2CB7A /* ConfigFiles.swift */,
 				0A8B4670C5772629361ABCBD /* LoginItem.swift */,
 				6EC2DFB993B9DD616AA69897 /* Paths.swift */,
 				782C9136DD7E6CB247394CA0 /* XPlaneLocator.swift */,
@@ -700,6 +703,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B6E20111CC6AFED619B680E6 /* AppDelegate.swift in Sources */,
+				70F124BBA31FFFEE94D0D932 /* ConfigFiles.swift in Sources */,
 				7A6F62E9F9D5BBB68F0FDE89 /* CoreBridge.swift in Sources */,
 				CEECB10CC2B6C711447AFEAB /* LoginItem.swift in Sources */,
 				E3D74F3C27EA475A1CDD68C5 /* MapperWindowController.swift in Sources */,

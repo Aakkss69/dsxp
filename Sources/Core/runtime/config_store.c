@@ -209,6 +209,10 @@ unsigned cfg_store_flush(cfg_store_t *st, config_t *live, unsigned files, double
                 conf_merge(f, &st->base, live, &theirs, live);
                 st->warns[f] = w;
                 st->gen++;
+                st->last_reload = f + 1;
+                for (int i = 0; i < w.n; i++)
+                    dsxp_log("config: %s line %d %s: %s", conf_schema(f)->file, w.w[i].line, w.w[i].key, w.w[i].msg);
+                dsxp_log("applied your edit to %s (merged with the mapper's changes)", conf_schema(f)->file);
                 changed |= 1u << f;
             }
         }

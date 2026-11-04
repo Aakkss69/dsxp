@@ -164,7 +164,9 @@ static void outside_edits(time_t t0) {
     put_file(d, "controls.conf", text ? text : "", t + 200);
     free(text);
     L.s.tune.gesture = 0.8;
+    S.last_reload = 0;
     CHECK_INT(cfg_store_flush(&S, &L, CFB_CONTROLS, (double)t + 210, false), CFB_CONTROLS);
+    CHECK_INT(S.last_reload, CF_CONTROLS + 1);       /* the mapper shows "applied your edit" */
     CHECK_NEAR(L.s.tune.deadzone, 0.30, 1e-12);
     CHECK_NEAR(L.s.tune.gesture, 0.8, 1e-12);
     CHECK_NEAR(L.s.tune.curve, 2.0, 1e-12);

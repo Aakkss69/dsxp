@@ -21,6 +21,7 @@ extension dsxp_status_t {
     var controllerLink: ControllerLink { ControllerLink(link) }
     var xpExecutablePath: String { Self.string(xp_exe_path) }
     var commandsFilePath: String { Self.string(commands_path) }
+    var configWarnFile: String { Self.string(config_warn_file) }
 
     private static func string<T>(_ tuple: T) -> String {
         withUnsafeBytes(of: tuple) { raw in

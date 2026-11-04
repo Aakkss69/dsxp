@@ -13,6 +13,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let xplaneLine = NSMenuItem()
     private let bridgeLine = NSMenuItem()
     private let accessLine = NSMenuItem()
+    private let configLine = NSMenuItem()
+    private var configProblemFile = ""
     private let loginItem = NSMenuItem()
 
     override init() {
@@ -28,12 +30,17 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         accessLine.action = #selector(fixAccessAction)
         accessLine.isHidden = true
         menu.addItem(accessLine)
+        configLine.target = self
+        configLine.action = #selector(openConfigProblem)
+        configLine.isHidden = true
+        menu.addItem(configLine)
         menu.addItem(.separator())
         add("Open Mapper…", #selector(openMapperAction), "m")
         loginItem.title = "Launch at Login"
         loginItem.target = self
         loginItem.action = #selector(toggleLogin)
         menu.addItem(loginItem)
+        add("Open Config Folder", #selector(openConfigFolder), "")
         add("Open Logs Folder", #selector(openLogs), "")
         menu.addItem(.separator())
         add("Quit DSXP", #selector(quitAction), "q")
@@ -73,6 +80,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
         bridgeLine.title = s.suspended ? "Bridge: paused (sleep)" : s.engaged ? "Bridge: engaged" : "Bridge: idle"
         accessLine.isHidden = !accessProblem
+
+        // a line in bridge.conf, controls.conf or feedback.conf DSXP could not use
+        let problems = Int(s.config_warnings)
+        configProblemFile = s.configWarnFile
+        configLine.isHidden = problems == 0
+        configLine.title = problems == 1 ? "Fix Config Problem in \(configProblemFile)…"
+            : "Fix \(problems) Config Problems, First in \(configProblemFile)…"
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -88,6 +102,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func fixAccessAction() { fixAccess?() }
     @objc private func toggleLogin() { LoginItem.toggle() }
     @objc private func quitAction() { NSApp.terminate(nil) }
+
+    @objc private func openConfigProblem() { ConfigFiles.open(configProblemFile) }
+    @objc private func openConfigFolder() { ConfigFiles.open("") }
 
     @objc private func openLogs() {
         try? FileManager.default.createDirectory(at: Paths.logDir, withIntermediateDirectories: true)

@@ -55,6 +55,16 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
             guard method == "POST" else { return respond(urlSchemeTask, 405, "text/plain", Data()) }
             onOpenAccess?()
             respondOK(urlSchemeTask)
+        case "/api/openconfig":
+            // ?file=controls.conf opens that file, no file opens the folder
+            guard method == "POST" else { return respond(urlSchemeTask, 405, "text/plain", Data()) }
+            let file = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "file" }?.value ?? ""
+            guard file.isEmpty || ConfigFiles.url(file) != nil else {
+                return respond(urlSchemeTask, 400, "text/plain; charset=utf-8", Data("unknown config file".utf8))
+            }
+            let opened = ConfigFiles.open(file)
+            respond(urlSchemeTask, 200, "application/json", Data("{\"ok\":\(opened)}".utf8))
         default:
             if path.hasPrefix("/api/") {
                 let r = CoreBridge.shared.api(method: method, path: path, query: query)

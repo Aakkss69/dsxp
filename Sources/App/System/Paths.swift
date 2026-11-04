@@ -2,7 +2,7 @@ import Foundation
 
 /// Where DSXP keeps its files. Nothing is ever written inside the app bundle.
 enum Paths {
-    /// ~/Library/Application Support/DSXP (bindings.conf, instance.lock)
+    /// ~/Library/Application Support/DSXP (bridge.conf, controls.conf, feedback.conf, instance.lock)
     static var dataDir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("DSXP", isDirectory: true)
