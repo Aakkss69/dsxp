@@ -77,9 +77,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         CoreBridge.shared.refresh()
-        loginItem.state = LoginItem.isEnabled ? .on : .off
+        let login = LoginItem.state
+        loginItem.state = login == .on ? .on : login == .needsApproval ? .mixed : .off
         loginItem.isEnabled = LoginItem.canToggle
-        loginItem.title = LoginItem.canToggle ? "Launch at Login" : "Launch at Login (install in /Applications)"
+        loginItem.title = !LoginItem.canToggle ? "Launch at Login (install in /Applications)"
+            : login == .needsApproval ? "Launch at Login (Approve in System Settings…)" : "Launch at Login"
     }
 
     @objc private func openMapperAction() { openMapper?() }

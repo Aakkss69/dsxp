@@ -150,6 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return done(false)
             }
             XPlaneLocator.save(url)
+            pendingPick?(false)          // a second pick replaces an unanswered first one
             pendingPick = done
             CoreBridge.shared.setCommandsPath(XPlaneLocator.commandsFile(in: url).path)
         }

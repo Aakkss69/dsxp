@@ -29,7 +29,7 @@ final class MapperWindowController: NSObject, NSWindowDelegate, WKUIDelegate, WK
         #endif
         web.uiDelegate = self
         web.navigationDelegate = self
-        web.setValue(false, forKey: "drawsBackground")
+        web.underPageBackgroundColor = .windowBackgroundColor   // public API; no private KVC
 
         let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 900),
                            styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -48,6 +48,8 @@ final class MapperWindowController: NSObject, NSWindowDelegate, WKUIDelegate, WK
     }
 
     func windowWillClose(_ notification: Notification) {
+        // the motor test buttons keep running until Stop; closing the window stops them
+        _ = CoreBridge.shared.api(method: "POST", path: "/api/rumble", query: "left=0&right=0")
         webView?.stopLoading()
         window?.contentView = nil
         webView = nil
@@ -76,6 +78,12 @@ final class MapperWindowController: NSObject, NSWindowDelegate, WKUIDelegate, WK
     }
 
     // MARK: WKNavigationDelegate - the window only ever shows DSXP's own page
+
+    /// The page's WebContent process can be killed by the system (memory pressure)
+    /// or crash; without this the window would stay blank.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        webView.load(URLRequest(url: URL(string: "dsxp://app/")!))
+    }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async
         -> WKNavigationActionPolicy {

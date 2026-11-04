@@ -725,13 +725,17 @@ async function loadInit() {
 async function pollLoop() {
   while (!stopped) {
     const t0 = Date.now();
-    await poll();
+    try { await poll(); }
+    catch (e) { console.error(e); await new Promise(r => setTimeout(r, 1000)); }   /* never stop polling */
     await new Promise(r => setTimeout(r, Math.max(10, 50 - (Date.now() - t0))));
   }
 }
 
 (async () => {
-  await loadInit();
+  for (;;) {                       /* retry until the API answers */
+    try { await loadInit(); break; }
+    catch (e) { console.error(e); await new Promise(r => setTimeout(r, 1000)); }
+  }
   await poll();
   renderButtons(); renderAxes(); renderResults(); drawCurve(); renderFx(); applyFxMode(); applyRumbleMode(); applyLightMode();
   pollLoop();
