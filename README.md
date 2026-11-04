@@ -26,7 +26,7 @@ for the buttons.
   select it, then search X-Plane's whole command list (with descriptions) and
   assign. Hold-to-repeat or fire-once per button.
 - **Axes**: any stick or trigger to roll, pitch, yaw, throttle, differential rudder
-  or toe brakes, with invert, deadzone and response curve.
+  or toe brakes, with invert, dead zone and response curve.
 - **Touchpad gestures**: tap, two-finger tap and eight swipe directions as buttons.
 - **Adaptive triggers**: hand-set Resist / Weapon / Vibrate effects, or *wind mode*,
   where rudder-pedal force follows airspeed squared, crosswind loads one side, and
@@ -38,12 +38,16 @@ for the buttons.
 - **Safe by default**: every override is released when X-Plane closes, the cable
   is plugged in, the controller goes quiet, the Mac sleeps, or DSXP quits. A small
   guard process does the same if DSXP itself ever crashes.
+- **Plain-text settings**: three commented config files, applied while DSXP runs
+  (see [Settings files](#settings-files)).
 
 ## Requirements
 
 - macOS 14 Sonoma or later, Apple Silicon or Intel
-- X-Plane 12, with *Settings › Network › Accept incoming connections* enabled
-  (DSXP talks to it on `127.0.0.1:49000`)
+- X-Plane 12 (any install folder), with *Settings › Network › Accept incoming
+  connections* enabled. DSXP talks to it on `127.0.0.1:49000` (`xplane.port` in
+  `bridge.conf`) and takes control only once X-Plane answers its telemetry
+  request, so with networking off DSXP stays idle instead of sending into the void.
 - A DualSense (`054C:0CE6`) paired over Bluetooth
 - To build: Xcode, and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
   (`brew install xcodegen`)
@@ -71,20 +75,45 @@ macOS treats every rebuild as a new app and asks for permissions again.
 2. If the X-Plane folder is not found automatically (it looks in
    `~/X-Plane/X-Plane 12` and `/Applications/X-Plane 12`, and at a running
    X-Plane), click **Choose…** in the mapper and pick your X-Plane 12 folder.
-3. Turn on the controller. The menu shows *Controller: Bluetooth · ~60 Hz*.
-4. Start X-Plane. Once a flight is loaded the menu shows *Bridge: engaged*.
+3. Turn on the controller. The menu shows *Controller: Bluetooth, 62 Hz* or so.
+4. Start X-Plane. Once a flight is loaded the menu shows *Bridge: Driving X-Plane*.
 5. If the controller is connected but no input arrives, the mapper and the menu
-   offer **Input access…**, which opens *Privacy & Security › Input Monitoring*.
+   offer **Allow Input Monitoring…**, which opens *Privacy & Security › Input
+   Monitoring*.
 
 If you used the earlier `dualsense-xplane` prototype, its `bindings.conf` is
 imported once on first launch.
+
+## Settings files
+
+Everything DSXP can be tuned with lives in three text files in
+`~/Library/Application Support/DSXP/` (menu: **Open Config Folder**):
+
+| File | What it holds | Written by |
+|---|---|---|
+| `bridge.conf` | How DSXP talks to X-Plane: port, loop and repeat rates, timeouts, telemetry rate, logging | you only (DSXP creates it once) |
+| `controls.conf` | Stick dead zone and curve, touchpad gestures, the six axes, the 33 buttons | you and the mapper |
+| `feedback.conf` | Trigger effects and the wind model, rumble, light bar and its simulator thresholds | you and the mapper |
+
+- DSXP writes them on first run with every setting at its default, and each
+  setting is explained in place: what it does, its range and default, and for
+  numbers what raising or lowering it does in flight. The same files, with the
+  defaults, are in [`configs/`](configs/) in this repository.
+- Edit with any text editor and save: DSXP applies the change within about
+  2 seconds, no restart needed (a new X-Plane port or loop rate included).
+- A line DSXP cannot use is ignored and keeps the previous value; the mapper and
+  the menu list it with its file and line number. Delete a line to use its default;
+  delete a file to reset all of it.
+- When the mapper saves `controls.conf` or `feedback.conf` it rewrites the file
+  from the same template, so the documentation stays, but comments you added
+  yourself are lost. If you edited the file meanwhile, both changes are kept.
 
 ## Files
 
 | What | Where |
 |---|---|
-| Settings | `~/Library/Application Support/DSXP/bindings.conf` |
-| Logs (14 days) | `~/Library/Logs/DSXP/` (*Open Logs Folder* in the menu) |
+| Settings | `~/Library/Application Support/DSXP/` `bridge.conf`, `controls.conf`, `feedback.conf` |
+| Logs (`log.retention_days`, 14 days by default) | `~/Library/Logs/DSXP/` (*Open Logs Folder* in the menu) |
 | Console | subsystem `io.github.aakkss69.DSXP` |
 
 ## Uninstall
@@ -102,15 +131,19 @@ Quit DSXP, then delete `/Applications/DSXP.app`,
 | `Sources/App/` | The macOS app, in Swift: `Lifecycle/`, `Bridge/` (C bridge, `dsxp://` scheme), `UI/` (menu-bar item, mapper window), `System/`, `Support/` (Info.plist, entitlements). |
 | `Resources/` | What ships inside the app: `web/` (the mapper UI, plain HTML/CSS/JS) and the asset catalog. |
 | `Tests/CoreTests/` | C unit tests, run by `Scripts/test-core.sh` (AddressSanitizer + UBSan) and by `xcodebuild test`. |
-| `Tools/` | `dsxp-cli/` (headless runner: `--verify`, `--capture N`) and `make-icon.swift`. |
+| `configs/` | The three settings files with their defaults, generated from `Sources/Core/settings/config_schema.c` (`Scripts/test-core.sh --update-configs`); a test fails if they drift. |
+| `docs/` | [`REFERENCES.md`](docs/REFERENCES.md): every outside source the code relies on (X-Plane, DualSense, Apple), with links and the lines that use it, plus known limits and pitfalls. |
+| `Tools/` | `dsxp-cli/` (headless runner: `--verify`, `--capture N`, `--write-default-configs DIR`) and `make-icon.swift`. |
 | `Scripts/` | `bootstrap.sh`, `build.sh`, `test-core.sh`. |
 | `BuildSettings/` | Xcode build settings (`.xcconfig`); your signing team goes in the gitignored `Local.xcconfig`. |
 | `project.yml` | XcodeGen spec; `DSXP.xcodeproj` is generated from it. |
 
-## Licence and trademarks
+## License and trademarks
 
-Apache License 2.0, see [LICENSE](LICENSE).
+Apache License 2.0, see [LICENSE](LICENSE). The controller drawing in the mapper
+was traced from a stock image whose license is unknown; see
+[docs/REFERENCES.md](docs/REFERENCES.md#controller-drawing).
 
 DSXP is not affiliated with or endorsed by Sony Interactive Entertainment or
 Laminar Research. "DualSense" and "PlayStation" are trademarks of Sony
-Interactive Entertainment Inc. "X-Plane" is a trademark of Laminar Research.
+Interactive Entertainment Inc. X-Plane is made by Laminar Research.

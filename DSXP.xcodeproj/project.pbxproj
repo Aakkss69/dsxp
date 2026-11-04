@@ -154,6 +154,7 @@
 		8D13A771B15B03CE505CD5A8 /* commands.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = commands.c; sourceTree = "<group>"; };
 		90C28191C0E3D3396C80F4DD /* xp_packets.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xp_packets.c; sourceTree = "<group>"; };
 		92084FAD03F7E4E90EF7778B /* core.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core.c; sourceTree = "<group>"; };
+		9980B1C4A031D874BE854C87 /* REFERENCES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = REFERENCES.md; sourceTree = "<group>"; };
 		9C8B147E2C40B8445F7A85AD /* config_schema.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = config_schema.c; sourceTree = "<group>"; };
 		9D24135E2D0614620A84B6AB /* log.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = log.c; sourceTree = "<group>"; };
 		A5995EA892A12032C85F196E /* decode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = decode.c; sourceTree = "<group>"; };
@@ -379,6 +380,14 @@
 			path = runtime;
 			sourceTree = "<group>";
 		};
+		770224FE2647FA0B8F249D88 /* docs */ = {
+			isa = PBXGroup;
+			children = (
+				9980B1C4A031D874BE854C87 /* REFERENCES.md */,
+			);
+			path = docs;
+			sourceTree = "<group>";
+		};
 		809D48AD42963D837AD838E4 /* platform */ = {
 			isa = PBXGroup;
 			children = (
@@ -473,6 +482,7 @@
 			children = (
 				E8216F6884C98CAC8F82E288 /* BuildSettings */,
 				CD1A8F305BDB84F2578D30F6 /* configs */,
+				770224FE2647FA0B8F249D88 /* docs */,
 				22E6A4764EA11B9F04C83EC7 /* Resources */,
 				2F4C1C6B08DB54C44A8B0D77 /* Sources */,
 				04A1A52E1610CE31F662E656 /* Tests */,
