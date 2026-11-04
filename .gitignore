@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Build output
+build/
+dist/
+DerivedData/
+*.o
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Local signing settings (team ID)
+Config/Local.xcconfig
+
+# Runtime data - never commit
+logs/
+*.log
+bindings.conf
+!Tests/CoreTests/fixtures/*.conf
+
+# X-Plane's own files - never commit
+Commands.txt
+DataRefs.txt
+*.prf
+
+# Design-time references with unknown licence
+ref/
+tools/out/
+
+# Editors
+.idea/
+.vscode/
+
+# Local planning notes (contain local paths)
+plan/

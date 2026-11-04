@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dsxp mapper</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<header>
+  <h1>dsxp</h1>
+  <span class="sub">DualSense &rarr; X-Plane 12</span>
+  <span class="spacer"></span>
+  <span class="pill" id="g-bt">bluetooth</span>
+  <span class="pill" id="g-usb">usb</span>
+  <span class="pill" id="g-xp">x-plane 12</span>
+  <span class="pill" id="g-eng">idle</span>
+  <span class="pill" id="g-rep">0</span>
+  <button id="quit" title="stop the bridge and hand the controls back">Quit</button>
+</header>
+
+<div id="gone" hidden>
+  <div>
+    <h2>Bridge stopped</h2>
+    <p>The controller is quiet and X-Plane has its controls back.</p>
+    <p class="dim">Run <code>xplane_dualsense</code> to start it again.</p>
+  </div>
+</div>
+
+<main>
+    <section>
+      <div class="head">Controller <em id="mapstatus">waiting for report 0x31</em></div>
+      <div class="mapwrap">
+        <!-- Proportions follow the real DualSense: 1242 x 814 of body = 1.53,
+             four separate D-pad arrow keys, concentric stick rings. -->
+        <svg id="pad" viewBox="0 0 1310 871" role="img" aria-label="DualSense map">
+          <!-- Geometry traced from the reference with potrace; every outline
+               below is the real contour, not an approximation. -->
+          <path class="body" d="M 274.1 0.2 C 240.8 1.7 214.5 8.4 186.9 22.3 C 178.3 26.7 165.5 34.2 164.6 35.5 C 162.2 38.8 161.8 39.8 161.5 42.8 C 161.3 44.5 160.7 49.1 160.2 53.0 C 159.1 61.1 159.5 60.3 156.3 61.1 C 150.4 62.7 142.5 65.2 140.8 66.1 C 139.7 66.7 138.1 67.8 137.2 68.6 C 135.7 70.0 135.3 70.7 131.3 79.0 C 114.7 112.7 93.5 163.2 79.1 203.4 C 78.5 205.4 77.2 208.8 76.4 211.0 C 75.6 213.2 74.9 215.4 74.7 215.8 C 74.6 216.2 73.6 219.1 72.4 222.4 C 69.9 229.8 63.7 248.2 60.7 257.6 C 57.2 268.6 54.1 278.8 50.6 290.6 C 48.6 297.4 47.5 301.5 44.5 312.0 C 43.8 314.4 42.7 318.7 42.1 320.8 C 41.9 321.7 41.4 323.7 40.9 325.2 C 36.0 343.6 30.9 364.8 27.1 382.2 C 26.4 385.5 25.6 389.1 25.4 390.1 C 21.5 407.6 16.1 437.0 12.6 459.9 C 12.3 461.9 11.9 464.4 11.7 465.4 C 10.8 471.0 9.2 483.1 8.0 492.7 C 3.9 526.0 1.6 555.6 0.5 587.8 C 0.0 602.0 0.0 652.7 0.5 661.6 C 2.2 694.7 4.9 717.0 10.3 742.4 C 10.8 744.7 12.3 750.8 13.9 756.9 C 14.6 759.7 17.5 769.1 19.0 773.3 C 26.0 793.9 35.2 811.6 46.1 825.2 C 57.8 839.7 70.7 849.4 86.1 855.2 C 89.3 856.3 89.3 856.3 96.8 856.4 C 104.2 856.4 104.2 856.4 137.5 861.2 C 155.8 863.8 170.9 866.0 171.1 866.0 C 171.2 866.0 171.7 866.6 172.2 867.5 C 173.6 869.5 175.1 870.4 177.1 870.4 C 180.5 870.4 183.6 868.3 186.7 864.2 C 194.9 853.3 205.0 834.6 216.8 808.4 C 231.1 776.8 248.5 732.6 260.1 698.5 C 271.3 665.5 284.9 633.8 295.6 616.1 C 298.3 611.6 303.8 603.5 306.2 600.5 C 322.2 580.6 345.5 566.7 371.5 561.6 C 378.9 560.2 384.6 559.5 388.8 559.6 C 394.2 559.6 397.5 560.1 411.1 562.9 C 434.8 567.8 443.9 568.3 480.0 566.7 C 491.6 566.2 818.4 566.2 830.1 566.7 C 848.9 567.5 858.8 567.7 866.1 567.4 C 877.9 566.8 884.4 565.9 900.5 562.6 C 916.0 559.5 920.0 559.1 927.6 559.9 C 949.8 562.4 968.5 569.7 985.2 582.3 C 991.7 587.2 999.0 594.2 1003.8 600.3 C 1006.5 603.6 1013.0 613.2 1015.5 617.5 C 1025.1 633.8 1038.4 664.4 1047.9 692.1 C 1053.5 708.3 1054.6 711.6 1057.7 720.0 C 1078.7 777.6 1101.5 829.3 1117.0 854.6 C 1122.7 863.8 1125.9 867.7 1128.9 869.2 C 1133.4 871.4 1135.5 870.9 1138.5 866.8 C 1139.1 866.0 1139.1 866.0 1172.5 861.2 C 1205.9 856.4 1205.9 856.4 1213.3 856.4 C 1220.8 856.3 1220.8 856.3 1224.0 855.2 C 1250.8 845.2 1271.9 821.6 1286.7 785.0 C 1290.0 777.0 1294.2 764.3 1296.2 756.9 C 1299.8 743.2 1301.2 736.6 1303.5 722.9 C 1305.7 710.2 1307.9 690.4 1308.8 675.5 C 1309.9 658.2 1310.0 653.3 1309.9 623.9 C 1309.9 585.3 1309.1 566.3 1306.5 535.3 C 1305.4 521.8 1303.4 502.4 1301.9 491.5 C 1301.7 489.8 1301.3 486.8 1301.1 484.8 C 1300.5 480.5 1298.7 467.8 1298.3 465.4 C 1298.2 464.4 1297.9 462.3 1297.6 460.8 C 1294.4 439.5 1288.4 407.0 1284.7 390.1 C 1284.5 389.1 1283.4 384.4 1282.4 379.8 C 1280.7 372.2 1279.6 367.4 1276.8 355.3 C 1275.8 351.1 1272.1 336.5 1270.6 330.9 C 1268.9 324.3 1268.8 323.9 1268.0 320.9 C 1267.6 319.4 1266.9 317.0 1266.6 315.6 C 1264.3 307.3 1258.7 287.6 1255.6 277.6 C 1251.2 263.2 1248.7 255.2 1243.6 239.8 C 1225.0 183.8 1200.7 123.5 1178.8 79.0 C 1174.7 70.5 1174.3 70.0 1172.8 68.5 C 1171.8 67.7 1170.1 66.5 1168.8 65.9 C 1166.7 64.9 1158.2 62.2 1152.6 60.8 C 1150.6 60.3 1150.6 60.3 1150.0 55.7 C 1149.6 53.2 1149.0 48.6 1148.7 45.5 C 1148.0 39.8 1148.0 39.8 1146.4 37.4 C 1144.8 35.0 1144.8 35.0 1140.4 32.2 C 1115.5 16.7 1089.0 6.7 1061.8 2.6 C 1049.7 0.8 1040.8 0.2 1026.3 0.2 C 1010.2 0.2 999.4 0.9 990.3 2.4 C 984.5 3.5 979.5 5.1 978.4 6.5 C 978.2 6.8 977.4 11.4 976.4 18.0 C 975.4 24.1 974.6 29.2 974.6 29.3 C 974.5 29.3 973.2 29.5 971.8 29.8 C 968.3 30.3 964.7 31.1 961.7 32.2 C 959.3 33.0 959.3 33.0 954.4 32.2 C 943.4 30.3 920.6 27.2 904.9 25.5 C 899.3 24.8 897.9 24.6 895.6 23.7 C 890.6 22.0 887.6 21.3 878.3 20.0 C 844.8 15.2 793.9 12.2 720.6 10.6 C 698.1 10.1 602.2 10.1 579.2 10.6 C 506.0 12.1 455.5 15.2 427.5 19.7 C 420.2 20.9 417.6 21.6 412.7 23.7 C 410.0 24.9 409.4 25.0 405.3 25.5 C 391.8 26.9 368.9 30.0 356.7 32.0 C 350.8 33.0 350.8 33.0 348.1 32.1 C 345.0 31.0 340.9 30.1 337.6 29.6 C 336.3 29.5 335.3 29.3 335.2 29.2 C 335.1 29.2 334.3 24.1 333.4 18.0 C 332.4 11.3 331.6 6.8 331.4 6.5 C 330.5 5.4 326.6 3.9 322.6 3.0 C 317.4 1.9 310.2 1.1 301.6 0.6 C 296.2 0.3 277.8 0.0 274.1 0.2 Z"/>
+          <path class="pad" id="b-21" d="M 710.0 11.8 C 785.7 13.0 843.5 16.3 878.0 21.3 C 889.7 23.0 893.8 24.1 899.1 26.8 C 910.3 32.5 916.3 42.4 916.3 55.0 C 916.3 59.8 916.1 60.9 912.5 77.8 C 910.9 85.4 907.5 101.8 904.9 114.2 C 902.3 126.6 899.4 140.4 898.4 144.9 C 896.3 154.8 890.1 184.6 883.0 218.1 C 876.2 250.7 876.2 250.7 875.1 253.6 C 871.7 262.0 863.6 271.7 853.7 279.4 C 845.7 285.7 837.3 289.9 829.0 291.8 L 826.4 292.5 L 657.3 292.5 C 540.1 292.6 487.3 292.5 485.1 292.3 C 481.0 291.9 477.2 291.0 472.8 289.1 C 457.4 282.8 441.3 267.8 435.5 254.4 C 434.2 251.5 433.9 250.4 431.6 239.7 C 430.6 234.7 428.7 225.7 427.5 219.8 C 426.2 213.9 423.6 201.3 421.6 191.9 C 419.6 182.5 415.6 163.4 412.7 149.5 C 409.7 135.5 405.5 115.1 403.2 104.1 C 400.9 93.2 398.0 79.3 396.7 73.4 C 394.1 61.0 393.8 59.2 393.8 55.0 C 393.8 41.8 400.5 31.2 412.3 25.5 C 417.6 22.9 420.9 22.0 430.5 20.6 C 457.4 16.7 504.9 13.6 560.0 12.4 C 566.9 12.2 576.0 12.0 580.1 11.9 C 602.3 11.3 677.3 11.3 710.0 11.8 Z"/>
+          <path class="btn" id="b-12" d="M 305.5 2.1 C 318.8 3.2 326.7 4.8 330.1 7.1 C 330.5 7.4 333.9 29.0 333.6 29.3 C 333.5 29.3 331.2 29.6 328.5 29.8 C 296.5 32.4 207.6 48.2 165.7 58.7 C 163.1 59.3 160.9 59.8 160.8 59.8 C 160.7 59.7 160.9 57.6 161.3 55.0 C 161.6 52.3 162.1 48.0 162.5 45.4 C 163.0 40.7 163.1 40.5 164.2 38.6 C 164.9 37.5 165.7 36.4 166.0 36.0 C 166.4 35.7 168.5 34.3 170.8 32.9 C 201.4 14.0 232.9 4.0 268.8 1.7 C 274.9 1.4 298.9 1.6 305.5 2.1 Z"/>
+          <path class="btn" id="b-13" d="M 1040.3 1.7 C 1076.4 3.8 1109.2 14.2 1139.7 33.3 C 1143.9 36.0 1144.1 36.1 1145.5 38.6 C 1146.7 40.5 1146.7 40.7 1147.3 45.4 C 1147.6 48.0 1148.2 52.4 1148.5 55.0 C 1148.9 57.7 1149.2 59.8 1149.1 59.8 C 1149.1 59.8 1146.9 59.3 1144.3 58.7 C 1103.2 48.3 1014.4 32.5 983.0 29.9 C 976.6 29.4 976.1 29.3 976.1 28.9 C 976.1 27.3 979.4 7.3 979.7 7.1 C 983.6 4.3 996.5 2.3 1013.8 1.6 C 1019.7 1.4 1035.8 1.5 1040.3 1.7 Z"/>
+          <path class="btn sm" id="b-16" d="M 342.2 76.7 C 336.7 78.0 332.1 82.5 330.7 87.9 C 329.9 91.0 330.1 93.0 333.1 110.0 C 335.8 125.3 336.0 126.2 337.0 128.3 C 338.4 131.1 341.1 133.8 343.8 135.2 C 354.5 140.4 367.3 132.9 367.3 121.3 C 367.3 118.8 362.1 88.8 361.3 86.5 C 359.6 81.7 355.5 77.9 350.6 76.7 C 348.7 76.2 344.4 76.2 342.2 76.7 Z"/>
+          <path class="btn sm" id="b-17" d="M 959.1 76.9 C 954.5 78.5 951.0 81.8 949.4 86.2 C 948.8 87.7 943.6 116.3 943.2 120.1 C 942.7 124.0 944.7 129.0 947.8 132.1 C 955.5 139.9 968.8 137.8 973.6 128.2 C 974.7 126.0 974.8 125.4 977.6 109.5 C 979.1 100.5 980.4 92.6 980.4 91.8 C 980.4 84.8 975.2 78.3 968.3 76.7 C 965.5 76.0 961.4 76.1 959.1 76.9 Z"/>
+          <path class="btn" id="b-0" d="M 228.9 136.9 C 217.5 138.9 208.7 148.3 207.8 159.7 C 207.7 160.9 207.9 165.5 208.2 170.3 C 208.6 175.0 209.1 183.3 209.5 188.9 C 210.6 204.6 209.8 203.1 224.6 218.7 C 230.8 225.1 236.4 230.9 237.1 231.5 C 240.1 234.1 244.5 235.6 248.3 235.2 C 250.9 235.0 253.7 234.0 255.8 232.6 C 257.2 231.7 274.1 214.3 279.4 208.3 C 281.3 206.2 283.1 202.7 283.8 200.0 C 284.5 197.0 286.8 161.5 286.5 158.8 C 285.2 148.0 276.9 139.2 266.1 137.1 C 264.1 136.7 261.1 136.7 247.0 136.7 C 237.8 136.7 229.6 136.8 228.9 136.9 Z"/>
+          <path class="btn" id="b-2" d="M 326.1 209.6 C 323.4 209.8 318.1 210.2 314.3 210.5 C 298.2 211.5 296.8 211.7 294.4 212.4 C 290.3 213.7 289.3 214.5 276.2 227.0 C 263.1 239.5 262.6 240.1 261.3 243.9 C 260.8 245.4 260.6 246.5 260.6 248.4 C 260.6 252.5 261.8 255.8 264.1 258.5 C 266.5 261.2 288.2 281.7 289.7 282.6 C 291.5 283.8 294.5 285.0 296.4 285.4 C 297.2 285.5 301.8 285.9 306.6 286.3 C 311.5 286.6 319.0 287.1 323.3 287.4 C 333.5 288.2 337.0 288.2 339.8 287.4 C 349.4 285.0 356.6 277.6 358.6 268.1 C 358.9 266.5 359.0 262.8 359.0 248.5 C 359.0 231.8 359.0 230.7 358.4 228.4 C 357.7 225.4 355.5 220.8 353.5 218.5 C 350.5 214.7 345.8 211.6 341.0 210.2 C 337.8 209.2 333.2 209.0 326.1 209.6 Z"/>
+          <path class="btn" id="b-4" d="M 246.1 262.0 C 241.7 262.4 238.9 263.9 235.0 267.8 C 227.6 275.2 213.8 290.1 212.9 291.6 C 212.4 292.5 211.5 294.3 211.1 295.6 C 210.2 298.0 210.2 298.5 208.9 316.4 C 208.1 328.3 207.7 335.7 207.8 337.3 C 208.1 343.2 210.7 348.7 215.0 353.1 C 217.9 356.1 221.1 358.0 225.5 359.5 L 227.9 360.3 L 246.9 360.3 C 265.8 360.3 266.0 360.3 268.2 359.7 C 276.9 357.2 283.6 350.3 285.9 341.6 C 286.6 339.1 286.8 336.2 286.5 332.6 C 286.4 330.6 286.0 326.1 285.8 322.5 C 285.5 318.9 285.1 312.2 284.8 307.4 C 284.4 302.7 284.0 298.0 283.7 297.1 C 282.9 293.9 281.1 290.8 278.6 288.0 C 270.7 279.6 259.2 267.5 257.9 266.3 C 254.7 263.3 250.2 261.7 246.1 262.0 Z"/>
+          <path class="btn" id="b-6" d="M 155.2 209.6 C 150.9 210.5 146.6 212.8 143.3 215.9 C 139.7 219.3 137.3 223.2 136.0 228.0 C 135.3 230.3 135.3 230.5 135.3 248.4 C 135.3 269.1 135.2 268.5 137.7 273.7 C 141.9 282.5 150.4 288.0 159.8 288.0 C 164.5 288.0 196.0 285.7 198.3 285.3 C 201.2 284.6 204.6 282.9 206.8 280.9 C 207.9 280.0 213.5 274.6 219.4 269.0 C 230.8 258.2 231.9 256.9 233.0 253.5 C 234.3 249.3 234.0 245.2 231.9 241.4 C 230.7 238.9 230.0 238.2 219.2 228.0 C 214.2 223.3 209.1 218.4 207.8 217.2 C 204.9 214.5 201.2 212.5 197.7 211.9 C 195.2 211.4 167.6 209.4 161.2 209.3 C 158.3 209.2 156.6 209.3 155.2 209.6 Z"/>
+          <path class="btn" id="b-8" d="M 962.2 206.5 C 944.0 209.1 929.8 221.7 925.5 239.0 C 919.4 262.8 934.4 286.8 958.6 292.1 C 961.2 292.6 962.5 292.7 967.5 292.7 C 972.5 292.7 973.8 292.6 976.4 292.1 C 993.8 288.3 1006.8 274.9 1010.2 257.1 C 1010.9 253.5 1010.9 245.7 1010.2 242.1 C 1006.9 224.6 994.3 211.3 977.0 207.2 C 974.4 206.6 973.1 206.5 968.5 206.4 C 965.5 206.4 962.7 206.4 962.2 206.5 Z"/>
+          <path class="btn" id="b-9" d="M 1058.3 302.5 C 1051.2 303.6 1044.8 306.1 1039.0 309.9 C 1035.8 312.1 1030.1 317.8 1028.0 320.8 C 1020.7 331.4 1018.5 344.0 1021.6 356.3 C 1025.6 372.3 1038.5 384.7 1054.8 388.2 C 1057.5 388.7 1058.7 388.8 1063.7 388.8 C 1068.5 388.8 1069.9 388.7 1072.3 388.2 C 1083.6 385.7 1093.3 379.1 1099.5 369.8 C 1102.9 364.8 1104.9 360.0 1106.2 353.9 C 1107.0 349.9 1107.1 342.1 1106.3 338.2 C 1103.3 322.5 1092.8 310.1 1078.3 304.8 C 1073.6 303.2 1070.5 302.6 1064.6 302.5 C 1061.6 302.5 1058.7 302.5 1058.3 302.5 Z"/>
+          <path class="btn" id="b-10" d="M 1154.4 206.5 C 1147.3 207.5 1140.9 210.0 1135.1 213.8 C 1131.6 216.2 1126.0 221.8 1123.7 225.2 C 1113.6 240.5 1113.8 259.7 1124.2 274.6 C 1126.5 277.9 1131.9 283.2 1135.2 285.4 C 1140.3 288.7 1145.2 290.8 1150.8 292.1 C 1153.3 292.6 1154.7 292.7 1159.7 292.7 C 1164.7 292.7 1166.0 292.6 1168.5 292.1 C 1190.0 287.4 1204.8 267.5 1202.9 245.9 C 1201.2 227.0 1187.8 211.7 1169.2 207.2 C 1166.6 206.6 1165.3 206.5 1160.7 206.4 C 1157.7 206.4 1154.8 206.4 1154.4 206.5 Z"/>
+          <path class="btn" id="b-11" d="M 1058.3 110.4 C 1057.8 110.4 1056.1 110.8 1054.5 111.1 C 1038.7 114.4 1025.6 126.9 1021.6 142.7 C 1019.3 151.7 1019.9 160.7 1023.3 169.6 C 1027.7 180.9 1037.6 190.3 1049.2 194.4 C 1054.3 196.2 1057.1 196.6 1063.6 196.6 C 1068.7 196.6 1069.9 196.6 1072.5 196.0 C 1088.2 192.4 1100.6 181.1 1105.1 165.9 C 1111.7 144.1 1100.0 120.7 1078.4 112.7 C 1073.7 111.0 1070.6 110.4 1064.6 110.3 C 1061.6 110.3 1058.7 110.3 1058.3 110.4 Z"/>
+          <path class="btn sm" id="b-20" d="M 626.9 491.3 C 623.2 492.4 621.0 495.3 621.0 499.0 C 621.0 500.8 621.1 501.3 621.8 502.6 C 622.9 504.5 624.9 506.1 627.1 506.8 C 628.6 507.2 631.1 507.2 655.5 507.2 L 682.2 507.1 L 683.8 506.3 C 690.5 503.2 690.4 494.5 683.6 491.5 C 682.6 491.0 680.6 491.0 655.3 490.9 C 633.2 490.9 627.9 490.9 626.9 491.3 Z"/>
+          <circle class="touchdot" id="touch-0" r="16" cx="-99" cy="-99"/>
+          <circle class="touchdot" id="touch-1" r="16" cx="-99" cy="-99"/>
+          <g class="grille">
+            <path d="M 604.0 325.8 C 601.5 326.9 599.8 329.5 599.8 332.3 C 599.8 334.7 600.4 336.0 602.0 337.7 C 604.3 340.1 607.5 340.7 610.6 339.1 C 612.2 338.3 613.0 337.6 613.8 335.9 C 614.9 334.0 614.9 331.0 614.0 329.2 C 613.2 327.9 611.3 326.1 610.0 325.5 C 608.5 324.9 605.6 325.0 604.0 325.8 Z"/>
+            <path d="M 628.1 325.5 C 626.6 326.2 624.6 328.2 624.1 329.7 C 622.6 333.3 624.1 337.2 627.5 339.1 C 628.7 339.8 629.3 339.9 631.0 339.9 C 633.4 339.9 634.8 339.3 636.5 337.5 C 637.9 335.9 638.4 334.7 638.4 332.5 C 638.3 328.2 635.2 325.1 630.9 325.1 C 629.8 325.1 628.6 325.3 628.1 325.5 Z"/>
+            <path d="M 651.4 325.9 C 645.1 329.0 646.3 338.3 653.3 339.8 C 656.4 340.5 659.4 339.1 661.2 336.2 C 662.0 334.9 662.1 334.5 662.1 332.6 C 662.1 330.1 661.6 328.8 660.0 327.2 C 657.8 325.0 654.2 324.4 651.4 325.9 Z"/>
+            <path d="M 675.5 325.7 C 669.7 328.4 669.5 336.3 675.3 339.3 C 676.2 339.7 677.0 339.9 678.5 339.9 C 680.2 339.9 680.7 339.8 682.1 339.0 C 684.0 338.0 685.4 336.1 685.9 333.9 C 686.5 331.0 685.2 328.1 682.4 326.1 C 681.3 325.4 680.9 325.2 679.0 325.2 C 677.2 325.1 676.5 325.2 675.5 325.7 Z"/>
+            <path d="M 699.1 325.7 C 692.4 329.1 693.9 338.8 701.4 339.9 C 703.3 340.2 705.7 339.5 707.2 338.1 C 711.2 334.5 710.3 328.0 705.5 325.8 C 703.6 324.9 700.9 324.8 699.1 325.7 Z"/>
+            <path d="M 616.8 346.0 C 615.1 346.5 613.5 347.8 612.5 349.5 C 611.9 350.7 611.7 351.2 611.7 353.0 C 611.7 355.5 612.3 356.8 613.8 358.4 C 616.1 360.6 619.6 361.2 622.5 359.7 C 628.4 356.8 627.6 347.8 621.3 346.0 C 619.5 345.4 618.5 345.4 616.8 346.0 Z"/>
+            <path d="M 640.4 346.0 C 637.3 347.1 635.5 349.8 635.5 353.1 C 635.5 357.4 638.6 360.5 642.8 360.5 C 645.0 360.5 646.4 360.0 648.0 358.4 C 649.5 357.0 650.3 355.2 650.3 352.9 C 650.2 347.9 645.1 344.4 640.4 346.0 Z"/>
+            <path d="M 664.6 345.8 C 661.2 346.8 658.8 350.5 659.2 353.9 C 659.4 355.7 660.2 357.3 661.6 358.6 C 663.2 360.0 664.5 360.5 666.7 360.5 C 670.8 360.5 674.0 357.3 674.0 353.3 C 674.0 350.9 673.5 349.6 671.9 347.9 C 669.9 345.8 667.2 345.1 664.6 345.8 Z"/>
+            <path d="M 688.1 346.0 C 685.3 346.9 683.0 349.9 683.0 352.9 C 683.0 357.3 686.1 360.5 690.3 360.5 C 693.5 360.5 695.7 359.2 697.0 356.4 C 698.6 353.4 698.0 350.3 695.6 347.8 C 693.5 345.7 690.9 345.1 688.1 346.0 Z"/>
+          </g>
+          <g class="mark">
+            <polygon points="247,177 258,195 236,195"/>
+            <polygon points="247,321 258,303 236,303"/>
+            <polygon points="175,249 193,238 193,260"/>
+            <polygon points="319,249 301,238 301,260"/>
+          </g>
+          <circle class="diag" id="b-7" cx="185" cy="187" r="26"/>
+          <circle class="diag" id="b-1" cx="309" cy="187" r="26"/>
+          <circle class="diag" id="b-5" cx="185" cy="311" r="26"/>
+          <circle class="diag" id="b-3" cx="309" cy="311" r="26"/>
+          <g class="mark">
+            <polygon points="1065,136 1082,166 1048,166"/>
+            <rect x="948" y="233" width="34" height="34" rx="4"/>
+            <circle cx="1159" cy="250" r="17"/>
+            <path d="M1047 330 L1079 362 M1079 330 L1047 362"/>
+          </g>
+          <g>
+            <path class="well" d="M 442.0 329.9 C 405.1 331.3 371.9 353.0 355.8 386.5 C 346.9 405.1 344.0 425.2 347.4 445.7 C 352.6 477.6 373.4 505.2 402.8 519.3 C 430.4 532.5 462.8 532.2 490.2 518.4 C 499.7 513.7 507.7 507.9 515.7 499.9 C 524.6 491.0 529.9 483.6 535.2 472.6 C 541.5 459.5 544.7 446.7 545.1 432.0 C 545.8 405.0 535.8 379.6 516.9 360.1 C 500.4 343.1 478.2 332.4 454.8 330.3 C 450.9 330.0 445.2 329.8 442.0 329.9 Z"/>
+            <path class="wellring" d="M 438.4 352.2 C 415.0 354.4 393.7 367.2 380.7 387.0 C 377.3 392.1 374.2 398.6 372.1 404.6 C 364.4 427.4 367.7 452.5 381.1 472.5 C 402.6 504.5 444.2 516.0 478.8 499.5 C 500.7 489.1 516.4 469.2 521.5 445.3 C 523.7 435.3 523.6 423.1 521.4 412.9 C 515.0 384.0 492.9 361.3 464.3 354.2 C 456.0 352.1 446.6 351.4 438.4 352.2 Z"/>
+            <g id="stick-l" transform="translate(0 0)">
+              <path class="knob" d="M 438.1 379.3 C 423.5 381.7 411.2 389.6 403.2 401.8 C 398.1 409.5 395.4 417.9 395.0 427.4 C 394.7 436.0 396.3 443.8 400.1 451.6 C 410.4 472.4 433.0 483.6 455.8 479.0 C 474.1 475.3 489.3 461.2 494.3 443.1 C 495.7 438.1 496.1 435.6 496.1 429.3 C 496.1 424.0 496.0 423.0 495.3 419.7 C 494.3 415.1 493.1 411.5 491.2 407.5 C 484.3 393.2 471.4 383.2 455.5 379.8 C 451.8 379.0 441.9 378.7 438.1 379.3 Z"/>
+            </g>
+            <circle class="hit" id="b-18" cx="445" cy="431" r="50"/>
+            <text class="lbl xs" x="445" y="559">L3</text>
+          </g>
+          <g>
+            <path class="well" d="M 858.9 330.0 C 829.4 331.6 802.1 346.3 784.3 370.2 C 765.8 395.1 760.0 427.5 768.7 457.4 C 777.3 486.8 799.4 510.9 828.0 522.1 C 857.3 533.6 890.3 530.6 917.0 513.8 C 940.0 499.5 956.2 476.2 961.7 449.8 C 963.3 442.0 963.6 439.4 963.6 429.4 C 963.6 422.1 963.5 419.5 963.1 416.7 C 960.3 397.9 953.9 382.6 942.6 368.0 C 939.5 364.0 930.8 355.1 926.8 351.9 C 910.1 338.6 890.7 331.2 869.2 330.0 C 866.4 329.9 863.8 329.7 863.5 329.8 C 863.2 329.8 861.1 329.9 858.9 330.0 Z"/>
+            <path class="wellring" d="M 857.0 352.2 C 823.9 355.5 796.5 379.3 788.8 411.6 C 787.2 418.2 787.0 420.9 787.0 429.4 C 787.0 438.1 787.2 440.6 789.0 447.8 C 791.5 458.5 796.8 469.2 804.0 478.2 C 806.8 481.7 812.9 487.7 816.7 490.6 C 830.7 501.4 846.9 506.9 864.3 506.9 C 872.4 506.9 879.3 505.9 886.9 503.6 C 906.2 497.7 922.4 484.5 932.4 466.5 C 941.5 450.1 944.2 430.0 939.7 411.5 C 933.8 386.7 916.0 366.4 892.0 357.0 C 887.0 355.0 880.9 353.5 874.7 352.6 C 871.2 352.0 860.8 351.8 857.0 352.2 Z"/>
+            <g id="stick-r" transform="translate(0 0)">
+              <path class="knob" d="M 856.7 379.3 C 849.4 380.5 842.4 383.2 836.0 387.5 C 831.6 390.4 825.5 396.4 822.5 400.9 C 810.2 419.1 810.7 442.2 823.8 459.8 C 828.6 466.1 834.6 471.1 842.0 474.8 C 857.5 482.6 876.1 481.6 891.0 472.4 C 901.6 465.8 909.8 454.9 913.1 443.0 C 914.4 438.0 914.7 436.0 914.7 429.5 C 914.7 422.3 914.3 419.7 912.4 413.7 C 906.4 395.5 890.7 382.2 871.8 379.3 C 868.1 378.8 860.1 378.8 856.7 379.3 Z"/>
+            </g>
+            <circle class="hit" id="b-19" cx="862" cy="431" r="50"/>
+            <text class="lbl xs" x="862" y="559">R3</text>
+          </g>
+          <rect class="btn sm" id="b-22" x="641" y="541" width="28" height="9" rx="4"/>
+          <text class="lbl" x="247" y="40">L1</text>
+          <text class="lbl" x="1063" y="40">R1</text>
+        </svg>
+      </div>
+    </section>
+
+    <section>
+      <div class="head">Triggers <em id="trigstatus">analog &mdash; side view</em></div>
+      <svg id="trigview" viewBox="0 0 800 310" role="img" aria-label="trigger compression, side view">
+        <g transform="translate(74,10)">
+          <!-- grip cross-section: wide rounded top tapering to the grip tip -->
+          <path class="sidebody" d="M62 78 C62 44 88 20 122 20
+                                    C156 20 182 44 182 78
+                                    C182 112 172 148 158 178
+                                    C148 200 134 214 122 214
+                                    C110 214 96 200 86 178
+                                    C72 148 62 112 62 78 Z"/>
+          <rect class="sidebump" id="b-12s" x="44" y="36" width="66" height="20" rx="10"
+                transform="rotate(-28 77 46)"/>
+          <g class="ghost" transform="translate(66 66) rotate(-26)">
+            <path d="M6 -10 C-5 -8 -13 -1 -16 10 C-21 26 -22 43 -18 57
+                     C-15 68 -6 74 3 72 C12 70 18 62 18 52
+                     C18 37 15 18 13 5 C12 -4 10 -10 6 -10 Z"/>
+          </g>
+          <g id="trig-l-lever" transform="translate(66 66) rotate(0)">
+            <path class="blade" id="b-14"
+                  d="M6 -10 C-5 -8 -13 -1 -16 10 C-21 26 -22 43 -18 57
+                     C-15 68 -6 74 3 72 C12 70 18 62 18 52
+                     C18 37 15 18 13 5 C12 -4 10 -10 6 -10 Z"/>
+          </g>
+          <circle class="pivot" cx="66" cy="66" r="3"/>
+        </g>
+        <text class="cap" x="196" y="252">L2</text>
+        <rect class="dbar" x="136" y="264" width="120" height="8" rx="4"/>
+        <rect class="dfill" id="trig-l-bar" x="136" y="264" width="0" height="8" rx="4"/>
+        <text class="pct" id="trig-l-pct" x="196" y="296">0%</text>
+
+        <g transform="translate(740,10) scale(-1,1)">
+          <path class="sidebody" d="M62 78 C62 44 88 20 122 20
+                                    C156 20 182 44 182 78
+                                    C182 112 172 148 158 178
+                                    C148 200 134 214 122 214
+                                    C110 214 96 200 86 178
+                                    C72 148 62 112 62 78 Z"/>
+          <rect class="sidebump" id="b-13s" x="44" y="36" width="66" height="20" rx="10"
+                transform="rotate(-28 77 46)"/>
+          <g class="ghost" transform="translate(66 66) rotate(-26)">
+            <path d="M6 -10 C-5 -8 -13 -1 -16 10 C-21 26 -22 43 -18 57
+                     C-15 68 -6 74 3 72 C12 70 18 62 18 52
+                     C18 37 15 18 13 5 C12 -4 10 -10 6 -10 Z"/>
+          </g>
+          <g id="trig-r-lever" transform="translate(66 66) rotate(0)">
+            <path class="blade" id="b-15"
+                  d="M6 -10 C-5 -8 -13 -1 -16 10 C-21 26 -22 43 -18 57
+                     C-15 68 -6 74 3 72 C12 70 18 62 18 52
+                     C18 37 15 18 13 5 C12 -4 10 -10 6 -10 Z"/>
+          </g>
+          <circle class="pivot" cx="66" cy="66" r="3"/>
+        </g>
+        <text class="cap" x="618" y="252">R2</text>
+        <rect class="dbar" x="558" y="264" width="120" height="8" rx="4"/>
+        <rect class="dfill" id="trig-r-bar" x="558" y="264" width="0" height="8" rx="4"/>
+        <text class="pct" id="trig-r-pct" x="618" y="296">0%</text>
+      </svg>
+      <p class="note">Blades pivot through their full travel; the faint outline marks
+        fully depressed. Click a blade to bind its digital click &mdash; the analog
+        axis is set under Axes.</p>
+    </section>
+
+    <section>
+      <div class="head" id="target">Select a control</div>
+      <div class="searchwrap">
+        <input id="q" placeholder="Search X-Plane commands&hellip;" autocomplete="off" spellcheck="false">
+        <div class="hint">
+          <kbd>&uarr;</kbd><kbd>&darr;</kbd> move &nbsp;<kbd>&crarr;</kbd> assign
+          &nbsp;<kbd>esc</kbd> clear &nbsp;&mdash;&nbsp;
+          <a href="#" id="unbind">unbind</a>
+        </div>
+      </div>
+      <div id="results"></div>
+    </section>
+
+    <section>
+      <div class="head">Bindings <em id="bindcount"></em></div>
+      <div id="btns"></div>
+    </section>
+
+    <section>
+      <div class="head">Axes</div>
+      <div id="axes"></div>
+    </section>
+
+    <section>
+      <div class="head">Response</div>
+      <div class="tune">
+        <div class="tunegrid">
+          <label for="dz">Deadzone</label>
+          <input type="range" id="dz" min="0" max="0.45" step="0.005">
+          <output id="dz-v">0.060</output>
+          <label for="cv">Curve</label>
+          <input type="range" id="cv" min="0.4" max="3" step="0.05">
+          <output id="cv-v">1.00</output>
+          <label for="gs">Gesture</label>
+          <input type="range" id="gs" min="0" max="1" step="0.02">
+          <output id="gs-v">0.50</output>
+        </div>
+        <svg id="curve" viewBox="0 0 120 120" aria-label="response curve">
+          <rect class="grid" x="0" y="0" width="120" height="120" rx="8"/>
+          <line class="ax" x1="60" y1="0" x2="60" y2="120"/>
+          <line class="ax" x1="0" y1="60" x2="120" y2="60"/>
+          <polyline id="curveline" points=""/>
+          <circle id="curvedot" r="3.5" cx="60" cy="60"/>
+        </svg>
+      </div>
+      <p class="note">The override datarefs bypass X-Plane's own null zone and
+        response curves, so this is the only thing filtering stick drift.
+        Curve below 1.00 sharpens around centre, above 1.00 softens it.</p>
+    </section>
+
+
+    <section>
+      <div class="head">Trigger effects <em id="fxstatus">adaptive resistance</em></div>
+      <div class="fxtabs">
+        <button data-fxm="manual">Manual</button>
+        <button data-fxm="wind">Wind</button>
+      </div>
+      <div id="fxwind" hidden>
+        <div class="wxgrid">
+          <div><span>Indicated airspeed</span><b id="wx-ias">&mdash;</b></div>
+          <div><span>Wind</span><b id="wx-wind">&mdash;</b></div>
+          <div><span>Crosswind</span><b id="wx-xw">&mdash;</b></div>
+          <div><span>Turbulence</span><b id="wx-turb">&mdash;</b></div>
+          <div><span>Aerodynamic load</span><b id="wx-load">&mdash;</b></div>
+          <div><span>State</span><b id="wx-note">&mdash;</b></div>
+        </div>
+        <div class="wxfx">
+          <div><span>L2</span><b id="wx-l">&mdash;</b></div>
+          <div><span>R2</span><b id="wx-r">&mdash;</b></div>
+        </div>
+      </div>
+      <div class="fxgrid" id="fxmanual">
+        <div class="fxcol" data-side="l">
+          <div class="fxtitle">L2</div>
+          <div class="modes">
+            <button data-m="0">Off</button><button data-m="1">Resist</button>
+            <button data-m="2">Weapon</button><button data-m="3">Vibrate</button>
+          </div>
+          <div class="fxparams"></div>
+        </div>
+        <div class="fxcol" data-side="r">
+          <div class="fxtitle">R2</div>
+          <div class="modes">
+            <button data-m="0">Off</button><button data-m="1">Resist</button>
+            <button data-m="2">Weapon</button><button data-m="3">Vibrate</button>
+          </div>
+          <div class="fxparams"></div>
+        </div>
+      </div>
+      <p class="note" id="fxnote"><b>Resist</b> holds a constant force past a point.
+        <b>Weapon</b> resists across a band then breaks through, like a gun trigger.
+        <b>Vibrate</b> buzzes once you press past the threshold.
+        Positions are % of trigger travel, forces are % of maximum.
+        Squeeze the trigger to feel it &mdash; changes apply instantly.</p>
+    </section>
+    <section>
+      <div class="head">Rumble <em id="rstatus">manual</em></div>
+      <div class="fxtabs" id="rtabs">
+        <button data-rm="manual">Manual</button>
+        <button data-rm="sim">Sim</button>
+      </div>
+      <div id="rmanual">
+        <div class="fxparams rparams">
+          <label>Left motor</label>
+          <input type="range" id="r-l" min="0" max="255" value="0"><output id="r-lv">0%</output>
+          <label>Right motor</label>
+          <input type="range" id="r-r" min="0" max="255" value="0"><output id="r-rv">0%</output>
+        </div>
+        <div class="rtests">
+          <button data-test="soft">Soft buffet</button>
+          <button data-test="hard">Hard buffet</button>
+          <button data-test="left">Left wing</button>
+          <button data-test="right">Right wing</button>
+          <button data-test="crash">Crash</button>
+          <button data-test="stop">Stop</button>
+        </div>
+        <div class="rpath">
+          <label class="toggle"><input type="checkbox" id="rv2"> vibration v2 &mdash; unsupported on this controller</label>
+        </div>
+      </div>
+      <div id="rsim" hidden>
+        <div class="wxgrid">
+          <div><span>Left wing stalled</span><b id="rx-sl">&mdash;</b></div>
+          <div><span>Right wing stalled</span><b id="rx-sr">&mdash;</b></div>
+          <div><span>Stall warning</span><b id="rx-sw">&mdash;</b></div>
+          <div><span>Load factor</span><b id="rx-gn">&mdash;</b></div>
+          <div><span>Crashed</span><b id="rx-crash">&mdash;</b></div>
+          <div><span>State</span><b id="rx-note">&mdash;</b></div>
+        </div>
+        <div class="wxfx">
+          <div><span>Left motor</span><b id="rx-l">&mdash;</b></div>
+          <div><span>Right motor</span><b id="rx-r">&mdash;</b></div>
+        </div>
+      </div>
+      <p class="note" id="rnote"></p>
+    </section>
+
+    <section class="wide">
+      <div class="head">Light bar <em id="lightstatus"></em></div>
+      <div class="fxtabs" id="ltabs">
+        <button data-lt="solid">Solid</button>
+        <button data-lt="pattern">Pattern</button>
+        <button data-lt="sim">Sim</button>
+      </div>
+
+      <div id="lsolid">
+        <div class="lightrow">
+          <input type="color" id="lc" value="#005aff">
+          <div class="swatches">
+            <button class="sw" data-c="#ff2d1a" style="--s:#ff2d1a"></button>
+            <button class="sw" data-c="#ff8c00" style="--s:#ff8c00"></button>
+            <button class="sw" data-c="#ffd400" style="--s:#ffd400"></button>
+            <button class="sw" data-c="#22c55e" style="--s:#22c55e"></button>
+            <button class="sw" data-c="#005aff" style="--s:#005aff"></button>
+            <button class="sw" data-c="#8b5cf6" style="--s:#8b5cf6"></button>
+            <button class="sw" data-c="#ffffff" style="--s:#ffffff"></button>
+          </div>
+          <label class="toggle"><input type="checkbox" id="lon" checked> on</label>
+        </div>
+      </div>
+
+      <div id="lpattern" hidden>
+        <div class="patrow">
+          <button data-pat="1">Breathe</button>
+          <button data-pat="2">Pulse</button>
+          <button data-pat="3">Strobe</button>
+          <button data-pat="4">Rainbow</button>
+          <button data-pat="5">Alert</button>
+        </div>
+        <div class="fxparams rparams">
+          <label>Speed</label>
+          <input type="range" id="lspeed" min="0" max="1" step="0.02"><output id="lspeed-v">0.50</output>
+        </div>
+      </div>
+
+      <div id="lsim" hidden>
+        <div class="wxgrid">
+          <div><span>Showing</span><b id="lx-note">&mdash;</b></div>
+          <div><span>Colour</span><b id="lx-col">&mdash;</b></div>
+        </div>
+      </div>
+
+      <div class="fxparams rparams">
+        <label>Brightness</label>
+        <input type="range" id="lbright" min="0" max="1" step="0.02"><output id="lbright-v">100%</output>
+      </div>
+
+      <div class="pledrow">
+        <span>Player lamps</span>
+        <div class="pleds">
+          <button data-pl="0">Off</button>
+          <button data-pl="4">Single</button>
+          <button data-pl="10">Two</button>
+          <button data-pl="14">Three</button>
+          <button data-pl="27">Four</button>
+          <button data-pl="31">All</button>
+        </div>
+      </div>
+
+      <p class="note" id="lnote"></p>
+    </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

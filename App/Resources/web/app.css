@@ -1,0 +1,241 @@
+:root{
+  --bg:#f5f7fa; --panel:#fff; --line:#dee3ea; --ink:#111419; --dim:#5b6674;
+  --accent:#2f6feb; --soft:#e9f0fe; --live:#0f9d58; --warn:#c2410c;
+  --shell:#eaeef4; --shell-line:#c3ccd8; --cap:#fdfdfe; --cap-line:#b9c3d0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#0e1116; --panel:#161b22; --line:#252c36; --ink:#e6ebf2; --dim:#8a94a3;
+         --accent:#5b9bff; --soft:#182842; --live:#35d07f; --warn:#f59e5b;
+         --shell:#1b212a; --shell-line:#333c48; --cap:#232a34; --cap-line:#3d4754; }
+}
+*{box-sizing:border-box}
+/* an explicit display on an element beats the UA's [hidden]{display:none},
+   so .fxgrid stayed visible in wind mode - make hidden win everywhere */
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);
+     font:14px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+
+header{display:flex;align-items:center;gap:10px;padding:11px 18px;background:var(--panel);
+       border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;flex-wrap:wrap}
+h1{margin:0;font-size:16px;font-weight:680;letter-spacing:-.02em}
+.sub{color:var(--dim);font-size:12.5px}
+.spacer{flex:1}
+.pill{font:11px/1 var(--mono);padding:5px 9px;border-radius:999px;white-space:nowrap;
+      border:1px solid var(--line);color:var(--dim)}
+.pill.on{color:var(--live);border-color:color-mix(in srgb,var(--live) 45%,transparent);
+         background:color-mix(in srgb,var(--live) 14%,transparent)}
+.pill.off{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent);
+          background:color-mix(in srgb,var(--warn) 12%,transparent)}
+
+main{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px;
+     align-items:stretch}
+@media (max-width:1000px){ main{grid-template-columns:1fr} }
+
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        overflow:hidden;display:flex;flex-direction:column;min-width:0}
+/* the trailing note in a panel sinks to the bottom so paired panels of unequal
+   content still line up along their base */
+section > .note:last-child{margin-top:auto}
+.head{padding:10px 14px;border-bottom:1px solid var(--line);font-weight:640;font-size:11.5px;
+      letter-spacing:.06em;text-transform:uppercase;color:var(--dim);
+      display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.head em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500;font-size:11.5px}
+
+/* -------------------------------------------------- trigger side view */
+#trigview{width:100%;height:auto;display:block;padding:6px 10px 0;
+          margin-top:auto;margin-bottom:auto}
+#trigview .sidebody{fill:var(--shell);stroke:var(--shell-line);stroke-width:2;
+                    stroke-linejoin:round}
+#trigview .sidebump{fill:var(--cap);stroke:var(--cap-line);stroke-width:1.8}
+#trigview .travel{fill:none;stroke:var(--line);stroke-width:2;stroke-dasharray:3 4;
+                  stroke-linecap:round}
+#trigview .blade{fill:var(--cap);stroke:var(--cap-line);stroke-width:1.8;cursor:pointer}
+#trigview .blade:hover{fill:var(--soft)}
+#trigview .blade.down{fill:var(--live);stroke:var(--live)}
+#trigview .blade.sel{stroke:var(--accent);stroke-width:3}
+#trigview .pivot{fill:var(--shell-line)}
+#trigview .ghost path{fill:none;stroke:var(--cap-line);stroke-width:1.6;
+                      stroke-dasharray:5 4;opacity:.55}
+#trigview .cap{fill:var(--dim);font:12px var(--mono);text-anchor:middle}
+#trigview .pct{fill:var(--accent);font:15px var(--mono);text-anchor:middle;font-weight:600}
+#trigview .dbar{fill:var(--line)}
+#trigview .dfill{fill:var(--accent)}
+
+/* ------------------------------------------------------- controller map */
+.mapwrap{padding:8px 12px 4px;flex:1;display:flex;align-items:center}
+#pad{width:100%;height:auto;display:block}
+#pad .body{fill:var(--shell);stroke:var(--shell-line);stroke-width:2.2;stroke-linejoin:round}
+#pad .btn,#pad .pad{fill:var(--cap);stroke:var(--cap-line);stroke-width:2.2;
+      cursor:pointer;transition:fill .05s linear}
+/* the DualSense has no physical diagonal key - these are invisible targets
+   sitting in the gaps, and a diagonal lights its two adjacent arrows instead */
+#pad .diag{fill:transparent;stroke:none;cursor:pointer}
+#pad .diag.sel{stroke:var(--accent);stroke-width:2.5;stroke-dasharray:4 4}
+#pad .grille path{fill:none;stroke:var(--cap-line);stroke-width:2}
+#pad .wellring{fill:none;stroke:var(--cap-line);stroke-width:2.4}
+#pad .well{fill:var(--cap);stroke:var(--cap-line);stroke-width:2.4}
+#pad .knob{fill:var(--shell);stroke:var(--cap-line);stroke-width:2.6}
+#pad .hit{fill:transparent;stroke:none;cursor:pointer}
+#pad .seam{stroke:var(--cap-line);stroke-width:1.2;opacity:.5;pointer-events:none}
+#pad .mark{fill:none;stroke:var(--dim);stroke-width:2.6;stroke-linecap:round;
+           stroke-linejoin:round;pointer-events:none}
+#pad polygon.mark{fill:none}
+#pad text{fill:var(--dim);font:11px var(--mono);text-anchor:middle;pointer-events:none}
+#pad .xs{font-size:9.5px}
+#pad .btn:hover,#pad .pad:hover{fill:var(--soft)}
+#pad .down{fill:var(--live)!important;stroke:var(--live)}
+#pad .sel{stroke:var(--accent);stroke-width:3}
+
+/* ------------------------------------------------------------- response */
+.tune{display:grid;grid-template-columns:1fr 132px;gap:14px;padding:12px 14px;align-items:center}
+.tunegrid{display:grid;grid-template-columns:auto 1fr 52px;gap:9px 10px;align-items:center}
+.tunegrid label{font-size:12.5px;color:var(--dim)}
+.tunegrid output{font:12px var(--mono);color:var(--accent);text-align:right}
+input[type=range]{width:100%;accent-color:var(--accent)}
+#curve{width:132px;height:132px}
+#curve .grid{fill:var(--bg);stroke:var(--line)}
+#curve .ax{stroke:var(--line);stroke-width:1}
+#curve #curveline{fill:none;stroke:var(--accent);stroke-width:2.2;
+                  stroke-linejoin:round;stroke-linecap:round}
+#curve #curvedot{fill:var(--live)}
+.note{margin:0;padding:0 14px 12px;font-size:12px;color:var(--dim)}
+
+/* ----------------------------------------------------------------- axes */
+.axrow{display:grid;grid-template-columns:104px 1fr auto auto;gap:10px;align-items:center;
+       padding:9px 14px;border-bottom:1px solid var(--line)}
+.axrow:last-child{border-bottom:none}
+.axrow .nm{font-size:12.5px}
+.bar{height:6px;background:var(--line);border-radius:3px;position:relative;overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;background:var(--accent);border-radius:3px;left:50%;width:0}
+select{font:12px var(--mono);padding:4px 6px;border-radius:7px;border:1px solid var(--line);
+       background:var(--panel);color:var(--ink)}
+.inv{font:10px/1 var(--mono);border:1px solid var(--line);border-radius:5px;padding:5px 6px;
+     cursor:pointer;color:var(--dim);user-select:none}
+.inv.on{color:var(--accent);border-color:var(--accent)}
+
+/* -------------------------------------------------------------- mapper */
+.searchwrap{padding:12px 14px;border-bottom:1px solid var(--line)}
+#q{width:100%;font:13px var(--mono);padding:10px 12px;border-radius:9px;
+   border:1px solid var(--line);background:var(--bg);color:var(--ink);outline:none}
+#q:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--soft)}
+.hint{font-size:11.5px;color:var(--dim);padding-top:8px}
+.hint a{color:var(--warn)}
+kbd{font:10px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;
+    padding:2px 5px;color:var(--dim);margin-right:2px}
+#results{flex:1;min-height:180px;max-height:min(46vh,440px);overflow-y:auto}
+.res{padding:8px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.res:last-child{border-bottom:none}
+.res.k{background:var(--soft)}
+.res .p{font:12px var(--mono);color:var(--accent);word-break:break-all}
+.res .d{font-size:12.5px;color:var(--dim);margin-top:1px}
+mark{background:color-mix(in srgb,var(--accent) 30%,transparent);color:inherit;
+     border-radius:2px;padding:0 1px}
+.empty{padding:26px 14px;text-align:center;color:var(--dim);font-size:13px}
+
+/* --------------------------------------------------------- binding list */
+#btns{flex:1;min-height:180px;max-height:min(46vh,440px);overflow-y:auto}
+.row{display:flex;align-items:center;gap:10px;padding:7px 14px;
+     border-bottom:1px solid var(--line);cursor:pointer}
+.row:last-child{border-bottom:none}
+.row:hover{background:var(--soft)}
+.row.sel{background:var(--soft);box-shadow:inset 3px 0 0 var(--accent)}
+.row.down .nm{color:var(--live);font-weight:650}
+.row.empty-slot .nm{opacity:.5}
+.row .nm{width:128px;flex:none;font-size:12.5px}
+.bd{flex:1;font:11.5px/1.35 var(--mono);color:var(--dim);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+.bd.none{opacity:.42;font-style:italic}
+.rep{font:9.5px/1 var(--mono);border:1px solid var(--line);border-radius:4px;padding:3px 5px;
+     color:var(--dim);flex:none}
+.rep.on{color:var(--accent);border-color:var(--accent)}
+.axtag{font:9.5px/1 var(--mono);border:1px solid var(--accent);color:var(--accent);
+       border-radius:4px;padding:3px 5px;flex:none}
+
+/* ------------------------------------------------------------ light bar */
+.lightrow{display:flex;align-items:center;gap:12px;padding:12px 14px;flex-wrap:wrap}
+#lc{width:52px;height:34px;padding:0;border:1px solid var(--line);border-radius:8px;
+    background:none;cursor:pointer}
+.swatches{display:flex;gap:6px;flex:1}
+.sw{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);
+    background:var(--s);cursor:pointer;padding:0}
+.sw:hover{transform:scale(1.12)}
+.toggle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim)}
+#pad .touchdot{fill:var(--live);opacity:.85;pointer-events:none}
+
+/* -------------------------------------------------------- trigger effects */
+.fxgrid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.fxcol{padding:12px 14px}
+.fxcol+.fxcol{border-left:1px solid var(--line)}
+.fxtitle{font:12px var(--mono);color:var(--dim);margin-bottom:8px}
+.modes{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap}
+.modes button{font:10.5px var(--mono);padding:5px 8px;border-radius:6px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel);color:var(--dim)}
+.modes button:hover{background:var(--soft)}
+.modes button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.fxparams{display:grid;grid-template-columns:auto 1fr 34px;gap:7px 8px;align-items:center}
+.fxparams label{font-size:11.5px;color:var(--dim);white-space:nowrap}
+.fxparams output{font:11px var(--mono);color:var(--accent);text-align:right}
+.fxparams .off{opacity:.3;pointer-events:none}
+.note b{color:var(--ink);font-weight:600}
+
+/* ---------------------------------------------------- manual / wind tabs */
+.fxtabs{display:flex;gap:0;border-bottom:1px solid var(--line)}
+.fxtabs button{flex:1;font:11px var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  padding:9px 0;border:none;background:none;color:var(--dim);cursor:pointer;
+  border-bottom:2px solid transparent}
+.fxtabs button:hover{background:var(--soft)}
+.fxtabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+.wxgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+  border-bottom:1px solid var(--line)}
+.wxgrid > div{background:var(--panel);padding:9px 14px;display:flex;
+  justify-content:space-between;align-items:baseline;gap:8px}
+.wxgrid span{font-size:11.5px;color:var(--dim)}
+.wxgrid b{font:13px var(--mono);color:var(--ink);font-weight:600}
+.wxgrid b.stale{color:var(--warn)}
+.wxfx{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+.wxfx > div{background:var(--panel);padding:10px 14px;display:flex;
+  justify-content:space-between;align-items:baseline;gap:8px}
+.wxfx span{font:12px var(--mono);color:var(--dim)}
+.wxfx b{font:12px var(--mono);color:var(--accent)}
+
+/* --------------------------------------------------------------- rumble */
+section.wide{grid-column:1 / -1}
+.rparams{padding:12px 14px}
+.rtests{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px}
+.rtests button{font:10.5px var(--mono);padding:6px 9px;border-radius:6px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel);color:var(--dim)}
+.rtests button:hover{background:var(--soft);color:var(--accent);border-color:var(--accent)}
+.rtests button[data-test="crash"]{color:var(--warn);border-color:
+  color-mix(in srgb,var(--warn) 45%,transparent)}
+#rx-crash.hit{color:var(--warn)}
+.rpath{padding:0 14px 12px}
+
+/* ------------------------------------------------------ light bar extras */
+.patrow{display:flex;gap:6px;flex-wrap:wrap;padding:12px 14px 4px}
+.patrow button{font:10.5px var(--mono);padding:6px 10px;border-radius:6px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel);color:var(--dim)}
+.patrow button:hover{background:var(--soft)}
+.patrow button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pledrow{display:flex;align-items:center;gap:12px;padding:10px 14px;
+  border-top:1px solid var(--line);flex-wrap:wrap}
+.pledrow > span{font-size:11.5px;color:var(--dim)}
+.pleds{display:flex;gap:5px;flex-wrap:wrap}
+.pleds button{font:10.5px var(--mono);padding:5px 9px;border-radius:6px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel);color:var(--dim)}
+.pleds button:hover{background:var(--soft)}
+.pleds button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ----------------------------------------------------------------- quit */
+#quit{font:11px var(--mono);padding:5px 11px;border-radius:999px;cursor:pointer;
+  border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);
+  background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn)}
+#quit:hover{background:color-mix(in srgb,var(--warn) 24%,transparent)}
+#gone{position:fixed;inset:0;z-index:100;display:flex;align-items:center;
+  justify-content:center;background:var(--bg);text-align:center}
+#gone h2{margin:0 0 8px;font-size:17px;font-weight:650}
+#gone p{margin:4px 0;color:var(--dim);font-size:13.5px}
+#gone .dim{opacity:.7;margin-top:14px}
+#gone code{font:12px var(--mono);background:var(--panel);border:1px solid var(--line);
+  border-radius:5px;padding:2px 6px}
