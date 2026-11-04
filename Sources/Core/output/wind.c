@@ -62,15 +62,15 @@ void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg) {
         if (hz < 1) hz = 1;
         fx[0] = (trigger_fx_t){ TFX_VIBRATE, at, hz, amp };
         fx[1] = (trigger_fx_t){ TFX_VIBRATE, at, hz, amp };
-        snprintf(wx->note, sizeof wx->note, "buffet %.1f/10", wx->turb);
+        snprintf(wx->note, sizeof wx->note, "Buffet, turbulence %.1f", wx->turb);
     } else if (ias < cfg->no_airflow_kt) {
         fx[0] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
         fx[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
-        snprintf(wx->note, sizeof wx->note, "static - no airflow");
+        snprintf(wx->note, sizeof wx->note, "No airflow");
     } else {
         unsigned char free_play = clamp8(cfg->free_play * 255.0);
         fx[0] = (trigger_fx_t){ TFX_RESIST, free_play, 0, clamp8(fl) };
         fx[1] = (trigger_fx_t){ TFX_RESIST, free_play, 0, clamp8(fr) };
-        snprintf(wx->note, sizeof wx->note, "aero load %.0f%%", q * 100);
+        snprintf(wx->note, sizeof wx->note, "Airflow load %.0f%%", q * 100);
     }
 }

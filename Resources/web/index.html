@@ -3,48 +3,58 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DSXP</title>
+<meta name="color-scheme" content="light dark">
+<title>DSXP Mapper</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
-<header>
-  <h1>DSXP</h1>
-  <span class="sub">DualSense &rarr; X-Plane 12</span>
-  <span class="appstrip">
-    <button id="app-access" class="warnbtn" hidden
-            title="The controller is connected but no input arrives. Open the Input Monitoring settings.">Input access…</button>
-    <span id="app-xpdir" class="xpdir"></span>
-    <button id="app-pickxp" title="Choose your X-Plane 12 folder">Choose…</button>
-    <span id="app-imported" class="pill" hidden
-          title="Your bindings were imported from the dualsense-xplane prototype">imported settings</span>
-  </span>
-  <span class="spacer"></span>
-  <span class="pill" id="g-bt">bluetooth</span>
-  <span class="pill" id="g-usb">usb</span>
-  <span class="pill" id="g-xp">x-plane 12</span>
-  <span class="pill" id="g-eng">idle</span>
-  <span class="pill" id="g-rep">0</span>
-  <button id="quit" title="quit DSXP and hand the controls back to X-Plane">Quit</button>
+<header id="strip">
+  <div class="status" role="status">
+    <span class="st" id="st-ctl"><i class="dot"></i><span class="t">No controller</span><span class="sub" id="st-hz"></span></span>
+    <span class="st" id="st-xp"><i class="dot"></i><span class="t">X-Plane 12 not running</span></span>
+    <span class="st" id="st-eng"><i class="dot"></i><span class="t">Idle</span></span>
+  </div>
+  <div class="actions">
+    <button id="app-access" hidden
+            title="Let DSXP read the controller in Privacy &amp; Security">Allow Input Monitoring…</button>
+    <button id="app-config" hidden aria-haspopup="dialog" aria-controls="cfgpop"><i class="dot warn"></i><span>Config Problems</span></button>
+    <span id="app-imported" class="dim" hidden
+          title="Your settings were imported from the dualsense-xplane prototype">Imported settings</span>
+    <span class="xpdir">
+      <span id="app-xpdir"></span>
+      <button id="app-pickxp" title="Choose your X-Plane 12 folder to search its commands">Choose…</button>
+    </span>
+    <button id="app-openconfig" title="Show bridge.conf, controls.conf and feedback.conf in Finder">Open Config Folder</button>
+    <button id="quit" title="Give X-Plane its controls back and quit DSXP">Quit DSXP…</button>
+  </div>
 </header>
+
+<div id="cfgpop" class="popover" role="dialog" aria-label="Config problems" hidden>
+  <p>DSXP ignored these lines in its config files and kept the previous values.
+     Fix a line and save the file; DSXP applies it within about 2 seconds.</p>
+  <ul id="cfglist"></ul>
+  <div class="popbtns">
+    <button id="cfg-folder">Open Config Folder</button>
+    <button id="cfg-close">Done</button>
+  </div>
+</div>
 
 <div id="gone" hidden>
   <div>
     <h2>DSXP has quit</h2>
-    <p>The controller is quiet and X-Plane has its controls back.</p>
-    <p class="dim">Open DSXP again from Applications or Spotlight.</p>
+    <p>X-Plane has its controls back and the controller is quiet.</p>
+    <p>To start DSXP again, open it from Applications or Spotlight.</p>
   </div>
 </div>
 
 <div id="toast" role="status" hidden></div>
 
 <main>
-    <section>
-      <div class="head">Controller <em id="mapstatus">waiting for report 0x31</em></div>
-      <div class="mapwrap">
-        <!-- Proportions follow the real DualSense: 1242 x 814 of body = 1.53,
-             four separate D-pad arrow keys, concentric stick rings. -->
-        <svg id="pad" viewBox="0 0 1310 871" role="img" aria-label="DualSense map">
+  <section id="sec-map">
+    <div class="gtitle"><h2>Controller</h2><span class="gstatus" id="mapstatus">Waiting for input</span></div>
+    <div class="box">
+      <svg id="pad" viewBox="0 0 1310 871" role="img" aria-label="DualSense controller">
           <!-- Geometry traced from the reference with potrace; every outline
                below is the real contour, not an approximation. -->
           <path class="body" d="M 274.1 0.2 C 240.8 1.7 214.5 8.4 186.9 22.3 C 178.3 26.7 165.5 34.2 164.6 35.5 C 162.2 38.8 161.8 39.8 161.5 42.8 C 161.3 44.5 160.7 49.1 160.2 53.0 C 159.1 61.1 159.5 60.3 156.3 61.1 C 150.4 62.7 142.5 65.2 140.8 66.1 C 139.7 66.7 138.1 67.8 137.2 68.6 C 135.7 70.0 135.3 70.7 131.3 79.0 C 114.7 112.7 93.5 163.2 79.1 203.4 C 78.5 205.4 77.2 208.8 76.4 211.0 C 75.6 213.2 74.9 215.4 74.7 215.8 C 74.6 216.2 73.6 219.1 72.4 222.4 C 69.9 229.8 63.7 248.2 60.7 257.6 C 57.2 268.6 54.1 278.8 50.6 290.6 C 48.6 297.4 47.5 301.5 44.5 312.0 C 43.8 314.4 42.7 318.7 42.1 320.8 C 41.9 321.7 41.4 323.7 40.9 325.2 C 36.0 343.6 30.9 364.8 27.1 382.2 C 26.4 385.5 25.6 389.1 25.4 390.1 C 21.5 407.6 16.1 437.0 12.6 459.9 C 12.3 461.9 11.9 464.4 11.7 465.4 C 10.8 471.0 9.2 483.1 8.0 492.7 C 3.9 526.0 1.6 555.6 0.5 587.8 C 0.0 602.0 0.0 652.7 0.5 661.6 C 2.2 694.7 4.9 717.0 10.3 742.4 C 10.8 744.7 12.3 750.8 13.9 756.9 C 14.6 759.7 17.5 769.1 19.0 773.3 C 26.0 793.9 35.2 811.6 46.1 825.2 C 57.8 839.7 70.7 849.4 86.1 855.2 C 89.3 856.3 89.3 856.3 96.8 856.4 C 104.2 856.4 104.2 856.4 137.5 861.2 C 155.8 863.8 170.9 866.0 171.1 866.0 C 171.2 866.0 171.7 866.6 172.2 867.5 C 173.6 869.5 175.1 870.4 177.1 870.4 C 180.5 870.4 183.6 868.3 186.7 864.2 C 194.9 853.3 205.0 834.6 216.8 808.4 C 231.1 776.8 248.5 732.6 260.1 698.5 C 271.3 665.5 284.9 633.8 295.6 616.1 C 298.3 611.6 303.8 603.5 306.2 600.5 C 322.2 580.6 345.5 566.7 371.5 561.6 C 378.9 560.2 384.6 559.5 388.8 559.6 C 394.2 559.6 397.5 560.1 411.1 562.9 C 434.8 567.8 443.9 568.3 480.0 566.7 C 491.6 566.2 818.4 566.2 830.1 566.7 C 848.9 567.5 858.8 567.7 866.1 567.4 C 877.9 566.8 884.4 565.9 900.5 562.6 C 916.0 559.5 920.0 559.1 927.6 559.9 C 949.8 562.4 968.5 569.7 985.2 582.3 C 991.7 587.2 999.0 594.2 1003.8 600.3 C 1006.5 603.6 1013.0 613.2 1015.5 617.5 C 1025.1 633.8 1038.4 664.4 1047.9 692.1 C 1053.5 708.3 1054.6 711.6 1057.7 720.0 C 1078.7 777.6 1101.5 829.3 1117.0 854.6 C 1122.7 863.8 1125.9 867.7 1128.9 869.2 C 1133.4 871.4 1135.5 870.9 1138.5 866.8 C 1139.1 866.0 1139.1 866.0 1172.5 861.2 C 1205.9 856.4 1205.9 856.4 1213.3 856.4 C 1220.8 856.3 1220.8 856.3 1224.0 855.2 C 1250.8 845.2 1271.9 821.6 1286.7 785.0 C 1290.0 777.0 1294.2 764.3 1296.2 756.9 C 1299.8 743.2 1301.2 736.6 1303.5 722.9 C 1305.7 710.2 1307.9 690.4 1308.8 675.5 C 1309.9 658.2 1310.0 653.3 1309.9 623.9 C 1309.9 585.3 1309.1 566.3 1306.5 535.3 C 1305.4 521.8 1303.4 502.4 1301.9 491.5 C 1301.7 489.8 1301.3 486.8 1301.1 484.8 C 1300.5 480.5 1298.7 467.8 1298.3 465.4 C 1298.2 464.4 1297.9 462.3 1297.6 460.8 C 1294.4 439.5 1288.4 407.0 1284.7 390.1 C 1284.5 389.1 1283.4 384.4 1282.4 379.8 C 1280.7 372.2 1279.6 367.4 1276.8 355.3 C 1275.8 351.1 1272.1 336.5 1270.6 330.9 C 1268.9 324.3 1268.8 323.9 1268.0 320.9 C 1267.6 319.4 1266.9 317.0 1266.6 315.6 C 1264.3 307.3 1258.7 287.6 1255.6 277.6 C 1251.2 263.2 1248.7 255.2 1243.6 239.8 C 1225.0 183.8 1200.7 123.5 1178.8 79.0 C 1174.7 70.5 1174.3 70.0 1172.8 68.5 C 1171.8 67.7 1170.1 66.5 1168.8 65.9 C 1166.7 64.9 1158.2 62.2 1152.6 60.8 C 1150.6 60.3 1150.6 60.3 1150.0 55.7 C 1149.6 53.2 1149.0 48.6 1148.7 45.5 C 1148.0 39.8 1148.0 39.8 1146.4 37.4 C 1144.8 35.0 1144.8 35.0 1140.4 32.2 C 1115.5 16.7 1089.0 6.7 1061.8 2.6 C 1049.7 0.8 1040.8 0.2 1026.3 0.2 C 1010.2 0.2 999.4 0.9 990.3 2.4 C 984.5 3.5 979.5 5.1 978.4 6.5 C 978.2 6.8 977.4 11.4 976.4 18.0 C 975.4 24.1 974.6 29.2 974.6 29.3 C 974.5 29.3 973.2 29.5 971.8 29.8 C 968.3 30.3 964.7 31.1 961.7 32.2 C 959.3 33.0 959.3 33.0 954.4 32.2 C 943.4 30.3 920.6 27.2 904.9 25.5 C 899.3 24.8 897.9 24.6 895.6 23.7 C 890.6 22.0 887.6 21.3 878.3 20.0 C 844.8 15.2 793.9 12.2 720.6 10.6 C 698.1 10.1 602.2 10.1 579.2 10.6 C 506.0 12.1 455.5 15.2 427.5 19.7 C 420.2 20.9 417.6 21.6 412.7 23.7 C 410.0 24.9 409.4 25.0 405.3 25.5 C 391.8 26.9 368.9 30.0 356.7 32.0 C 350.8 33.0 350.8 33.0 348.1 32.1 C 345.0 31.0 340.9 30.1 337.6 29.6 C 336.3 29.5 335.3 29.3 335.2 29.2 C 335.1 29.2 334.3 24.1 333.4 18.0 C 332.4 11.3 331.6 6.8 331.4 6.5 C 330.5 5.4 326.6 3.9 322.6 3.0 C 317.4 1.9 310.2 1.1 301.6 0.6 C 296.2 0.3 277.8 0.0 274.1 0.2 Z"/>
@@ -113,12 +123,15 @@
           <text class="lbl" x="247" y="40">L1</text>
           <text class="lbl" x="1063" y="40">R1</text>
         </svg>
-      </div>
-    </section>
+    </div>
+    <p class="note">Click a control or press it on the controller to choose its command.
+      The dots on the touchpad show where your fingers are.</p>
+  </section>
 
-    <section>
-      <div class="head">Triggers <em id="trigstatus">analog &mdash; side view</em></div>
-      <svg id="trigview" viewBox="0 0 800 310" role="img" aria-label="trigger compression, side view">
+  <section id="sec-trig">
+    <div class="gtitle"><h2>Triggers</h2><span class="gstatus" id="trigstatus"></span></div>
+    <div class="box">
+      <svg id="trigview" viewBox="0 0 800 310" role="img" aria-label="Trigger travel, side view">
         <g transform="translate(74,10)">
           <!-- grip cross-section: wide rounded top tapering to the grip tip -->
           <path class="sidebody" d="M62 78 C62 44 88 20 122 20
@@ -174,212 +187,200 @@
         <rect class="dfill" id="trig-r-bar" x="558" y="264" width="0" height="8" rx="4"/>
         <text class="pct" id="trig-r-pct" x="618" y="296">0%</text>
       </svg>
-      <p class="note">Blades pivot through their full travel; the faint outline marks
-        fully depressed. Click a blade to bind its digital click &mdash; the analog
-        axis is set under Axes.</p>
-    </section>
+    </div>
+    <p class="note">The dashed outline marks a fully pressed trigger. Click a trigger to choose
+      the command for its click; its analog axis is set under Axes.</p>
+  </section>
 
-    <section>
-      <div class="head" id="target">Select a control</div>
-      <div class="searchwrap">
-        <input id="q" placeholder="Search X-Plane commands&hellip;" autocomplete="off" spellcheck="false">
-        <div class="hint">
-          <kbd>&uarr;</kbd><kbd>&darr;</kbd> move &nbsp;<kbd>&crarr;</kbd> assign
-          &nbsp;<kbd>esc</kbd> clear &nbsp;&mdash;&nbsp;
-          <a href="#" id="unbind">unbind</a>
-        </div>
+  <section id="sec-assign">
+    <div class="gtitle"><h2 id="target">Command</h2><span class="gstatus" id="target-cur">Select a control</span></div>
+    <div class="box flush">
+      <div class="searchrow">
+        <input type="search" id="q" placeholder="Search X-Plane commands" autocomplete="off"
+               spellcheck="false" aria-label="Search X-Plane commands">
+        <button id="unbind" title="Remove the command from the selected control">Clear</button>
       </div>
-      <div id="results"></div>
-    </section>
+      <div id="results" role="listbox" aria-label="X-Plane commands"></div>
+      <p class="hint">Up and Down Arrow choose a command, Return assigns it, Esc clears the search.</p>
+    </div>
+  </section>
 
-    <section>
-      <div class="head">Bindings <em id="bindcount"></em></div>
+  <section id="sec-btns">
+    <div class="gtitle"><h2>Buttons</h2><span class="gstatus" id="bindcount"></span></div>
+    <div class="box flush">
       <div id="btns"></div>
-    </section>
+    </div>
+    <p class="note">Repeat sends the command again and again while you hold the control
+      (trim, zoom, views); otherwise it is sent once per press (gear, flaps).</p>
+  </section>
 
-    <section>
-      <div class="head">Axes</div>
+  <section id="sec-axes">
+    <div class="gtitle"><h2>Axes</h2></div>
+    <div class="box">
       <div id="axes"></div>
-    </section>
+    </div>
+    <p class="note">An axis set to None is left entirely to X-Plane.</p>
+  </section>
 
-    <section>
-      <div class="head">Response</div>
+  <section id="sec-tune">
+    <div class="gtitle"><h2>Stick response</h2></div>
+    <div class="box">
       <div class="tune">
-        <div class="tunegrid">
-          <label for="dz">Deadzone</label>
+        <div class="form">
+          <label for="dz">Dead zone:</label>
           <input type="range" id="dz" min="0" max="0.45" step="0.005">
-          <output id="dz-v">0.060</output>
-          <label for="cv">Curve</label>
+          <output id="dz-v" for="dz">6.0%</output>
+          <label for="cv">Curve:</label>
           <input type="range" id="cv" min="0.4" max="3" step="0.05">
-          <output id="cv-v">1.00</output>
-          <label for="gs">Gesture</label>
+          <output id="cv-v" for="cv">1.00</output>
+          <label for="gs">Gesture sensitivity:</label>
           <input type="range" id="gs" min="0" max="1" step="0.02">
-          <output id="gs-v">0.50</output>
+          <output id="gs-v" for="gs">50%</output>
         </div>
-        <svg id="curve" viewBox="0 0 120 120" aria-label="response curve">
-          <rect class="grid" x="0" y="0" width="120" height="120" rx="8"/>
+        <svg id="curve" viewBox="0 0 120 120" role="img" aria-label="Response curve">
+          <rect class="grid" x="0" y="0" width="120" height="120" rx="6"/>
           <line class="ax" x1="60" y1="0" x2="60" y2="120"/>
           <line class="ax" x1="0" y1="60" x2="120" y2="60"/>
           <polyline id="curveline" points=""/>
           <circle id="curvedot" r="3.5" cx="60" cy="60"/>
         </svg>
       </div>
-      <p class="note">The override datarefs bypass X-Plane's own null zone and
-        response curves, so this is the only thing filtering stick drift.
-        Curve below 1.00 sharpens around centre, above 1.00 softens it.</p>
-    </section>
+    </div>
+    <p class="note">DSXP drives X-Plane through override datarefs, which X-Plane's own null zone
+      does not filter (observed), so the dead zone here is the only filter for stick drift.
+      A curve above 1.00 softens the center; below 1.00 sharpens it.</p>
+  </section>
 
-
-    <section>
-      <div class="head">Trigger effects <em id="fxstatus">adaptive resistance</em></div>
-      <div class="fxtabs">
-        <button data-fxm="manual">Manual</button>
-        <button data-fxm="wind">Wind</button>
+  <section id="sec-fx">
+    <div class="gtitle"><h2>Trigger effects</h2><span class="gstatus" id="fxstatus"></span></div>
+    <div class="box">
+      <div class="seg full" id="fxtabs" role="radiogroup" aria-label="Trigger effects source">
+        <button data-fxm="manual" role="radio">Manual</button><button data-fxm="wind" role="radio">Wind</button>
       </div>
       <div id="fxwind" hidden>
-        <div class="wxgrid">
-          <div><span>Indicated airspeed</span><b id="wx-ias">&mdash;</b></div>
-          <div><span>Wind</span><b id="wx-wind">&mdash;</b></div>
-          <div><span>Crosswind</span><b id="wx-xw">&mdash;</b></div>
-          <div><span>Turbulence</span><b id="wx-turb">&mdash;</b></div>
-          <div><span>Aerodynamic load</span><b id="wx-load">&mdash;</b></div>
-          <div><span>State</span><b id="wx-note">&mdash;</b></div>
-        </div>
-        <div class="wxfx">
-          <div><span>L2</span><b id="wx-l">&mdash;</b></div>
-          <div><span>R2</span><b id="wx-r">&mdash;</b></div>
-        </div>
+        <dl class="readouts">
+          <div><dt>Indicated airspeed</dt><dd id="wx-ias">&mdash;</dd></div>
+          <div><dt>Wind</dt><dd id="wx-wind">&mdash;</dd></div>
+          <div><dt>Crosswind</dt><dd id="wx-xw">&mdash;</dd></div>
+          <div><dt>Turbulence</dt><dd id="wx-turb">&mdash;</dd></div>
+          <div><dt>Airflow load</dt><dd id="wx-load">&mdash;</dd></div>
+          <div><dt>State</dt><dd id="wx-note">&mdash;</dd></div>
+          <div><dt>L2</dt><dd id="wx-l">&mdash;</dd></div>
+          <div><dt>R2</dt><dd id="wx-r">&mdash;</dd></div>
+        </dl>
       </div>
       <div class="fxgrid" id="fxmanual">
         <div class="fxcol" data-side="l">
           <div class="fxtitle">L2</div>
-          <div class="modes">
-            <button data-m="0">Off</button><button data-m="1">Resist</button>
-            <button data-m="2">Weapon</button><button data-m="3">Vibrate</button>
+          <div class="seg full modes" role="radiogroup" aria-label="L2 effect">
+            <button data-m="0" role="radio">Off</button><button data-m="1" role="radio">Resist</button><button data-m="2" role="radio">Weapon</button><button data-m="3" role="radio">Vibrate</button>
           </div>
-          <div class="fxparams"></div>
+          <div class="form fxparams"></div>
         </div>
         <div class="fxcol" data-side="r">
           <div class="fxtitle">R2</div>
-          <div class="modes">
-            <button data-m="0">Off</button><button data-m="1">Resist</button>
-            <button data-m="2">Weapon</button><button data-m="3">Vibrate</button>
+          <div class="seg full modes" role="radiogroup" aria-label="R2 effect">
+            <button data-m="0" role="radio">Off</button><button data-m="1" role="radio">Resist</button><button data-m="2" role="radio">Weapon</button><button data-m="3" role="radio">Vibrate</button>
           </div>
-          <div class="fxparams"></div>
+          <div class="form fxparams"></div>
         </div>
       </div>
-      <p class="note" id="fxnote"><b>Resist</b> holds a constant force past a point.
-        <b>Weapon</b> resists across a band then breaks through, like a gun trigger.
-        <b>Vibrate</b> buzzes once you press past the threshold.
-        Positions are % of trigger travel, forces are % of maximum.
-        Squeeze the trigger to feel it &mdash; changes apply instantly.</p>
-    </section>
-    <section>
-      <div class="head">Rumble <em id="rstatus">manual</em></div>
-      <div class="fxtabs" id="rtabs">
-        <button data-rm="manual">Manual</button>
-        <button data-rm="sim">Sim</button>
+    </div>
+    <p class="note" id="fxnote"></p>
+  </section>
+
+  <section id="sec-rumble">
+    <div class="gtitle"><h2>Rumble</h2><span class="gstatus" id="rstatus"></span></div>
+    <div class="box">
+      <div class="seg full" id="rtabs" role="radiogroup" aria-label="Rumble source">
+        <button data-rm="manual" role="radio">Manual</button><button data-rm="sim" role="radio">Simulator</button>
       </div>
       <div id="rmanual">
-        <div class="fxparams rparams">
-          <label>Left motor</label>
-          <input type="range" id="r-l" min="0" max="255" value="0"><output id="r-lv">0%</output>
-          <label>Right motor</label>
-          <input type="range" id="r-r" min="0" max="255" value="0"><output id="r-rv">0%</output>
+        <div class="form rparams">
+          <label for="r-l">Left motor:</label>
+          <input type="range" id="r-l" min="0" max="255" value="0"><output id="r-lv" for="r-l">0%</output>
+          <label for="r-r">Right motor:</label>
+          <input type="range" id="r-r" min="0" max="255" value="0"><output id="r-rv" for="r-r">0%</output>
         </div>
-        <div class="rtests">
-          <button data-test="soft">Soft buffet</button>
-          <button data-test="hard">Hard buffet</button>
-          <button data-test="left">Left wing</button>
-          <button data-test="right">Right wing</button>
+        <div class="btnrow rtests">
+          <button data-test="soft">Soft Buffet</button>
+          <button data-test="hard">Hard Buffet</button>
+          <button data-test="left">Left Wing</button>
+          <button data-test="right">Right Wing</button>
           <button data-test="crash">Crash</button>
           <button data-test="stop">Stop</button>
         </div>
-        <div class="rpath">
-          <label class="toggle"><input type="checkbox" id="rv2"> vibration v2 &mdash; unsupported on this controller</label>
-        </div>
+        <label class="check"><input type="checkbox" id="rv2"> Use the newer vibration path (v2)</label>
       </div>
       <div id="rsim" hidden>
-        <div class="wxgrid">
-          <div><span>Left wing stalled</span><b id="rx-sl">&mdash;</b></div>
-          <div><span>Right wing stalled</span><b id="rx-sr">&mdash;</b></div>
-          <div><span>Stall warning</span><b id="rx-sw">&mdash;</b></div>
-          <div><span>Load factor</span><b id="rx-gn">&mdash;</b></div>
-          <div><span>Crashed</span><b id="rx-crash">&mdash;</b></div>
-          <div><span>State</span><b id="rx-note">&mdash;</b></div>
-        </div>
-        <div class="wxfx">
-          <div><span>Left motor</span><b id="rx-l">&mdash;</b></div>
-          <div><span>Right motor</span><b id="rx-r">&mdash;</b></div>
-        </div>
+        <dl class="readouts">
+          <div><dt>Left wing stall</dt><dd id="rx-sl">&mdash;</dd></div>
+          <div><dt>Right wing stall</dt><dd id="rx-sr">&mdash;</dd></div>
+          <div><dt>Stall warning</dt><dd id="rx-sw">&mdash;</dd></div>
+          <div><dt>Load factor</dt><dd id="rx-gn">&mdash;</dd></div>
+          <div><dt>Crashed</dt><dd id="rx-crash">&mdash;</dd></div>
+          <div><dt>State</dt><dd id="rx-note">&mdash;</dd></div>
+          <div><dt>Left motor</dt><dd id="rx-l">&mdash;</dd></div>
+          <div><dt>Right motor</dt><dd id="rx-r">&mdash;</dd></div>
+        </dl>
       </div>
-      <p class="note" id="rnote"></p>
-    </section>
+    </div>
+    <p class="note" id="rnote"></p>
+  </section>
 
-    <section class="wide">
-      <div class="head">Light bar <em id="lightstatus"></em></div>
-      <div class="fxtabs" id="ltabs">
-        <button data-lt="solid">Solid</button>
-        <button data-lt="pattern">Pattern</button>
-        <button data-lt="sim">Sim</button>
+  <section class="wide" id="sec-light">
+    <div class="gtitle"><h2>Light bar</h2><span class="gstatus" id="lightstatus"></span></div>
+    <div class="box">
+      <div class="lighttop">
+        <div class="seg" id="ltabs" role="radiogroup" aria-label="Light bar mode">
+          <button data-lt="solid" role="radio">Solid</button><button data-lt="pattern" role="radio">Pattern</button><button data-lt="sim" role="radio">Simulator</button>
+        </div>
+        <label class="check"><input type="checkbox" id="lon" switch checked> Light bar and player lamps on</label>
       </div>
-
-      <div id="lsolid">
-        <div class="lightrow">
-          <input type="color" id="lc" value="#005aff">
-          <div class="swatches">
-            <button class="sw" data-c="#ff2d1a" style="--s:#ff2d1a"></button>
-            <button class="sw" data-c="#ff8c00" style="--s:#ff8c00"></button>
-            <button class="sw" data-c="#ffd400" style="--s:#ffd400"></button>
-            <button class="sw" data-c="#22c55e" style="--s:#22c55e"></button>
-            <button class="sw" data-c="#005aff" style="--s:#005aff"></button>
-            <button class="sw" data-c="#8b5cf6" style="--s:#8b5cf6"></button>
-            <button class="sw" data-c="#ffffff" style="--s:#ffffff"></button>
+      <div class="lightgrid">
+        <div class="form">
+          <div id="lsolid" style="display:contents">
+            <label for="lc">Color:</label>
+            <div class="colorrow">
+              <input type="color" id="lc" value="#005aff">
+              <div class="swatches" role="group" aria-label="Preset colors">
+                <button class="sw" data-c="#ff2d1a" style="--s:#ff2d1a" title="Red"></button>
+                <button class="sw" data-c="#ff8c00" style="--s:#ff8c00" title="Orange"></button>
+                <button class="sw" data-c="#ffd400" style="--s:#ffd400" title="Yellow"></button>
+                <button class="sw" data-c="#22c55e" style="--s:#22c55e" title="Green"></button>
+                <button class="sw" data-c="#005aff" style="--s:#005aff" title="Blue"></button>
+                <button class="sw" data-c="#8b5cf6" style="--s:#8b5cf6" title="Purple"></button>
+                <button class="sw" data-c="#ffffff" style="--s:#ffffff" title="White"></button>
+              </div>
+            </div>
+            <span></span>
           </div>
-          <label class="toggle"><input type="checkbox" id="lon" checked> on</label>
+          <div id="lpattern" hidden style="display:contents">
+            <span class="lab">Pattern:</span>
+            <div class="seg patrow" role="radiogroup" aria-label="Pattern">
+              <button data-pat="1" role="radio">Breathe</button><button data-pat="2" role="radio">Pulse</button><button data-pat="3" role="radio">Strobe</button><button data-pat="4" role="radio">Rainbow</button><button data-pat="5" role="radio">Alert</button>
+            </div>
+            <span></span>
+            <label for="lspeed">Speed:</label>
+            <input type="range" id="lspeed" min="0" max="1" step="0.02"><output id="lspeed-v" for="lspeed">50%</output>
+          </div>
+          <div id="lsim" hidden style="display:contents">
+            <span class="lab">Showing:</span><span id="lx-note">&mdash;</span><span></span>
+          </div>
+        </div>
+        <div class="form">
+          <label for="lbright">Brightness:</label>
+          <input type="range" id="lbright" min="0" max="1" step="0.02"><output id="lbright-v" for="lbright">100%</output>
+          <span class="lab">Player lamps:</span>
+          <div class="seg pleds" role="radiogroup" aria-label="Player lamps">
+            <button data-pl="0" role="radio">Off</button><button data-pl="4" role="radio">One</button><button data-pl="10" role="radio">Two</button><button data-pl="14" role="radio">Three</button><button data-pl="27" role="radio">Four</button><button data-pl="31" role="radio">All</button>
+          </div>
+          <span></span>
         </div>
       </div>
-
-      <div id="lpattern" hidden>
-        <div class="patrow">
-          <button data-pat="1">Breathe</button>
-          <button data-pat="2">Pulse</button>
-          <button data-pat="3">Strobe</button>
-          <button data-pat="4">Rainbow</button>
-          <button data-pat="5">Alert</button>
-        </div>
-        <div class="fxparams rparams">
-          <label>Speed</label>
-          <input type="range" id="lspeed" min="0" max="1" step="0.02"><output id="lspeed-v">0.50</output>
-        </div>
-      </div>
-
-      <div id="lsim" hidden>
-        <div class="wxgrid">
-          <div><span>Showing</span><b id="lx-note">&mdash;</b></div>
-          <div><span>Colour</span><b id="lx-col">&mdash;</b></div>
-        </div>
-      </div>
-
-      <div class="fxparams rparams">
-        <label>Brightness</label>
-        <input type="range" id="lbright" min="0" max="1" step="0.02"><output id="lbright-v">100%</output>
-      </div>
-
-      <div class="pledrow">
-        <span>Player lamps</span>
-        <div class="pleds">
-          <button data-pl="0">Off</button>
-          <button data-pl="4">Single</button>
-          <button data-pl="10">Two</button>
-          <button data-pl="14">Three</button>
-          <button data-pl="27">Four</button>
-          <button data-pl="31">All</button>
-        </div>
-      </div>
-
-      <p class="note" id="lnote"></p>
-    </section>
+    </div>
+    <p class="note" id="lnote"></p>
+  </section>
 </main>
 
 <script src="/app.js"></script>

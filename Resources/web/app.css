@@ -1,255 +1,236 @@
+/* DSXP mapper - styled after Apple's macOS Human Interface Guidelines.
+ *
+ * Colors are the system's semantic colors: inside the app's WKWebView the
+ * -apple-system-* keywords resolve to the real NSColors (label, separator,
+ * control background, status colors) and follow Light/Dark Mode; anywhere else
+ * the fallbacks below are used. The window background and the user's accent
+ * color are not available as CSS keywords, so the app injects them as --win and
+ * --accent (MapperWindowController.pushSystemColors).
+ *
+ * Roles: the accent marks selection, slider fills and focus only. Green, orange
+ * and red appear only as status dots. Everything else is neutral.
+ * Type: the macOS text styles - body 13/16, headline 13 semibold, callout 12,
+ * subheadline 11, footnote 10. Spacing: a 4-point grid. Radii: 4, 6, 10.
+ */
 :root{
-  --bg:#f5f7fa; --panel:#fff; --line:#dee3ea; --ink:#111419; --dim:#5b6674;
-  --accent:#2f6feb; --soft:#e9f0fe; --live:#0f9d58; --warn:#c2410c;
-  --shell:#eaeef4; --shell-line:#c3ccd8; --cap:#fdfdfe; --cap-line:#b9c3d0;
-  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:light dark;
+  --label:rgba(0,0,0,.85); --label2:rgba(0,0,0,.5); --label3:rgba(0,0,0,.26); --label4:rgba(0,0,0,.1);
+  --sep:rgba(0,0,0,.1); --ctl:#fff; --win:#ececec;
+  --green:#28cd41; --orange:#ff9500; --red:#ff3b30; --gray:#8e8e93;
+  --accent:#007aff;
+  --font:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --labelw:128px;
 }
 @media (prefers-color-scheme:dark){
-  :root{ --bg:#0e1116; --panel:#161b22; --line:#252c36; --ink:#e6ebf2; --dim:#8a94a3;
-         --accent:#5b9bff; --soft:#182842; --live:#35d07f; --warn:#f59e5b;
-         --shell:#1b212a; --shell-line:#333c48; --cap:#232a34; --cap-line:#3d4754; }
+  :root{
+    --label:rgba(255,255,255,.85); --label2:rgba(255,255,255,.55); --label3:rgba(255,255,255,.25);
+    --label4:rgba(255,255,255,.1); --sep:rgba(255,255,255,.1); --ctl:#1e1e1e; --win:#323232;
+    --green:#32d74b; --orange:#ff9f0a; --red:#ff453a; --gray:#98989d; --accent:#0a84ff;
+  }
 }
+@supports (color:-apple-system-label){
+  :root{
+    --label:-apple-system-label; --label2:-apple-system-secondary-label;
+    --label3:-apple-system-tertiary-label; --label4:-apple-system-quaternary-label;
+    --sep:-apple-system-separator; --ctl:-apple-system-control-background;
+    --green:-apple-system-green; --orange:-apple-system-orange; --red:-apple-system-red;
+    --gray:-apple-system-gray;
+  }
+}
+:root{
+  --box:color-mix(in srgb,var(--label) 4%,transparent);       /* group box fill   */
+  --boxline:color-mix(in srgb,var(--label) 9%,transparent);   /* group box border */
+  --track:color-mix(in srgb,var(--label) 8%,transparent);     /* bars, seg track  */
+}
+
 *{box-sizing:border-box}
-/* an explicit display on an element beats the UA's [hidden]{display:none},
-   so .fxgrid stayed visible in wind mode - make hidden win everywhere */
+/* an element with its own display beats the UA's [hidden]{display:none} */
 [hidden]{display:none!important}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);
-     font:14px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+body{background:var(--win);color:var(--label);font:13px/16px var(--font);
+     -webkit-font-smoothing:antialiased;cursor:default;-webkit-user-select:none;user-select:none}
+input,select,textarea{-webkit-user-select:text;user-select:text}
+button,select,input{font:13px/16px var(--font)}
+output,.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono)}
+h2{margin:0;font-size:13px;line-height:16px;font-weight:600}
 
-header{display:flex;align-items:center;gap:10px;padding:11px 18px;background:var(--panel);
-       border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;flex-wrap:wrap}
-h1{margin:0;font-size:16px;font-weight:680;letter-spacing:-.02em}
-.sub{color:var(--dim);font-size:12.5px}
-.spacer{flex:1}
-.pill{font:11px/1 var(--mono);padding:5px 9px;border-radius:999px;white-space:nowrap;
-      border:1px solid var(--line);color:var(--dim)}
-.pill.on{color:var(--live);border-color:color-mix(in srgb,var(--live) 45%,transparent);
-         background:color-mix(in srgb,var(--live) 14%,transparent)}
-.pill.off{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent);
-          background:color-mix(in srgb,var(--warn) 12%,transparent)}
+/* ------------------------------------------------------------ status strip */
+#strip{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+  padding:8px 20px;background:var(--win);border-bottom:1px solid var(--sep)}
+.status{display:flex;align-items:center;gap:16px;flex-wrap:wrap;min-width:0}
+.st{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.st .sub{color:var(--label2)}
+.dot{display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;background:var(--gray)}
+.dot.ok{background:var(--green)} .dot.warn{background:var(--orange)} .dot.bad{background:var(--red)}
+.actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+.xpdir{display:inline-flex;align-items:center;gap:8px;min-width:0}
+#app-xpdir{color:var(--label2);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#app-xpdir.missing{color:var(--label)}
+.dim{color:var(--label2)}
+#app-config .dot{margin-right:6px;vertical-align:0}
 
-main{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px;
-     align-items:stretch}
-@media (max-width:1000px){ main{grid-template-columns:1fr} }
+/* ----------------------------------------------------------- page layout */
+/* the two panels of a row end at the same height; lists grow to fill */
+main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;padding:20px;align-items:stretch}
+@media (max-width:1000px){ main{grid-template-columns:minmax(0,1fr)} }
+section{display:flex;flex-direction:column;gap:6px;min-width:0}
+section.wide{grid-column:1 / -1}
+.gtitle{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:0 4px}
+.gstatus{font-size:11px;line-height:14px;color:var(--label2);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.box{flex:1 1 auto;background:var(--box);border:1px solid var(--boxline);border-radius:10px;padding:12px;min-width:0}
+.box.flush{padding:0;overflow:hidden;display:flex;flex-direction:column}
+#sec-trig .box{display:flex;flex-direction:column;justify-content:center}
+.box > * + *{margin-top:12px}
+.note{margin:0;padding:0 4px;font-size:11px;line-height:14px;color:var(--label2)}
+.note b{font-weight:600;color:var(--label)}
+.inlineerr{margin:0;padding:0 4px;font-size:11px;line-height:14px;color:var(--label)}
+.inlineerr .dot{margin-right:6px}
 
-section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-        overflow:hidden;display:flex;flex-direction:column;min-width:0}
-/* the trailing note in a panel sinks to the bottom so paired panels of unequal
-   content still line up along their base */
-section > .note:last-child{margin-top:auto}
-.head{padding:10px 14px;border-bottom:1px solid var(--line);font-weight:640;font-size:11.5px;
-      letter-spacing:.06em;text-transform:uppercase;color:var(--dim);
-      display:flex;justify-content:space-between;gap:10px;align-items:baseline}
-.head em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500;font-size:11.5px}
+/* label column, control, value - one right-aligned label column per form */
+.form{display:grid;grid-template-columns:var(--labelw) minmax(0,1fr) 52px;gap:8px;align-items:center}
+/* labels may sit inside a display:contents group, so not only direct children */
+.form label,.form .lab{text-align:right;white-space:nowrap}
+.form > output{text-align:right;color:var(--label2);font-size:12px}
+input[type=range]{width:100%;margin:0}
 
-/* -------------------------------------------------- trigger side view */
-#trigview{width:100%;height:auto;display:block;padding:6px 10px 0;
-          margin-top:auto;margin-bottom:auto}
-#trigview .sidebody{fill:var(--shell);stroke:var(--shell-line);stroke-width:2;
-                    stroke-linejoin:round}
-#trigview .sidebump{fill:var(--cap);stroke:var(--cap-line);stroke-width:1.8}
-#trigview .travel{fill:none;stroke:var(--line);stroke-width:2;stroke-dasharray:3 4;
-                  stroke-linecap:round}
-#trigview .blade{fill:var(--cap);stroke:var(--cap-line);stroke-width:1.8;cursor:pointer}
-#trigview .blade:hover{fill:var(--soft)}
-#trigview .blade.down{fill:var(--live);stroke:var(--live)}
-#trigview .blade.sel{stroke:var(--accent);stroke-width:3}
-#trigview .pivot{fill:var(--shell-line)}
-#trigview .ghost path{fill:none;stroke:var(--cap-line);stroke-width:1.6;
-                      stroke-dasharray:5 4;opacity:.55}
-#trigview .cap{fill:var(--dim);font:12px var(--mono);text-anchor:middle}
-#trigview .pct{fill:var(--accent);font:15px var(--mono);text-anchor:middle;font-weight:600}
-#trigview .dbar{fill:var(--line)}
-#trigview .dfill{fill:var(--accent)}
+/* segmented control: equal widths, a neutral raised selection */
+.seg{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;padding:2px;border-radius:6px;
+  background:var(--track);min-width:0}
+.seg button{appearance:none;-webkit-appearance:none;border:0;background:none;color:var(--label);
+  font-size:12px;line-height:16px;padding:2px 12px;border-radius:4px;white-space:nowrap}
+.seg button.on{background:var(--ctl);box-shadow:0 0 0 .5px rgba(0,0,0,.14),0 1px 1.5px rgba(0,0,0,.14)}
+@media (prefers-color-scheme:dark){
+  .seg button.on{background:color-mix(in srgb,var(--label) 24%,transparent);box-shadow:none}
+}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+.seg.full{display:grid;width:100%}
+.check{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.check input{margin:0}
 
-/* ------------------------------------------------------- controller map */
-.mapwrap{padding:8px 12px 4px;flex:1;display:flex;align-items:center}
+/* read-only values: label, value */
+.readouts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 20px;margin:0}
+.readouts > div{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-width:0}
+.readouts dt{color:var(--label2)}
+.readouts dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.readouts dd.stale{color:var(--label3)}
+.readouts dd .dot{margin-right:6px}
+
+/* -------------------------------------------------------- controller map */
 #pad{width:100%;height:auto;display:block}
-#pad .body{fill:var(--shell);stroke:var(--shell-line);stroke-width:2.2;stroke-linejoin:round}
-#pad .btn,#pad .pad{fill:var(--cap);stroke:var(--cap-line);stroke-width:2.2;
-      cursor:pointer;transition:fill .05s linear}
-/* the DualSense has no physical diagonal key - these are invisible targets
-   sitting in the gaps, and a diagonal lights its two adjacent arrows instead */
-#pad .diag{fill:transparent;stroke:none;cursor:pointer}
-#pad .diag.sel{stroke:var(--accent);stroke-width:2.5;stroke-dasharray:4 4}
-#pad .grille path{fill:none;stroke:var(--cap-line);stroke-width:2}
-#pad .wellring{fill:none;stroke:var(--cap-line);stroke-width:2.4}
-#pad .well{fill:var(--cap);stroke:var(--cap-line);stroke-width:2.4}
-#pad .knob{fill:var(--shell);stroke:var(--cap-line);stroke-width:2.6}
-#pad .hit{fill:transparent;stroke:none;cursor:pointer}
-#pad .seam{stroke:var(--cap-line);stroke-width:1.2;opacity:.5;pointer-events:none}
-#pad .mark{fill:none;stroke:var(--dim);stroke-width:2.6;stroke-linecap:round;
-           stroke-linejoin:round;pointer-events:none}
-#pad polygon.mark{fill:none}
-#pad text{fill:var(--dim);font:11px var(--mono);text-anchor:middle;pointer-events:none}
-#pad .xs{font-size:9.5px}
-#pad .btn:hover,#pad .pad:hover{fill:var(--soft)}
-#pad .down{fill:var(--live)!important;stroke:var(--live)}
-#pad .sel{stroke:var(--accent);stroke-width:3}
+#pad .body{fill:var(--box);stroke:var(--label3);stroke-width:2.2;stroke-linejoin:round}
+#pad .btn,#pad .pad,#pad .well{fill:var(--ctl);stroke:var(--label3);stroke-width:2.2}
+#pad .diag{fill:transparent;stroke:none}
+#pad .diag.sel{stroke:var(--accent);stroke-width:3;stroke-dasharray:6 5}
+#pad .grille path{fill:none;stroke:var(--label3);stroke-width:2}
+#pad .wellring{fill:none;stroke:var(--label3);stroke-width:2.4}
+#pad .knob{fill:var(--box);stroke:var(--label3);stroke-width:2.6}
+#pad .hit{fill:transparent;stroke:none}
+#pad .mark{fill:none;stroke:var(--label2);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;
+  pointer-events:none}
+#pad text{fill:var(--label2);font:500 26px var(--font);text-anchor:middle;pointer-events:none}
+#pad .xs{font-size:24px}
+#pad .down{fill:color-mix(in srgb,var(--label) 30%,var(--ctl))}
+#pad .sel{stroke:var(--accent);stroke-width:4}
+#pad .touchdot{fill:var(--label2);opacity:.7;pointer-events:none}
 
-/* ------------------------------------------------------------- response */
-.tune{display:grid;grid-template-columns:1fr 132px;gap:14px;padding:12px 14px;align-items:center}
-.tunegrid{display:grid;grid-template-columns:auto 1fr 52px;gap:9px 10px;align-items:center}
-.tunegrid label{font-size:12.5px;color:var(--dim)}
-.tunegrid output{font:12px var(--mono);color:var(--accent);text-align:right}
-input[type=range]{width:100%;accent-color:var(--accent)}
-#curve{width:132px;height:132px}
-#curve .grid{fill:var(--bg);stroke:var(--line)}
-#curve .ax{stroke:var(--line);stroke-width:1}
-#curve #curveline{fill:none;stroke:var(--accent);stroke-width:2.2;
-                  stroke-linejoin:round;stroke-linecap:round}
-#curve #curvedot{fill:var(--live)}
-.note{margin:0;padding:0 14px 12px;font-size:12px;color:var(--dim)}
+/* ------------------------------------------------------ trigger side view */
+#trigview{width:100%;height:auto;display:block}
+#trigview .sidebody{fill:var(--box);stroke:var(--label3);stroke-width:2;stroke-linejoin:round}
+#trigview .sidebump,#trigview .blade{fill:var(--ctl);stroke:var(--label3);stroke-width:1.8}
+#trigview .blade.down{fill:color-mix(in srgb,var(--label) 30%,var(--ctl))}
+#trigview .sidebump.down{fill:color-mix(in srgb,var(--label) 30%,var(--ctl))}
+#trigview .blade.sel{stroke:var(--accent);stroke-width:3}
+#trigview .pivot{fill:var(--label3)}
+#trigview .ghost path{fill:none;stroke:var(--label3);stroke-width:1.6;stroke-dasharray:5 4}
+#trigview .cap{fill:var(--label2);font:500 14px var(--font);text-anchor:middle}
+#trigview .pct{fill:var(--label);font:14px var(--font);text-anchor:middle;font-variant-numeric:tabular-nums}
+#trigview .dbar{fill:var(--track)}
+#trigview .dfill{fill:var(--label2)}
 
-/* ----------------------------------------------------------------- axes */
-.axrow{display:grid;grid-template-columns:104px 1fr auto auto;gap:10px;align-items:center;
-       padding:9px 14px;border-bottom:1px solid var(--line)}
-.axrow:last-child{border-bottom:none}
-.axrow .nm{font-size:12.5px}
-.bar{height:6px;background:var(--line);border-radius:3px;position:relative;overflow:hidden}
-.bar i{position:absolute;top:0;bottom:0;background:var(--accent);border-radius:3px;left:50%;width:0}
-select{font:12px var(--mono);padding:4px 6px;border-radius:7px;border:1px solid var(--line);
-       background:var(--panel);color:var(--ink)}
-.inv{font:10px/1 var(--mono);border:1px solid var(--line);border-radius:5px;padding:5px 6px;
-     cursor:pointer;color:var(--dim);user-select:none}
-.inv.on{color:var(--accent);border-color:var(--accent)}
+/* -------------------------------------------------- command search, lists */
+.searchrow{display:flex;gap:8px;align-items:center;padding:12px;border-bottom:1px solid var(--sep)}
+#q{flex:1;min-width:0}
+.hint{margin:0;padding:8px 12px;font-size:11px;line-height:14px;color:var(--label2);
+  border-top:1px solid var(--sep)}
+#results,#btns{flex:1 1 360px;min-height:0;overflow-y:auto}
+.box.flush > * + *{margin-top:0}
+.res{padding:6px 12px;border-bottom:1px solid var(--sep)}
+.res .p{font:12px/16px var(--mono);word-break:break-all}
+.res .d{font-size:11px;line-height:14px;color:var(--label2)}
+.res.k{background:var(--accent);color:#fff}
+.res.k .d{color:rgba(255,255,255,.8)}
+mark{background:color-mix(in srgb,var(--orange) 35%,transparent);color:inherit;border-radius:2px}
+.res.k mark{background:rgba(255,255,255,.28)}
+.empty{padding:32px 16px;text-align:center;color:var(--label2)}
 
-/* -------------------------------------------------------------- mapper */
-.searchwrap{padding:12px 14px;border-bottom:1px solid var(--line)}
-#q{width:100%;font:13px var(--mono);padding:10px 12px;border-radius:9px;
-   border:1px solid var(--line);background:var(--bg);color:var(--ink);outline:none}
-#q:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--soft)}
-.hint{font-size:11.5px;color:var(--dim);padding-top:8px}
-.hint a{color:var(--warn)}
-kbd{font:10px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;
-    padding:2px 5px;color:var(--dim);margin-right:2px}
-#results{flex:1;min-height:180px;max-height:min(46vh,440px);overflow-y:auto}
-.res{padding:8px 14px;border-bottom:1px solid var(--line);cursor:pointer}
-.res:last-child{border-bottom:none}
-.res.k{background:var(--soft)}
-.res .p{font:12px var(--mono);color:var(--accent);word-break:break-all}
-.res .d{font-size:12.5px;color:var(--dim);margin-top:1px}
-mark{background:color-mix(in srgb,var(--accent) 30%,transparent);color:inherit;
-     border-radius:2px;padding:0 1px}
-.empty{padding:26px 14px;text-align:center;color:var(--dim);font-size:13px}
+.row{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--sep);min-height:32px}
+.row .nm{flex:none;width:156px}
+.row.down .nm{font-weight:600}
+.row .bd{flex:1;min-width:0;font:12px/16px var(--mono);color:var(--label2);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.row .bd.none{font-family:var(--font);color:var(--label3)}
+.row .axtag{flex:none;font-size:11px;color:var(--label2)}
+.row .rep{flex:none;font-size:12px}
+.row.sel{background:var(--accent);color:#fff}
+.row.sel .bd,.row.sel .bd.none,.row.sel .axtag{color:rgba(255,255,255,.85)}
 
-/* --------------------------------------------------------- binding list */
-#btns{flex:1;min-height:180px;max-height:min(46vh,440px);overflow-y:auto}
-.row{display:flex;align-items:center;gap:10px;padding:7px 14px;
-     border-bottom:1px solid var(--line);cursor:pointer}
-.row:last-child{border-bottom:none}
-.row:hover{background:var(--soft)}
-.row.sel{background:var(--soft);box-shadow:inset 3px 0 0 var(--accent)}
-.row.down .nm{color:var(--live);font-weight:650}
-.row.empty-slot .nm{opacity:.5}
-.row .nm{width:128px;flex:none;font-size:12.5px}
-.bd{flex:1;font:11.5px/1.35 var(--mono);color:var(--dim);overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap}
-.bd.none{opacity:.42;font-style:italic}
-.rep{font:9.5px/1 var(--mono);border:1px solid var(--line);border-radius:4px;padding:3px 5px;
-     color:var(--dim);flex:none}
-.rep.on{color:var(--accent);border-color:var(--accent)}
-.axtag{font:9.5px/1 var(--mono);border:1px solid var(--accent);color:var(--accent);
-       border-radius:4px;padding:3px 5px;flex:none}
+/* ------------------------------------------------------------------- axes */
+.axrow{display:grid;grid-template-columns:112px minmax(60px,1fr) minmax(0,auto) auto;gap:12px;
+  align-items:center;padding:6px 0}
+.axrow + .axrow{border-top:1px solid var(--sep)}
+.bar{height:4px;background:var(--track);border-radius:2px;position:relative;overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;left:50%;width:0;background:var(--label2);border-radius:2px}
+.axrow select{max-width:220px}
 
-/* ------------------------------------------------------------ light bar */
-.lightrow{display:flex;align-items:center;gap:12px;padding:12px 14px;flex-wrap:wrap}
-#lc{width:52px;height:34px;padding:0;border:1px solid var(--line);border-radius:8px;
-    background:none;cursor:pointer}
-.swatches{display:flex;gap:6px;flex:1}
-.sw{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);
-    background:var(--s);cursor:pointer;padding:0}
-.sw:hover{transform:scale(1.12)}
-.toggle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim)}
-#pad .touchdot{fill:var(--live);opacity:.85;pointer-events:none}
+/* -------------------------------------------------------------- response */
+.tune{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:16px;align-items:center}
+
+#curve{width:120px;height:120px}
+#curve .grid{fill:var(--ctl);stroke:var(--sep)}
+#curve .ax{stroke:var(--sep);stroke-width:1}
+#curve #curveline{fill:none;stroke:var(--label);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+#curve #curvedot{fill:var(--label2)}
 
 /* -------------------------------------------------------- trigger effects */
-.fxgrid{display:grid;grid-template-columns:1fr 1fr;gap:0}
-.fxcol{padding:12px 14px}
-.fxcol+.fxcol{border-left:1px solid var(--line)}
-.fxtitle{font:12px var(--mono);color:var(--dim);margin-bottom:8px}
-.modes{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap}
-.modes button{font:10.5px var(--mono);padding:5px 8px;border-radius:6px;cursor:pointer;
-  border:1px solid var(--line);background:var(--panel);color:var(--dim)}
-.modes button:hover{background:var(--soft)}
-.modes button.on{background:var(--accent);border-color:var(--accent);color:#fff}
-.fxparams{display:grid;grid-template-columns:auto 1fr 34px;gap:7px 8px;align-items:center}
-.fxparams label{font-size:11.5px;color:var(--dim);white-space:nowrap}
-.fxparams output{font:11px var(--mono);color:var(--accent);text-align:right}
-.fxparams .off{opacity:.3;pointer-events:none}
-.note b{color:var(--ink);font-weight:600}
+.fxgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.fxcol{display:flex;flex-direction:column;gap:8px;min-width:0}
+.fxtitle{font-weight:600}
+.fxparams{--labelw:84px;grid-template-columns:var(--labelw) minmax(0,1fr) 44px}
+.fxparams .off{grid-column:1 / -1;color:var(--label2)}
 
-/* ---------------------------------------------------- manual / wind tabs */
-.fxtabs{display:flex;gap:0;border-bottom:1px solid var(--line)}
-.fxtabs button{flex:1;font:11px var(--mono);letter-spacing:.05em;text-transform:uppercase;
-  padding:9px 0;border:none;background:none;color:var(--dim);cursor:pointer;
-  border-bottom:2px solid transparent}
-.fxtabs button:hover{background:var(--soft)}
-.fxtabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
-.wxgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
-  border-bottom:1px solid var(--line)}
-.wxgrid > div{background:var(--panel);padding:9px 14px;display:flex;
-  justify-content:space-between;align-items:baseline;gap:8px}
-.wxgrid span{font-size:11.5px;color:var(--dim)}
-.wxgrid b{font:13px var(--mono);color:var(--ink);font-weight:600}
-.wxgrid b.stale{color:var(--warn)}
-.wxfx{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
-.wxfx > div{background:var(--panel);padding:10px 14px;display:flex;
-  justify-content:space-between;align-items:baseline;gap:8px}
-.wxfx span{font:12px var(--mono);color:var(--dim)}
-.wxfx b{font:12px var(--mono);color:var(--accent)}
+/* ---------------------------------------------------------------- rumble */
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
 
-/* --------------------------------------------------------------- rumble */
-section.wide{grid-column:1 / -1}
-.rparams{padding:12px 14px}
-.rtests{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px}
-.rtests button{font:10.5px var(--mono);padding:6px 9px;border-radius:6px;cursor:pointer;
-  border:1px solid var(--line);background:var(--panel);color:var(--dim)}
-.rtests button:hover{background:var(--soft);color:var(--accent);border-color:var(--accent)}
-.rtests button[data-test="crash"]{color:var(--warn);border-color:
-  color-mix(in srgb,var(--warn) 45%,transparent)}
-#rx-crash.hit{color:var(--warn)}
-.rpath{padding:0 14px 12px}
+/* ------------------------------------------------------------- light bar */
+.lighttop{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.colorrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#lc{width:44px;height:24px;padding:0;border:1px solid var(--sep);border-radius:6px;background:none}
+.swatches{display:flex;gap:8px}
+.sw{appearance:none;-webkit-appearance:none;width:20px;height:20px;border-radius:50%;padding:0;
+  border:1px solid color-mix(in srgb,var(--label) 20%,transparent);background:var(--s)}
+.sw:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lightgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px}
 
-/* ------------------------------------------------------ light bar extras */
-.patrow{display:flex;gap:6px;flex-wrap:wrap;padding:12px 14px 4px}
-.patrow button{font:10.5px var(--mono);padding:6px 10px;border-radius:6px;cursor:pointer;
-  border:1px solid var(--line);background:var(--panel);color:var(--dim)}
-.patrow button:hover{background:var(--soft)}
-.patrow button.on{background:var(--accent);border-color:var(--accent);color:#fff}
-.pledrow{display:flex;align-items:center;gap:12px;padding:10px 14px;
-  border-top:1px solid var(--line);flex-wrap:wrap}
-.pledrow > span{font-size:11.5px;color:var(--dim)}
-.pleds{display:flex;gap:5px;flex-wrap:wrap}
-.pleds button{font:10.5px var(--mono);padding:5px 9px;border-radius:6px;cursor:pointer;
-  border:1px solid var(--line);background:var(--panel);color:var(--dim)}
-.pleds button:hover{background:var(--soft)}
-.pleds button.on{background:var(--accent);border-color:var(--accent);color:#fff}
-
-/* ----------------------------------------------------------------- quit */
-#quit{font:11px var(--mono);padding:5px 11px;border-radius:999px;cursor:pointer;
-  border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);
-  background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn)}
-#quit:hover{background:color-mix(in srgb,var(--warn) 24%,transparent)}
-#gone{position:fixed;inset:0;z-index:100;display:flex;align-items:center;
-  justify-content:center;background:var(--bg);text-align:center}
-#gone h2{margin:0 0 8px;font-size:17px;font-weight:650}
-#gone p{margin:4px 0;color:var(--dim);font-size:13.5px}
-#gone .dim{opacity:.7;margin-top:14px}
-#gone code{font:12px var(--mono);background:var(--panel);border:1px solid var(--line);
-  border-radius:5px;padding:2px 6px}
-
-/* DSXP app strip: Input Monitoring, X-Plane folder, imported note */
-.appstrip{display:flex;align-items:center;gap:8px;margin-left:6px;min-width:0}
-.appstrip button{font-size:11.5px;line-height:1;font-family:inherit;padding:5px 9px;border-radius:7px;cursor:pointer;
-  border:1px solid var(--line);background:var(--panel);color:var(--ink)}
-.appstrip button:hover{border-color:var(--accent);color:var(--accent)}
-.appstrip .warnbtn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
-.xpdir{font:11px var(--mono);color:var(--dim);max-width:320px;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
-.xpdir.missing{color:var(--warn)}
-#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:40;
-  font:12.5px var(--mono);padding:9px 14px;border-radius:9px;background:var(--panel);
-  color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);
-  box-shadow:0 6px 24px rgba(0,0,0,.18)}
+/* ------------------------------------------------- toast, popover, quit */
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:40;max-width:min(560px,90vw);
+  display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--ctl);
+  color:var(--label);border:1px solid var(--sep);box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.popover{position:fixed;top:48px;right:20px;z-index:30;width:min(560px,calc(100vw - 40px));
+  max-height:min(60vh,520px);overflow:auto;padding:12px;border-radius:10px;background:var(--ctl);
+  border:1px solid var(--sep);box-shadow:0 12px 32px rgba(0,0,0,.22);-webkit-user-select:text;user-select:text}
+.popover > * + *{margin-top:12px}
+.popover p{margin:0;color:var(--label2);font-size:12px;line-height:15px}
+#cfglist{list-style:none;margin:0;padding:0}
+#cfglist li{padding:8px 0;border-top:1px solid var(--sep)}
+#cfglist .where{font:12px/16px var(--mono);color:var(--label2)}
+#cfglist .msg{margin-top:2px}
+#cfglist .fixrow{display:flex;justify-content:flex-end;margin-top:4px}
+.popbtns{display:flex;justify-content:flex-end;gap:8px}
+#gone{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  background:var(--win);text-align:center}
+#gone h2{font-size:17px;line-height:22px;margin-bottom:8px}
+#gone p{margin:4px 0;color:var(--label2)}

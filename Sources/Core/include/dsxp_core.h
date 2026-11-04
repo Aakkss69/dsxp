@@ -54,7 +54,7 @@ typedef struct {
     bool     suspended;       /* paused for system sleep                         */
     bool     imported_legacy; /* settings were imported from the old prototype   */
     int      hid_open_result; /* IOReturn of IOHIDManagerOpen, 0 = success       */
-    int      ncmds;           /* X-Plane commands in the catalogue               */
+    int      ncmds;           /* X-Plane commands in the catalog               */
     double   report_hz;       /* input report rate over the last 10 s window     */
     int      xp_port;         /* X-Plane's UDP port (bridge.conf xplane.port)     */
     int      config_warnings; /* problems found in the config files              */

@@ -44,7 +44,7 @@ bool telemetry_rref_path(int id, char *out, size_t n) {
 }
 
 /* Turbulence at the aircraft: X-Plane 12 publishes it per weather layer, with
- * each layer's centre altitude. Interpolate linearly between the two layers
+ * each layer's center altitude. Interpolate linearly between the two layers
  * around the aircraft, holding the end values beyond them. If the altitudes are
  * all zero (not filled in), fall back to the first layer. */
 double turb_at_altitude(const float *turb, const float *alt, int n, double elev_m) {
@@ -162,7 +162,7 @@ void core_on_udp(core_t *c, const unsigned char *buf, size_t n, bool from_loopba
     }
     if (weather) c->wx.turb = turb_at_altitude(c->turb_layer, c->alt_layer, WX_LAYERS, c->wx.elev_m);
     if (stall) {
-        /* the main wing may be modelled as Plane Maker wing 1 or 2: take the worse */
+        /* the main wing may be modeled as Plane Maker wing 1 or 2: take the worse */
         double w[STALL_WINGS];
         for (int i = 0; i < STALL_WINGS; i++) w[i] = wing_mean(c->stall_el[i]);
         c->wx.stall_l = fmax(w[0], w[2]);
@@ -186,14 +186,14 @@ void telemetry_tick(core_t *c, double now) {
     }
     if (!want && c->subscribed) {
         telemetry_unsubscribe(c);
-        sim_release(c, c->xp_running ? "paused" : "X-Plane closed");
+        sim_release(c, c->xp_running ? "Paused" : "X-Plane closed");
     }
     if (!want) {
         if (c->wx.live) sim_release(c, "X-Plane closed");
         snprintf(c->wx.note, sizeof c->wx.note, "%s",
-                 c->s.fxmode == FXM_WIND ? "waiting for X-Plane" : "manual");
+                 c->s.fxmode == FXM_WIND ? "Waiting for X-Plane" : "Manual");
         if (c->s.rmode == RM_SIM)
-            snprintf(c->rnote, sizeof c->rnote, "waiting for X-Plane");
+            snprintf(c->rnote, sizeof c->rnote, "Waiting for X-Plane");
         return;
     }
     /* X-Plane does not always keep subscriptions (observed across reloads; not
@@ -219,8 +219,8 @@ void telemetry_tick(core_t *c, double now) {
             c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
             out_mark(c);
         }
-        snprintf(c->wx.note, sizeof c->wx.note, "paused");
-        if (c->s.rmode == RM_SIM) snprintf(c->rnote, sizeof c->rnote, "paused");
+        snprintf(c->wx.note, sizeof c->wx.note, "Paused");
+        if (c->s.rmode == RM_SIM) snprintf(c->rnote, sizeof c->rnote, "Paused");
     } else if (c->wx.live) {
         if (c->s.fxmode == FXM_WIND) {
             trigger_fx_t before[2] = { c->fx_out[0], c->fx_out[1] };
@@ -238,10 +238,10 @@ void telemetry_tick(core_t *c, double now) {
     } else if (was_live) {
         /* the feed went quiet while the process is still around - hung, or
          * networking turned off. Do not leave anything latched. */
-        sim_release(c, "telemetry lost");
+        sim_release(c, "Telemetry lost");
     } else {
-        snprintf(c->wx.note, sizeof c->wx.note, "waiting for X-Plane");
+        snprintf(c->wx.note, sizeof c->wx.note, "Waiting for X-Plane");
         if (c->s.rmode == RM_SIM)
-            snprintf(c->rnote, sizeof c->rnote, "waiting for X-Plane");
+            snprintf(c->rnote, sizeof c->rnote, "Waiting for X-Plane");
     }
 }

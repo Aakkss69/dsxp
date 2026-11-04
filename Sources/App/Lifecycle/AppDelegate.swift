@@ -45,7 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.fixAccess = { [weak self] in self?.openInputAccess() }
         statusMenu = menu
 
-        mapper.scheme.onQuit = { NSApp.terminate(nil) }
+        mapper.scheme.onQuit = { [weak self] done in
+            guard let self else { return done(false) }
+            self.mapper.confirmQuit(done)
+        }
         mapper.scheme.onPickXPlane = { [weak self] done in self?.pickXPlane(done) }
         mapper.scheme.onOpenAccess = { [weak self] in self?.openInputAccess() }
 
@@ -156,8 +159,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard response == .OK, let url = panel.url else { return done(false) }
             guard XPlaneLocator.isValid(url) else {
                 let alert = NSAlert()
-                alert.messageText = "That folder has no Resources/plugins/Commands.txt."
-                alert.informativeText = "Pick the X-Plane 12 folder itself, for example ~/X-Plane/X-Plane 12."
+                alert.messageText = "This isn’t an X-Plane 12 folder."
+                alert.informativeText = "DSXP looks for Resources/plugins/Commands.txt inside it. "
+                    + "Choose the X-Plane 12 folder itself, such as ~/X-Plane/X-Plane 12."
                 if let win = mapper.window { _ = await alert.beginSheetModal(for: win) }
                 return done(false)
             }

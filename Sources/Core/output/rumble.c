@@ -38,7 +38,7 @@ void rumble_apply(const wx_t *wx, rumble_t *out, char *note, size_t note_n,
         /* full shake for crash_duration, then quiet: a crash must not buzz forever */
         bool shaking = cfg->crash_s > 0 && crash_age < cfg->crash_s;
         out->left = out->right = shaking ? 255 : 0;
-        snprintf(note, note_n, "CRASH");
+        snprintf(note, note_n, shaking ? "Crashed" : "Crashed (shake ended)");
         return;
     }
 
@@ -64,15 +64,15 @@ void rumble_apply(const wx_t *wx, rumble_t *out, char *note, size_t note_n,
     out->right = clamp8(r * 255.0);
 
     if (jolt > 0.05)
-        snprintf(note, note_n, "%.1f g load", wx->gn);
+        snprintf(note, note_n, "Load %.1f g", wx->gn);
     else if (l > 0.02 || r > 0.02) {
         double diff = sl - sr;
         if (fabs(diff) < 0.12)
-            snprintf(note, note_n, "stall buffet %.0f%%", fmax(l, r) * 100);
+            snprintf(note, note_n, "Stall buffet %.0f%%", fmax(l, r) * 100);
         else
             snprintf(note, note_n, "%s wing dropping %.0f%%",
-                     diff > 0 ? "left" : "right", fmax(l, r) * 100);
+                     diff > 0 ? "Left" : "Right", fmax(l, r) * 100);
     } else {
-        snprintf(note, note_n, "clean");
+        snprintf(note, note_n, "Clean");
     }
 }

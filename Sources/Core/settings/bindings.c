@@ -58,7 +58,7 @@ void load_defaults(settings_t *s) {
      * 5% (rx +0.0315, ry -0.0472), and the override datarefs bypass X-Plane's own
      * null zone, so nothing else would filter it. */
     s->tune = (tuning_t){ 0.06, 1.00, 0.5 };
-    /* centre lamp only is the DualSense's "player 1" indicator */
+    /* center lamp only is the DualSense's "player 1" indicator */
     s->light = (light_t){ 0, 90, 255, true, LP_SOLID, 0.5, 1.0, LM_MANUAL, 0x04 };
     s->fx_manual[0] = s->fx_manual[1] = (trig_manual_t){ TFX_OFF, 70, 160, 200, 40 };
     s->fxmode = FXM_MANUAL;

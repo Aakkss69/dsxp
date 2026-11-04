@@ -47,7 +47,7 @@
 #define CMD_DESC_MAX  256
 
 #define TICK_HZ                 60.0
-#define INPUT_STALE_SEC         0.25  /* centre the yoke after this long without input */
+#define INPUT_STALE_SEC         0.25  /* center the yoke after this long without input */
 #define INPUT_LOST_SEC          2.0   /* treat the controller as gone after this       */
 #define OVERRIDE_REASSERT_SEC   1.0
 #define OVERRIDE_RELEASE_REPEAT 3
@@ -115,7 +115,7 @@ enum {
 typedef struct { char cmd[CMD_PATH_MAX]; bool repeat; } binding_t;
 typedef struct { int target; bool invert; } axis_map_t;
 typedef struct { double deadzone; double curve; double gesture; } tuning_t;
-/* Light bar: a static colour, or an animated pattern built from it. */
+/* Light bar: a static color, or an animated pattern built from it. */
 typedef enum { LP_SOLID = 0, LP_BREATHE, LP_PULSE, LP_STROBE, LP_RAINBOW, LP_ALERT,
                LP_COUNT } lpat_t;
 typedef enum { LM_MANUAL = 0, LM_SIM } lmode_t;
@@ -124,8 +124,8 @@ typedef struct {
     bool on;
     int  pattern;          /* lpat_t */
     double speed;          /* 0..1 */
-    double bright;         /* 0..1, scales the emitted colour */
-    int  mode;             /* lmode_t - sim mode drives colour and pattern */
+    double bright;         /* 0..1, scales the emitted color */
+    int  mode;             /* lmode_t - sim mode drives color and pattern */
     unsigned char player;  /* player-indicator LED bitmask, 5 lamps */
 } light_t;
 typedef enum { TFX_OFF = 0, TFX_RESIST, TFX_WEAPON, TFX_VIBRATE } tfx_mode_t;
@@ -154,7 +154,7 @@ typedef struct {
     double gn;           /* normal load factor, Gs                              */
     bool   crashed;
     bool   paused;       /* sim/time/paused                              */
-    double elev_m;       /* aircraft elevation MSL, metres                 */
+    double elev_m;       /* aircraft elevation MSL, meters                 */
     double last_rx;
     bool   live;
     char   note[64];
@@ -165,10 +165,10 @@ typedef struct {
     double raw01[S_COUNT];   /* 0..1 exactly as delivered  */
     double val[S_COUNT];     /* shaped: -1..1, or 0..1 for triggers */
     bool   btn[B_COUNT];
-    touch_t touch[2];        /* normalised 0..1 across the pad */
+    touch_t touch[2];        /* normalized 0..1 across the pad */
 } ds_state_t;
 
-/* Gesture recogniser state (was function statics in the prototype). */
+/* Gesture recognizer state (was function statics in the prototype). */
 typedef struct {
     bool   was;
     bool   saw_second;
@@ -193,7 +193,7 @@ typedef struct {
 } settings_t;
 
 /* X-Plane 12 telemetry (RREF ids). Weather is published per layer: 13 layers of
- * turbulence with their centre altitudes (DataRefs.txt: sim/weather/aircraft/
+ * turbulence with their center altitudes (DataRefs.txt: sim/weather/aircraft/
  * turbulence and wind_altitude_msl_m, both float[13]); DSXP interpolates at the
  * aircraft elevation. Wing elements are float[480] laid out as [48 wings][10
  * elements]; even wings are left, odd wings right. */
@@ -361,7 +361,7 @@ void hsv(double h, double s, double v, unsigned char *R, unsigned char *G, unsig
 void light_sim(const wx_t *wx, int *pat, unsigned char *r, unsigned char *g,
                unsigned char *b, double *rate, char *note, size_t note_n,
                const lightsim_cfg_t *cfg);
-bool light_tick(core_t *c, double now);     /* true if the emitted colour changed */
+bool light_tick(core_t *c, double now);     /* true if the emitted color changed */
 
 /* xp_packets.c - X-Plane UDP wire formats */
 #define DREF_LEN 509
@@ -436,7 +436,7 @@ typedef struct {
     void *ctx;
     void (*snapshot)(void *ctx, dsxp_snap_t *out);
     bool (*submit)(void *ctx, const cmd_t *cmd);                   /* false = queue full */
-    void (*catalogue)(void *ctx, void (*fn)(void *arg, const xcmd_t *cmds, int n), void *arg);
+    void (*catalog)(void *ctx, void (*fn)(void *arg, const xcmd_t *cmds, int n), void *arg);
     void (*app_info)(void *ctx, jbuf_t *j);                        /* writes the "app" object */
 } api_env_t;
 void api_handle(const api_env_t *env, const char *method, const char *path,

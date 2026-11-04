@@ -33,7 +33,7 @@ for the buttons.
   turbulence becomes buffet.
 - **Rumble**: hand-set, or *sim mode*, where each motor follows its wing's stall,
   hard landings jolt, and a crash shakes both.
-- **Light bar**: colour and patterns, or *sim mode*, where it shows stall, g-load,
+- **Light bar**: color and patterns, or *sim mode*, where it shows stall, g-load,
   turbulence and crash.
 - **Safe by default**: every override is released when X-Plane closes, the cable
   is plugged in, the controller goes quiet, the Mac sleeps, or DSXP quits. A small

@@ -9,7 +9,7 @@
  *   dsxp-out   blocking IOHIDDeviceSetReport calls, fed through a one-slot
  *              mailbox (latest report wins), so a congested Bluetooth link never
  *              stalls input decoding.
- *   dsxp.io    serial queue: settings writes and command-catalogue loads.
+ *   dsxp.io    serial queue: settings writes and command-catalog loads.
  * Other threads talk to the core only through the command queue (in) and the
  * published snapshot (out). No lock is ever held across I/O.
  */
@@ -92,7 +92,7 @@ typedef struct {
     bool imported;
     bool zombie;                /* a stop timed out: threads may still be alive */
     atomic_int want_suspend;    /* -1 none, 0 resume, 1 suspend (F21) */
-    atomic_uint cmds_gen;       /* bumped on every catalogue load (F17) */
+    atomic_uint cmds_gen;       /* bumped on every catalog load (F17) */
 } runtime_t;
 
 static runtime_t R = {
@@ -359,7 +359,7 @@ static void publish(core_t *c, double now) {
     st.report_hz = c->report_hz;
     st.xp_port = c->bridge.port;
     snprintf(st.xp_exe_path, sizeof st.xp_exe_path, "%s", c->xp_exe);
-    /* the catalogue changes rarely: take its lock only when the generation moved,
+    /* the catalog changes rarely: take its lock only when the generation moved,
      * not 60 times a second (F17) */
     static unsigned seen_gen = (unsigned)-1;
     static int cached_ncmds;
@@ -588,7 +588,7 @@ static void *core_main(void *arg) {
     return NULL;
 }
 
-/* ------------------------------------------------------- commands catalogue */
+/* ------------------------------------------------------- commands catalog */
 
 static void load_commands_now(const char *path) {
     size_t len = 0;
@@ -854,7 +854,7 @@ static void runtime_snapshot(void *ctx, dsxp_snap_t *out) {
     pthread_mutex_unlock(&R.snap_lock);
 }
 
-static void runtime_catalogue(void *ctx, void (*fn)(void *, const xcmd_t *, int), void *arg) {
+static void runtime_catalog(void *ctx, void (*fn)(void *, const xcmd_t *, int), void *arg) {
     (void)ctx;
     pthread_rwlock_rdlock(&R.cmds_lock);
     fn(arg, R.cmds, R.ncmds);
@@ -868,7 +868,7 @@ static void runtime_app_info(void *ctx, jbuf_t *j) {
     int a = atomic_load(&R.access);
     const char *access = a == DSXP_ACCESS_GRANTED ? "granted" :
                          a == DSXP_ACCESS_DENIED ? "denied" : "unknown";
-    /* the X-Plane folder is the catalogue path minus Resources/plugins/Commands.txt */
+    /* the X-Plane folder is the catalog path minus Resources/plugins/Commands.txt */
     char xpdir[1024];
     snprintf(xpdir, sizeof xpdir, "%s", st.commands_path);
     const char *tail = "/Resources/plugins/Commands.txt";
@@ -910,7 +910,7 @@ static void runtime_app_info(void *ctx, jbuf_t *j) {
 }
 
 void dsxp_api(const char *method, const char *path, const char *query, dsxp_response_t *out) {
-    api_env_t env = { NULL, runtime_snapshot, runtime_submit, runtime_catalogue, runtime_app_info };
+    api_env_t env = { NULL, runtime_snapshot, runtime_submit, runtime_catalog, runtime_app_info };
     api_handle(&env, method, path, query, out);
 }
 

@@ -52,7 +52,7 @@ void xp_wanted_overrides(const settings_t *s, bool want[OV_COUNT]) {
 }
 
 /* Neutral value for the control an override covers, sent before releasing it. */
-static void centre_for(core_t *c, int ov) {
+static void center_for(core_t *c, int ov) {
     switch (ov) {
     case OV_PITCH_I:   xp_send_dref(c, DR_PITCH, 0.0f);   break;
     case OV_ROLL_I:    xp_send_dref(c, DR_ROLL, 0.0f);    break;
@@ -75,7 +75,7 @@ void xp_engage(core_t *c, double now) {
 }
 
 /*
- * Centre the controls (toe brakes too) and release every override, twice: UDP can
+ * Center the controls (toe brakes too) and release every override, twice: UDP can
  * drop. If X-Plane was busy (loading, stalled) its socket buffer may be full and
  * drop exactly these packets, so every override that was on gets further releases
  * from xp_release_tick() while X-Plane keeps running.
@@ -112,7 +112,7 @@ void xp_release_tick(core_t *c, double now) {
     }
     for (int k = 0; k < OV_COUNT; k++) {
         if (c->ov_release_left[k] > 0 && now >= c->ov_release_at[k]) {
-            centre_for(c, k);
+            center_for(c, k);
             xp_send_dref(c, OV_PATH[k], 0.0f);
             c->ov_release_left[k]--;
             c->ov_release_at[k] = now + c->bridge.override_reassert_s;
@@ -124,7 +124,7 @@ void xp_release_tick(core_t *c, double now) {
  * Override planner. A wanted override is re-asserted every second: X-Plane may
  * not be listening yet when the process first appears, and it resets overrides
  * on an aircraft reload. An override that stops being wanted (its axis was
- * unmapped) gets a centred value, then "off", repeated a few times, so the axis
+ * unmapped) gets a centered value, then "off", repeated a few times, so the axis
  * goes straight back to X-Plane instead of freezing where it was.
  */
 static void plan_overrides(core_t *c, double now) {
@@ -139,7 +139,7 @@ static void plan_overrides(core_t *c, double now) {
                 c->ov_release_left[k] = 0;
             }
         } else if (c->ov_on[k]) {
-            centre_for(c, k);
+            center_for(c, k);
             xp_send_dref(c, OV_PATH[k], 0.0f);
             c->ov_on[k] = false;
             c->ov_release_left[k] = c->bridge.override_release_repeats;
@@ -167,7 +167,7 @@ void xp_push(core_t *c, double now) {
             double v = c->state.val[i];       /* -1..1 for sticks, 0..1 for triggers */
             double u = c->state.raw01[i];     /* always 0..1                          */
             if (s->axis[i].invert) { v = -v; u = 1.0 - u; }
-            /* a stick used as a unipolar control needs its centred value remapped */
+            /* a stick used as a unipolar control needs its centered value remapped */
             double uni = (i >= S_L2) ? u : (v + 1.0) / 2.0;
             switch (s->axis[i].target) {
             case AX_ROLL:     roll  += v;   break;

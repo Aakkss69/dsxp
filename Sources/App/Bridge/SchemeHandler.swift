@@ -6,7 +6,8 @@ import WebKit
 /// reach the API.
 @MainActor
 final class SchemeHandler: NSObject, WKURLSchemeHandler {
-    var onQuit: (() -> Void)?
+    /// Asks the user, then answers true if DSXP is quitting.
+    var onQuit: ((@escaping @MainActor (Bool) -> Void) -> Void)?
     var onPickXPlane: ((@escaping @MainActor (Bool) -> Void) -> Void)?
     var onOpenAccess: (() -> Void)?
 
@@ -41,9 +42,9 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
         switch path {
         case "/api/quit":
             guard method == "POST" else { return respond(urlSchemeTask, 405, "text/plain", Data()) }
-            respondOK(urlSchemeTask)
-            DispatchQueue.main.async { [weak self] in
-                MainActor.assumeIsolated { self?.onQuit?() }
+            guard let quit = onQuit else { return respondOK(urlSchemeTask) }
+            quit { [weak self] ok in
+                self?.respond(urlSchemeTask, 200, "application/json", Data("{\"ok\":\(ok)}".utf8))
             }
         case "/api/pickxp":
             guard method == "POST" else { return respond(urlSchemeTask, 405, "text/plain", Data()) }

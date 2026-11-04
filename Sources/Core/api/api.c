@@ -3,7 +3,7 @@
  * server, now transport-independent: the app serves it through a WKWebView
  * custom-scheme handler, so no TCP port is ever opened.
  *
- *   GET  /api/init         command catalogue + slot/source/target vocabulary
+ *   GET  /api/init         command catalog + slot/source/target vocabulary
  *   GET  /api/state        live axes, buttons, gate, bindings, tuning, app info
  *   POST /api/bind         ?i=<slot>&cmd=<path>&repeat=<0|1>   (empty cmd clears)
  *   POST /api/axis         ?k=<source>&t=<target>&inv=<0|1>
@@ -94,7 +94,7 @@ static void api_init(const api_env_t *env, dsxp_response_t *out) {
     jb_init(&j, 512 * 1024);
     jb_printf(&j, "{\"commands\":[");
     init_arg_t arg = { &j };
-    if (env->catalogue) env->catalogue(env->ctx, init_commands, &arg);
+    if (env->catalog) env->catalog(env->ctx, init_commands, &arg);
     jb_printf(&j, "],\"slots\":[");
     for (int i = 0; i < B_COUNT; i++) {
         jb_printf(&j, "%s{\"i\":%d,\"n\":", i ? "," : "", i);

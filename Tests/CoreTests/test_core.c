@@ -1,4 +1,4 @@
-/* Core behaviour with a fake clock and captured packets: the gate, the override
+/* Core behavior with a fake clock and captured packets: the gate, the override
  * planner, input staleness, telemetry, wind vs manual triggers, saves, output. */
 #include "tests.h"
 #include <ftw.h>
@@ -131,7 +131,7 @@ static void gate_and_overrides(void) {
     CHECK_INT(drefs_with(OV_ROLL, 0.0f), 1);
     for (double t = 3.25; t < 7.0; t += 1.05) { feed(&C, 255, 0x08, t); core_tick(&C, t); }
     CHECK_INT(drefs_with(OV_ROLL, 0.0f), 1 + OVERRIDE_RELEASE_REPEAT);
-    CHECK_INT(drefs(DR_ROLL, NULL), 1);              /* no more roll values after the centre */
+    CHECK_INT(drefs(DR_ROLL, NULL), 1);              /* no more roll values after the center */
     CHECK_INT(drefs_with(OV_ROLL, 1.0f), 0);
 
     /* USB plugged in: X-Plane's native path wins, overrides released twice */
@@ -234,7 +234,7 @@ static void telemetry_and_triggers(void) {
     CHECK_INT(C.rumble.left, 0);
     CHECK(!C.wx.crashed);
     CHECK_NEAR(C.stall_el[0][0] + C.stall_el[0][1] + C.stall_el[0][2], 0.0, 0);
-    CHECK(!strcmp(C.wx.note, "telemetry lost"));
+    CHECK(!strcmp(C.wx.note, "Telemetry lost"));
 }
 
 static void light_sim_alone(void) {
@@ -247,7 +247,7 @@ static void light_sim_alone(void) {
     float vals[] = { 80.0f };
     udp_pairs(&C, ids, vals, 1, true, 1.1);
     core_tick(&C, 1.1);
-    CHECK(!strcmp(C.lnote, "clean"));
+    CHECK(!strcmp(C.lnote, "Clean"));
 
     /* X-Plane quits: unsubscribed (frequency 0) */
     reset_cap();
@@ -282,7 +282,7 @@ static void saves_and_output(void) {
     core_apply_config(&C, &cf, CFB_CONTROLS | CFB_FEEDBACK, 21.6);
     CHECK_NEAR(C.s.tune.curve, 2.0, 1e-12);
     CHECK_INT(C.s.fxmode, FXM_WIND);
-    CHECK(!strcmp(C.wx.note, "waiting for X-Plane"));
+    CHECK(!strcmp(C.wx.note, "Waiting for X-Plane"));
     CHECK_NEAR(C.bridge.telemetry_hz, 10, 1e-12);     /* bridge.conf was not in the mask */
     CHECK_INT(core_save_due(&C, 30.0), 0);
     cf.s.fxmode = FXM_MANUAL;
@@ -365,7 +365,7 @@ static void xp12_telemetry(void) {
     CHECK_INT(C.rumble.left, 0);
     CHECK_INT(C.fx_out[0].mode, TFX_OFF);
     CHECK(C.engaged);
-    CHECK(!strcmp(C.rnote, "paused"));
+    CHECK(!strcmp(C.rnote, "Paused"));
     pv[0] = 0;
     udp_pairs(&C, pid, pv, 1, true, 1.2);
     feed(&C, 128, 0x08, 1.2);
@@ -478,7 +478,7 @@ static void runtime_smoke(void) {
     nftw(root, rm_entry, 16, FTW_DEPTH | FTW_PHYS);
 }
 
-/* What the guard sends after a crash: centred yoke, brakes off, all four
+/* What the guard sends after a crash: centered yoke, brakes off, all four
  * overrides off, and a frequency-0 RREF for every telemetry id (F6, F25). */
 static void guard_packets(void) {
     reset_cap();

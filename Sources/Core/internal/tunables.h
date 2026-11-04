@@ -1,6 +1,6 @@
 /*
  * Values a user can tune in the config files (the .conf files in configs/). The defaults are
- * defined in settings/settings.c and reproduce the prototype's behaviour.
+ * defined in settings/settings.c and reproduce the prototype's behavior.
  * Fractions are 0..1 here and shown as percent in the files.
  */
 #ifndef DSXP_TUNABLES_H

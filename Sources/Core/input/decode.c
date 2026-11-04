@@ -100,7 +100,7 @@ bool ds_decode_report_cfg(ds_state_t *st, gesture_t *g, const tuning_t *tune,
     for (int i = 0; i < S_COUNT; i++) {
         unsigned char raw = r[off[i]];
         st->raw01[i] = (double)raw / 255.0;
-        /* triggers are unipolar 0..1; sticks are centred at 128 */
+        /* triggers are unipolar 0..1; sticks are centered at 128 */
         st->val[i] = (i >= S_L2) ? st->raw01[i]
                                  : shape(((double)raw - 128.0) / 127.0,
                                          tune->deadzone, tune->curve);

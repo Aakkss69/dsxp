@@ -14,10 +14,10 @@ void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     c->s = *s;
     c->bridge = BRIDGE_DEFAULTS;
     if (sinks) c->sinks = *sinks;
-    snprintf(c->rnote, sizeof c->rnote, "%s", c->s.rmode == RM_SIM ? "waiting for X-Plane" : "manual");
-    snprintf(c->lnote, sizeof c->lnote, "manual");
+    snprintf(c->rnote, sizeof c->rnote, "%s", c->s.rmode == RM_SIM ? "Waiting for X-Plane" : "Manual");
+    snprintf(c->lnote, sizeof c->lnote, "Manual");
     snprintf(c->wx.note, sizeof c->wx.note, "%s",
-             c->s.fxmode == FXM_WIND ? "waiting for X-Plane" : "manual");
+             c->s.fxmode == FXM_WIND ? "Waiting for X-Plane" : "Manual");
     if (c->s.fxmode == FXM_MANUAL) {
         c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
         c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
@@ -47,7 +47,7 @@ static void out_send(core_t *c) {
 
 /*
  * Writes are coalesced to at most one per frame. macOS re-asserts its own light
- * bar colour, so ours is held with a slow keepalive even when nothing changed.
+ * bar color, so ours is held with a slow keepalive even when nothing changed.
  */
 void out_tick(core_t *c, double now) {
     if (!c->have_output_device) return;
@@ -151,10 +151,10 @@ void core_set_fxmode(core_t *c, int mode, double now) {
     if (want == FXM_MANUAL) {
         /* hand-set effects come straight back: wind never touched them */
         if (!c->suspended) { c->fx_out[0] = trig_effect(&c->s.fx_manual[0]); c->fx_out[1] = trig_effect(&c->s.fx_manual[1]); }
-        snprintf(c->wx.note, sizeof c->wx.note, "manual");
+        snprintf(c->wx.note, sizeof c->wx.note, "Manual");
     } else {
         c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
-        snprintf(c->wx.note, sizeof c->wx.note, "waiting for X-Plane");
+        snprintf(c->wx.note, sizeof c->wx.note, "Waiting for X-Plane");
     }
     out_mark(c);
     dsxp_log("trigger source -> %s", want == FXM_WIND ? "wind" : "manual");
@@ -167,7 +167,7 @@ void core_set_rmode(core_t *c, int mode, double now) {
     c->s.rmode = want;
     /* never leave the motors spinning when handing control over */
     c->rumble.left = c->rumble.right = 0;
-    snprintf(c->rnote, sizeof c->rnote, "%s", want == RM_SIM ? "waiting for X-Plane" : "manual");
+    snprintf(c->rnote, sizeof c->rnote, "%s", want == RM_SIM ? "Waiting for X-Plane" : "Manual");
     out_mark(c);
     dsxp_log("rumble source -> %s", want == RM_SIM ? "sim" : "manual");
 }
@@ -296,7 +296,8 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         if (s->rmode == RM_SIM || c->suspended) return;        /* sim mode owns the motors */
         if (cmd->u.rumble.has_l) c->rumble.left  = cmd->u.rumble.l;
         if (cmd->u.rumble.has_r) c->rumble.right = cmd->u.rumble.r;
-        snprintf(c->rnote, sizeof c->rnote, "manual %d / %d", c->rumble.left, c->rumble.right);
+        snprintf(c->rnote, sizeof c->rnote, "Manual: left %d%%, right %d%%",
+                 c->rumble.left * 100 / 255, c->rumble.right * 100 / 255);
         out_mark(c);
         break;
     case CMD_RUMBLEMODE: {

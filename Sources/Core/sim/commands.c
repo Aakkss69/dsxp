@@ -1,5 +1,5 @@
 /*
- * X-Plane's command catalogue. X-Plane ships every command with a human-readable
+ * X-Plane's command catalog. X-Plane ships every command with a human-readable
  * description in Resources/plugins/Commands.txt, formatted as <path>, two or more
  * spaces, then <text>. That file is what makes the mapper searchable in plain
  * English. The file belongs to X-Plane and is read from the user's install at

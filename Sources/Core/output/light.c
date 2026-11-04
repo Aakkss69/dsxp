@@ -1,4 +1,4 @@
-/* Light bar: manual colour/patterns, or a sim-driven annunciator. */
+/* Light bar: manual color/patterns, or a sim-driven annunciator. */
 #include "core_internal.h"
 #include <math.h>
 #include <stdio.h>
@@ -29,31 +29,31 @@ void light_sim(const wx_t *wx, int *pat, unsigned char *r, unsigned char *g,
     if (!cfg) cfg = &LIGHTSIM_DEFAULTS;
     if (!wx->live) {                         /* no telemetry: dim amber standby */
         *pat = LP_BREATHE; *r = 120; *g = 70; *b = 0; *rate = 0.3;
-        snprintf(note, note_n, "waiting for X-Plane");
+        snprintf(note, note_n, "Waiting for X-Plane");
         return;
     }
     if (wx->crashed) {
         *pat = LP_STROBE;  *r = 255; *g = 0; *b = 0; *rate = 3.0;
-        snprintf(note, note_n, "CRASH");
+        snprintf(note, note_n, "Crashed");
     } else if (wx->stall_ratio > cfg->stall_alarm) {
         *pat = LP_PULSE;   *r = 255; *g = 0; *b = 0; *rate = 2.5;
-        snprintf(note, note_n, "stall %.0f%%", wx->stall_ratio * 100);
+        snprintf(note, note_n, "Stall %.0f%%", wx->stall_ratio * 100);
     } else if (wx->stall_ratio > cfg->stall_caution) {
         *pat = LP_BREATHE; *r = 255; *g = 120; *b = 0; *rate = 1.5;
-        snprintf(note, note_n, "stall warning");
+        snprintf(note, note_n, "Stall warning");
     } else if (fabs(wx->gn) > cfg->g_caution) {
         *pat = LP_SOLID;   *r = 255; *g = 150; *b = 0; *rate = 1.0;
-        snprintf(note, note_n, "%.1f g", wx->gn);
+        snprintf(note, note_n, "Load %.1f g", wx->gn);
     } else if (wx->turb > cfg->turb_caution) {
         *pat = LP_BREATHE; *r = 0; *g = 200; *b = 220; *rate = 1.2;
-        snprintf(note, note_n, "turbulence %.1f", wx->turb);
+        snprintf(note, note_n, "Turbulence %.1f", wx->turb);
     } else {
         *pat = LP_SOLID;   *r = 0; *g = 190; *b = 90; *rate = 1.0;
-        snprintf(note, note_n, "clean");
+        snprintf(note, note_n, "Clean");
     }
 }
 
-/* Recompute the emitted colour. Patterns refresh at 20 Hz - the bar cannot
+/* Recompute the emitted color. Patterns refresh at 20 Hz - the bar cannot
  * resolve faster and it keeps the Bluetooth link free for input. */
 bool light_tick(core_t *c, double now) {
     const light_t *L = &c->s.light;
@@ -62,10 +62,10 @@ bool light_tick(core_t *c, double now) {
     double rate = 0.25 + 2.25 * L->speed;
     double k0 = L->bright;
 
-    /* sim mode overrides colour, pattern and rate; manual mode uses the picker */
+    /* sim mode overrides color, pattern and rate; manual mode uses the picker */
     if (L->mode == LM_SIM) light_sim(&c->wx, &pattern, &br, &bg, &bb, &rate,
                                      c->lnote, sizeof c->lnote, &c->s.lsim);
-    else snprintf(c->lnote, sizeof c->lnote, "manual");
+    else snprintf(c->lnote, sizeof c->lnote, "Manual");
 
     if (!isfinite(k0) || k0 < 0) k0 = 0;
     if (k0 > 1) k0 = 1;
@@ -93,7 +93,7 @@ bool light_tick(core_t *c, double now) {
         case LP_RAINBOW:
             hsv(ph, 1.0, 1.0, &r, &g, &b);
             break;
-        case LP_ALERT:                              /* base colour vs amber */
+        case LP_ALERT:                              /* base color vs amber */
             if (ph > 0.5) { r = 255; g = 120; b = 0; }
             break;
         default: break;
