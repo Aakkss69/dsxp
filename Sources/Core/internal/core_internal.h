@@ -50,6 +50,7 @@
 #define INPUT_LOST_SEC          2.0   /* treat the controller as gone after this       */
 #define OVERRIDE_REASSERT_SEC   1.0
 #define OVERRIDE_RELEASE_REPEAT 3
+#define THROTTLE_KEEPALIVE_SEC  5.0   /* resend an unchanged throttle this often; 0 = never */
 #define TELEMETRY_TIMEOUT_SEC   3.0
 #define TELEMETRY_RESUB_SEC     5.0
 #define TELEMETRY_HZ            10
@@ -222,6 +223,8 @@ typedef struct core {
     double ov_last[OV_COUNT];
     int    ov_release_left[OV_COUNT];
     double ov_release_at[OV_COUNT];
+    double last_thr, last_thr_at;
+    bool   thr_sent;
 
     /* telemetry */
     wx_t   wx;
@@ -364,7 +367,8 @@ void xp_wanted_overrides(const settings_t *s, bool want[OV_COUNT]);
 void xp_send_dref(core_t *c, const char *path, float value);
 void xp_send_cmnd(core_t *c, const char *cmd);
 void xp_engage(core_t *c, double now);
-void xp_disengage(core_t *c);
+void xp_disengage(core_t *c, double now);
+void xp_release_tick(core_t *c, double now);
 void xp_push(core_t *c, double now);
 
 /* telemetry.c */

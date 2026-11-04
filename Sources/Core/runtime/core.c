@@ -106,7 +106,9 @@ bool core_gate_due(const core_t *c, double now, double last_gate) {
  *   1. a DualSense on Bluetooth, and NOT also on USB - over USB X-Plane's own
  *      HID handling works, so the bridge must stay out of its way
  *   2. its reports are actually arriving
- *   3. X-Plane 12 is running
+ *   3. X-Plane 12 is running and answering: its RREF telemetry arrives, which
+ *      also proves "Accept incoming connections" is on. Without that X-Plane
+ *      ignores every packet, so engaging would only claim control falsely.
  */
 void core_set_gate(core_t *c, bool bt, bool usb, bool xp, const char *xp_exe, double now) {
     c->force_gate = false;
@@ -115,13 +117,14 @@ void core_set_gate(core_t *c, bool bt, bool usb, bool xp, const char *xp_exe, do
     c->xp_running = xp;
     snprintf(c->xp_exe, sizeof c->xp_exe, "%s", xp_exe ? xp_exe : "");
     bool input = core_input_live(c, now);
-    bool ok = bt && !usb && xp && input && !c->suspended && !c->dry_run;
+    bool tele = c->wx.live;
+    bool ok = bt && !usb && xp && input && tele && !c->suspended && !c->dry_run;
     if (ok && !c->engaged) {
-        dsxp_log("gate: bluetooth=%d usb=%d xplane12=%d input=%d -> ACTIVE", bt, usb, xp, input);
+        dsxp_log("gate: bluetooth=%d usb=%d xplane=%d input=%d telemetry=%d -> ACTIVE", bt, usb, xp, input, tele);
         xp_engage(c, now);
     } else if (!ok && c->engaged) {
-        dsxp_log("gate: bluetooth=%d usb=%d xplane12=%d input=%d -> INACTIVE", bt, usb, xp, input);
-        xp_disengage(c);
+        dsxp_log("gate: bluetooth=%d usb=%d xplane=%d input=%d telemetry=%d -> INACTIVE", bt, usb, xp, input, tele);
+        xp_disengage(c, now);
     }
 }
 
@@ -249,7 +252,7 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
     case CMD_SUSPEND:
         if (cmd->u.flag && !c->suspended) {
             c->suspended = true;
-            xp_disengage(c);
+            xp_disengage(c, now);
             c->rumble.left = c->rumble.right = 0;
             c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
             out_mark(c);
@@ -307,10 +310,11 @@ void core_tick(core_t *c, double now) {
     }
     if (light_tick(c, now)) out_mark(c);
 
-    /* input gone quiet for long enough: re-run the gate now, not in 2 s */
-    if (c->engaged && !core_input_live(c, now)) c->force_gate = true;
+    /* input or telemetry gone quiet: re-run the gate now, not in 2 s */
+    if (c->engaged && (!core_input_live(c, now) || !c->wx.live)) c->force_gate = true;
 
     xp_push(c, now);
+    xp_release_tick(c, now);
     out_tick(c, now);
 
     if (c->cfg_dirty && now - c->cfg_dirty_at >= SAVE_DEBOUNCE_SEC) core_flush_save(c);

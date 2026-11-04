@@ -74,12 +74,22 @@ static void udp_pairs(core_t *c, const int32_t *ids, const float *vals, int n, b
     core_on_udp(c, b, 5 + 8 * (size_t)n, loop, now);
 }
 
+/* X-Plane answering: one loopback RREF reply makes telemetry live (the gate needs it) */
+static void tele(core_t *c, double now) {
+    int32_t ids[] = { 1 };
+    float vals[] = { 0.0f };
+    udp_pairs(c, ids, vals, 1, true, now);
+}
+
 static const core_sinks_t SK = { NULL, cap_udp, cap_out, cap_save };
 #define OV_ROLL  "sim/operation/override/override_joystick_roll"
 #define OV_PITCH "sim/operation/override/override_joystick_pitch"
 #define OV_HDG   "sim/operation/override/override_joystick_heading"
 #define OV_BRK   "sim/operation/override/override_toe_brakes"
 #define DR_ROLL  "sim/joystick/yoke_roll_ratio"
+#define DR_LBRK  "sim/cockpit2/controls/left_brake_ratio"
+#define DR_RBRK  "sim/cockpit2/controls/right_brake_ratio"
+#define DR_THR   "sim/cockpit2/engine/actuators/throttle_ratio_all"
 
 static core_t C;
 
@@ -95,6 +105,10 @@ static void gate_and_overrides(void) {
     core_set_gate(&C, true, false, true, "X-Plane", 1.0);
     CHECK(!C.engaged);                               /* no input yet: stay out */
     feed(&C, 128, 0x08, 1.0);
+    core_set_gate(&C, true, false, true, "X-Plane", 1.0);
+    CHECK(!C.engaged);                               /* X-Plane not answering yet (F34) */
+    tele(&C, 1.0);
+    CHECK(C.force_gate);                             /* first reply re-runs the gate */
     core_set_gate(&C, true, false, true, "X-Plane", 1.0);
     CHECK(C.engaged);
     core_tick(&C, 1.0);
@@ -129,12 +143,34 @@ static void gate_and_overrides(void) {
     core_set_gate(&C, true, true, true, "X-Plane", 7.0);
     CHECK(!C.engaged);
     CHECK_INT(drefs_with(OV_PITCH, 0.0f), 2);
+    CHECK_INT(drefs_with(DR_LBRK, 0.0f), 2);         /* brakes let go too (F6) */
+    CHECK_INT(drefs_with(DR_RBRK, 0.0f), 2);
+
+    /* releases repeat while X-Plane runs, only for overrides that were on (F2) */
+    reset_cap();
+    for (double t = 8.05; t < 12.5; t += 1.05) core_tick(&C, t);
+    CHECK_INT(drefs_with(OV_PITCH, 0.0f), OVERRIDE_RELEASE_REPEAT);
+    CHECK_INT(drefs_with(OV_HDG, 0.0f), OVERRIDE_RELEASE_REPEAT);
+    CHECK_INT(drefs_with(OV_ROLL, 0.0f), 0);         /* roll was already handed back */
+    CHECK_INT(drefs_with(OV_BRK, 0.0f), 0);          /* brakes were never overridden */
+
+    /* a disengage while X-Plane quits schedules nothing further */
+    fresh();
+    feed(&C, 128, 0x08, 1.0); tele(&C, 1.0);
+    core_set_gate(&C, true, false, true, "X-Plane", 1.0);
+    core_tick(&C, 1.0);
+    core_set_gate(&C, true, false, false, "", 1.5);
+    CHECK(!C.engaged);
+    reset_cap();
+    for (double t = 2.6; t < 6.0; t += 1.05) core_tick(&C, t);
+    CHECK_INT(drefs_with(OV_PITCH, 0.0f), 0);
 }
 
 static void staleness(void) {
     fresh();
-    feed(&C, 128, 0x08, 10.0);
+    feed(&C, 128, 0x08, 10.0); tele(&C, 10.0);
     core_set_gate(&C, true, false, true, "X-Plane", 10.0);
+    CHECK(C.engaged);
     reset_cap();
     feed(&C, 255, 0x08 | 0x20, 10.0);               /* stick hard over, Cross held */
     core_tick(&C, 10.0);
@@ -252,9 +288,28 @@ static void saves_and_output(void) {
     CHECK(!C.have_report);
 }
 
+/* F7: throttle has no override, so it is sent on change plus a slow keepalive */
+static void throttle(void) {
+    fresh();
+    C.s.axis[S_RY] = (axis_map_t){ AX_THROTTLE, false };
+    feed(&C, 128, 0x08, 1.0); tele(&C, 1.0);
+    core_set_gate(&C, true, false, true, "X-Plane", 1.0);
+    reset_cap();
+    for (double t = 1.0; t < 2.0; t += 1.0 / 60) { feed(&C, 128, 0x08, t); tele(&C, t); core_tick(&C, t); }
+    CHECK_INT(drefs(DR_THR, NULL), 1);               /* a still stick: sent once */
+    C.state.raw01[S_RY] = 0.9;                       /* stick moves */
+    C.last_report_at = 2.0;
+    core_tick(&C, 2.0);
+    CHECK_INT(drefs(DR_THR, NULL), 2);
+    for (double t = 2.0; t < 2.0 + THROTTLE_KEEPALIVE_SEC + 0.5; t += 0.5) {
+        C.last_report_at = t; tele(&C, t); core_tick(&C, t);
+    }
+    CHECK_INT(drefs(DR_THR, NULL), 3);               /* one keepalive */
+}
+
 static void suspend_and_dry_run(void) {
     fresh();
-    feed(&C, 128, 0x08, 1.0);
+    feed(&C, 128, 0x08, 1.0); tele(&C, 1.0);
     core_set_gate(&C, true, false, true, "X-Plane", 1.0);
     CHECK(C.engaged);
     cmd_t sp = { .kind = CMD_SUSPEND }; sp.u.flag = true;
@@ -285,6 +340,7 @@ void test_core(void) {
     light_sim_alone();
     saves_and_output();
     suspend_and_dry_run();
+    throttle();
 
     CHECK(log_name_is_ours("reports-2026-01-02.log"));
     CHECK(log_name_is_ours("events-2026-11-05.log"));

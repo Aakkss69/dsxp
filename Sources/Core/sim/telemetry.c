@@ -102,6 +102,7 @@ void core_on_udp(core_t *c, const unsigned char *buf, size_t n, bool from_loopba
     if (got_l) c->wx.stall_l = (c->sl[0] + c->sl[1] + c->sl[2]) / 3.0;
     if (got_r) c->wx.stall_r = (c->sr[0] + c->sr[1] + c->sr[2]) / 3.0;
     c->wx.last_rx = now;
+    if (!c->wx.live) c->force_gate = true;   /* X-Plane just started answering */
     c->wx.live = true;
 }
 

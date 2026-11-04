@@ -351,7 +351,7 @@ static void noop(void *arg) { (void)arg; }
 /* Runs on the core thread, from the timer, once stop was requested. */
 static void shutdown_core(void) {
     core_t *c = &R.core;
-    xp_disengage(c);
+    xp_disengage(c, now_sec());
     telemetry_unsubscribe(c);
 
     /* stop the writer, then send the quiet report synchronously */

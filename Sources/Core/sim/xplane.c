@@ -3,6 +3,7 @@
  * Pure: packets go out through c->sinks.udp_send.
  */
 #include "core_internal.h"
+#include <math.h>
 #include <string.h>
 
 /* Writable datarefs, confirmed against X-Plane 12 Resources/plugins/DataRefs.txt
@@ -73,20 +74,50 @@ void xp_engage(core_t *c, double now) {
     /* the overrides themselves are asserted by xp_push's planner, every tick */
 }
 
-/* Centre the controls and release every override, twice: UDP can drop. */
-void xp_disengage(core_t *c) {
+/*
+ * Centre the controls (toe brakes too) and release every override, twice: UDP can
+ * drop. If X-Plane was busy (loading, stalled) its socket buffer may be full and
+ * drop exactly these packets, so every override that was on gets further releases
+ * from xp_release_tick() while X-Plane keeps running.
+ */
+void xp_disengage(core_t *c, double now) {
     if (!c->engaged) return;
     for (int k = 0; k < 2; k++) {
         xp_send_dref(c, DR_PITCH, 0.0f);
         xp_send_dref(c, DR_ROLL, 0.0f);
         xp_send_dref(c, DR_HEADING, 0.0f);
+        xp_send_dref(c, DR_LBRAKE, 0.0f);
+        xp_send_dref(c, DR_RBRAKE, 0.0f);
         for (int i = 0; i < OV_COUNT; i++) xp_send_dref(c, OV_PATH[i], 0.0f);
     }
+    for (int i = 0; i < OV_COUNT; i++) {
+        if (c->ov_on[i]) {
+            c->ov_release_left[i] = OVERRIDE_RELEASE_REPEAT;
+            c->ov_release_at[i] = now + OVERRIDE_REASSERT_SEC;
+        }
+        c->ov_on[i] = false;
+    }
     c->engaged = false;
+    c->thr_sent = false;
     memset(c->prev_btn, 0, sizeof c->prev_btn);
-    memset(c->ov_on, 0, sizeof c->ov_on);
-    memset(c->ov_release_left, 0, sizeof c->ov_release_left);
     dsxp_log("DISENGAGED - X-Plane has controls back");
+}
+
+/* Further override releases after a disengage, while X-Plane is still running. */
+void xp_release_tick(core_t *c, double now) {
+    if (c->engaged || c->dry_run) return;
+    if (!c->xp_running) {                    /* X-Plane gone: its overrides went with it */
+        memset(c->ov_release_left, 0, sizeof c->ov_release_left);
+        return;
+    }
+    for (int k = 0; k < OV_COUNT; k++) {
+        if (c->ov_release_left[k] > 0 && now >= c->ov_release_at[k]) {
+            centre_for(c, k);
+            xp_send_dref(c, OV_PATH[k], 0.0f);
+            c->ov_release_left[k]--;
+            c->ov_release_at[k] = now + OVERRIDE_REASSERT_SEC;
+        }
+    }
 }
 
 /*
@@ -167,7 +198,15 @@ void xp_push(core_t *c, double now) {
     if (want[OV_ROLL_I])    xp_send_dref(c, DR_ROLL,    (float)roll);
     if (want[OV_PITCH_I])   xp_send_dref(c, DR_PITCH,   (float)pitch);
     if (want[OV_HEADING_I]) xp_send_dref(c, DR_HEADING, (float)yaw);
-    if (thr >= 0) xp_send_dref(c, DR_THROTL, (float)thr);
+    /* Throttle has no override, so writing it every tick would fight the mouse,
+     * keyboard and autothrottle. Send it on change, plus a slow keepalive. */
+    if (thr >= 0 && (!c->thr_sent || fabs(thr - c->last_thr) >= 0.002 ||
+                     (THROTTLE_KEEPALIVE_SEC > 0 && now - c->last_thr_at >= THROTTLE_KEEPALIVE_SEC))) {
+        xp_send_dref(c, DR_THROTL, (float)thr);
+        c->last_thr = thr;
+        c->last_thr_at = now;
+        c->thr_sent = true;
+    }
     if (lb  >= 0) xp_send_dref(c, DR_LBRAKE, (float)lb);
     if (rb  >= 0) xp_send_dref(c, DR_RBRAKE, (float)rb);
 
