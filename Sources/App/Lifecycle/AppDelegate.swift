@@ -23,9 +23,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         signal(SIGPIPE, SIG_IGN)
         installSignalHandlers()
 
-        // the crash guard: cleans up after us if we ever die without doing so
-        guardFD = dsxp_guard_spawn(Bundle.main.executablePath ?? CommandLine.arguments[0])
-
         let bridge = CoreBridge.shared
         bridge.statusChanged = { [weak self] in self?.statusChanged() }
         bridge.commandsLoaded = { [weak self] in self?.commandsLoaded() }
@@ -36,6 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let rc = bridge.start(commandsPath: folder.map { XPlaneLocator.commandsFile(in: $0).path },
                               importLegacy: importLegacy)
         if rc == 0 && importLegacy { defaults.set(true, forKey: "ImportedLegacyBindings") }
+
+        // the crash guard: cleans up after us if we ever die without doing so. Spawned
+        // after the core starts so it inherits the core's UDP socket.
+        guardFD = dsxp_guard_spawn(Bundle.main.executablePath ?? CommandLine.arguments[0])
 
         let menu = StatusMenuController()
         menu.openMapper = { [weak self] in self?.mapper.show() }

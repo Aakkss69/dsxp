@@ -98,6 +98,9 @@ static runtime_t R = {
 
 bool runtime_test_disable_hid = false;   /* tests: run the core without IOKit HID */
 
+int runtime_udp_socket(void) { return R.sock; }
+int runtime_xp_port(void) { return R.sock >= 0 ? ntohs(R.xp.sin_port) : XP_PORT; }
+
 static unsigned char g_bt_buf[512];   /* input buffer of the one Bluetooth device */
 
 double now_sec(void) {

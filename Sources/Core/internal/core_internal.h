@@ -428,6 +428,11 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
 /* core_thread.c */
 double now_sec(void);                       /* monotonic seconds */
 extern bool runtime_test_disable_hid;       /* tests: run without IOKit HID */
+int  runtime_udp_socket(void);              /* the core's socket, -1 if not running */
+int  runtime_xp_port(void);
+
+/* guard.c */
+void guard_build_release(void (*send)(void *ctx, const unsigned char *buf, size_t len), void *ctx);
 
 /* fileio.c */
 char *file_read_all(const char *path, size_t max, size_t *len);

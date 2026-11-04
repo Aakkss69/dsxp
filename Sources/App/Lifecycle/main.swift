@@ -4,9 +4,11 @@ import DSXPCore
 // Guard mode: the app re-executes itself with --dsxp-guard to clean up if it
 // ever dies without doing so (see Sources/Core/platform/guard.c). Nothing else runs.
 let arguments = CommandLine.arguments
-if let i = arguments.firstIndex(of: "--dsxp-guard"), i + 1 < arguments.count,
-   let fd = Int32(arguments[i + 1]) {
-    exit(dsxp_guard_main(fd))
+// Arguments: --dsxp-guard <pipe fd> <socket fd or -1> <X-Plane port>
+if let i = arguments.firstIndex(of: "--dsxp-guard"), i + 3 < arguments.count,
+   let pipeFD = Int32(arguments[i + 1]), let sockFD = Int32(arguments[i + 2]),
+   let port = Int32(arguments[i + 3]) {
+    exit(dsxp_guard_main(pipeFD, sockFD, port))
 }
 
 // One bridge at a time. A second launch asks the running one to show its mapper.

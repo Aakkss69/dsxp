@@ -464,8 +464,23 @@ static void runtime_smoke(void) {
     nftw(root, rm_entry, 16, FTW_DEPTH | FTW_PHYS);
 }
 
+/* What the guard sends after a crash: centred yoke, brakes off, all four
+ * overrides off, and a frequency-0 RREF for every telemetry id (F6, F25). */
+static void guard_packets(void) {
+    reset_cap();
+    guard_build_release(cap_udp, NULL);
+    CHECK_INT(drefs_with(DR_ROLL, 0.0f), 1);
+    CHECK_INT(drefs_with(DR_LBRK, 0.0f), 1);
+    CHECK_INT(drefs_with(DR_RBRK, 0.0f), 1);
+    CHECK_INT(drefs_with(OV_ROLL, 0.0f) + drefs_with(OV_PITCH, 0.0f) + drefs_with(OV_HDG, 0.0f) +
+              drefs_with(OV_BRK, 0.0f), 4);
+    CHECK_INT(rrefs(0), telemetry_rref_count());
+    CHECK_INT(rrefs(TELEMETRY_HZ), 0);
+}
+
 void test_core(void) {
     runtime_smoke();
+    guard_packets();
     gate_and_overrides();
     staleness();
     telemetry_and_triggers();

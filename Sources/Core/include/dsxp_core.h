@@ -86,9 +86,12 @@ void dsxp_api(const char *method, const char *path, const char *query,
 void dsxp_response_free(dsxp_response_t *r);
 
 /* Crash guard: a helper process that cleans up if the app dies without doing so. */
+/* Spawn it after dsxp_start: it inherits the core's UDP socket so it can cancel
+ * the telemetry subscriptions X-Plane is streaming to that socket. */
 int  dsxp_guard_spawn(const char *exe_path);  /* returns the pipe fd, or -1       */
 void dsxp_guard_release(int fd);              /* clean exit: guard leaves quietly */
-int  dsxp_guard_main(int fd);                 /* body of the guard process        */
+void dsxp_guard_port(int fd, int port);       /* X-Plane's port changed           */
+int  dsxp_guard_main(int pipe_fd, int sock_fd, int port);   /* body of the guard  */
 
 #ifdef __cplusplus
 }
