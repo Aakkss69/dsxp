@@ -1,0 +1,895 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02CE6183260673949C31B48D /* SchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327DB461B1DB16B28C708494 /* SchemeHandler.swift */; };
+		05BEB6EDFC6B5E7970FF38E3 /* test_wire.c in Sources */ = {isa = PBXBuildFile; fileRef = D20976879F304F3D4B9EE53E /* test_wire.c */; };
+		09A1D05834E1DE362339874B /* XPlaneLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07244932A3089076FD71655 /* XPlaneLocator.swift */; };
+		0EF564F6922C9B92AB0A799B /* CoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFADBE2F6727BA62E8B2DD8A /* CoreBridge.swift */; };
+		11CB97FEE3FE62BD6F191095 /* log.c in Sources */ = {isa = PBXBuildFile; fileRef = 5BE23F6C11197224D8E95D71 /* log.c */; };
+		13A4742CF38F78E05B9BC77E /* xp_packets.c in Sources */ = {isa = PBXBuildFile; fileRef = 19730D6C05D0C1873CECA9C8 /* xp_packets.c */; };
+		20FC29DB7F887A794197E268 /* gate.c in Sources */ = {isa = PBXBuildFile; fileRef = 922F5EEB46C6DE976D45EF3A /* gate.c */; };
+		2B3AC51C27DC762BD3D758C8 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72A8EDAE4788923AED068B9E /* CoreFoundation.framework */; };
+		2D445FB64B8C9EF19D981EEA /* decode.c in Sources */ = {isa = PBXBuildFile; fileRef = 9141980519CBD984101D1425 /* decode.c */; };
+		34B5DC2C4C83A2FF626D3B23 /* light.c in Sources */ = {isa = PBXBuildFile; fileRef = 8E320CE3F8B63EFDDB3D98EE /* light.c */; };
+		3AD45AC1B3952EE312E34363 /* StatusMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F62B881EB5C6AF1A09F413 /* StatusMenuController.swift */; };
+		40D02939E7634CEBE65EFFE3 /* module.modulemap in CopyFiles */ = {isa = PBXBuildFile; fileRef = 56ACA707A5F4C06D8C30654B /* module.modulemap */; };
+		4AE3C4000806506C792C5E58 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72A8EDAE4788923AED068B9E /* CoreFoundation.framework */; };
+		4E973F4B9A8A9CE3158D6320 /* api.c in Sources */ = {isa = PBXBuildFile; fileRef = 1381BB7D80D3E3BF8C912583 /* api.c */; };
+		4EC422D2F08F5CC52E17F0E5 /* output.c in Sources */ = {isa = PBXBuildFile; fileRef = 82006AA1D5F3580361415314 /* output.c */; };
+		5D13B7D8BB5500745357C5F8 /* test_bindings.c in Sources */ = {isa = PBXBuildFile; fileRef = F00A221E204BB9F523FDC4D1 /* test_bindings.c */; };
+		636DE4765797CCD362688938 /* MapperWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA3FE7CB80211B2DEBE5F72 /* MapperWindowController.swift */; };
+		643BE965211C61933980BA71 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFF36B5CC890C9E3D521AB3E /* IOKit.framework */; };
+		646F02D017CC15EE6979EFED /* telemetry.c in Sources */ = {isa = PBXBuildFile; fileRef = AE07EDD83876D0CAAA6C8D06 /* telemetry.c */; };
+		6E2CEA0F59022960D74ADF13 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB721C79E561D452ECBE5760 /* Assets.xcassets */; };
+		7210E72C7C669D1E78BA5EB1 /* runner.c in Sources */ = {isa = PBXBuildFile; fileRef = 60FE23D149AA8EF847C89233 /* runner.c */; };
+		764FFED3E298F3214E2C58DC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 351B44CF55C376AB7ABD8C44 /* main.swift */; };
+		8278BEB4C8C89F4BAFA8B112 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72A8EDAE4788923AED068B9E /* CoreFoundation.framework */; };
+		89CB4DC4AA1DAEEF3C023170 /* core.c in Sources */ = {isa = PBXBuildFile; fileRef = 2A060C65304C7024ACB7998F /* core.c */; };
+		8F340CE59EED45B21A41315F /* CoreTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 71DC65F09F3E439E29FE56E2 /* CoreTests.m */; };
+		9251CE797EE90E1A2D50C426 /* vocab.c in Sources */ = {isa = PBXBuildFile; fileRef = 22272F917FCD3EA190A4E362 /* vocab.c */; };
+		93975578703BAF61CAA3E6D0 /* web in Resources */ = {isa = PBXBuildFile; fileRef = 77D947CE78D5F79508C3FBDD /* web */; };
+		95AEFA60AF578142022B61ED /* test_core.c in Sources */ = {isa = PBXBuildFile; fileRef = 6C396E705CF6F207B918F8BC /* test_core.c */; };
+		97328F6202A3286C3C489F9C /* core_thread.c in Sources */ = {isa = PBXBuildFile; fileRef = B9C0E38DB235D48825993FB9 /* core_thread.c */; };
+		99AFF88008EAF9F91B189F31 /* json.c in Sources */ = {isa = PBXBuildFile; fileRef = 33CE11B743D36E6156C53954 /* json.c */; };
+		9B5B59B007CD37AEA28D8338 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A468DCD6B1831D06AE5FD1C7 /* AppDelegate.swift */; };
+		9D7839B3DD5E826D79A514F6 /* fileio.c in Sources */ = {isa = PBXBuildFile; fileRef = 5ACEBE82F08C7A87C6E8695E /* fileio.c */; };
+		9D85F7325217B012E7E04E4C /* test_input.c in Sources */ = {isa = PBXBuildFile; fileRef = BC92844BB3C5698354333F21 /* test_input.c */; };
+		AD28618A22919F9BC6EB93B3 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = E1A784A30F7F7DB83D636069 /* main.c */; };
+		B037F7245A517B8A4355977C /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFF36B5CC890C9E3D521AB3E /* IOKit.framework */; };
+		B0708C1010934B642AFE5487 /* json_check.c in Sources */ = {isa = PBXBuildFile; fileRef = 2E0B58893B7048AD27E33B45 /* json_check.c */; };
+		B185862D5A097006AD526F6D /* libDSXPCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */; };
+		B1AD67F217C26D62315CD6D5 /* bindings.c in Sources */ = {isa = PBXBuildFile; fileRef = DA2DF9E78F7458021E601A52 /* bindings.c */; };
+		B79CC97AB982D39A47E13FD2 /* libDSXPCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */; };
+		B9F7F130AE005F72B1784125 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D924C5A76991D3E003CC942C /* WebKit.framework */; };
+		BB9359FD0C77E16852C6E4C6 /* LoginItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7EA2C4B6298357BF7701036 /* LoginItem.swift */; };
+		BBB15C9FD567A56C9D184D32 /* Paths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A199EFBD645B9C13C476691 /* Paths.swift */; };
+		BFA039EC5C73105C8A54315C /* SingleInstance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C224981B7749122D39CBA1E /* SingleInstance.swift */; };
+		C96BD1802E073C041BCA4E34 /* ServiceManagement.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 115AD210C39BBA5DA4EE2B65 /* ServiceManagement.framework */; };
+		CB5C867C0511842085C85DF6 /* rumble.c in Sources */ = {isa = PBXBuildFile; fileRef = 6077DA7750F4F319878D4556 /* rumble.c */; };
+		CECDB22160D255BC7B62EC5F /* guard.c in Sources */ = {isa = PBXBuildFile; fileRef = 681D9DD757FE29B841CB064F /* guard.c */; };
+		D6D669683498716C786F235A /* dsxp_core.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = F6C970D6187067F35A54BEBB /* dsxp_core.h */; };
+		D96C611A0EFD5648F8634C0B /* wind.c in Sources */ = {isa = PBXBuildFile; fileRef = 4BBE62913A773BBE6AFBFCBA /* wind.c */; };
+		DC5A66824E5C25441C093E23 /* commands.c in Sources */ = {isa = PBXBuildFile; fileRef = 0147E42859FA9C537C67E55D /* commands.c */; };
+		E9AF0AF9AF042440CA572914 /* libDSXPCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */; };
+		F0C72962FD9CE15D035EC940 /* xplane.c in Sources */ = {isa = PBXBuildFile; fileRef = 5FE4790CDBF179FC5E3647EC /* xplane.c */; };
+		F490B8E5FC494DE8F4E0196A /* core_internal.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9721656D640A6F1E1160906A /* core_internal.h */; };
+		FEF8FA27D6093FE0F9000EF3 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFF36B5CC890C9E3D521AB3E /* IOKit.framework */; };
+		FFDC5CBF1D6B0C8CB055DE76 /* test_api.c in Sources */ = {isa = PBXBuildFile; fileRef = DE57317E9D5B2A92B1956A53 /* test_api.c */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0737424B1C6469D44AB5BB7E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2AB5927D9C09E9B30C33E43F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B74BED7E904BA0898CEBAE96;
+			remoteInfo = DSXPCore;
+		};
+		7540448AE6AB7793E7281F39 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2AB5927D9C09E9B30C33E43F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B74BED7E904BA0898CEBAE96;
+			remoteInfo = DSXPCore;
+		};
+		B3CE2E666817F98016283DE1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2AB5927D9C09E9B30C33E43F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B74BED7E904BA0898CEBAE96;
+			remoteInfo = DSXPCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1D17A1FA33A70490FAA05876 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "include/$(PRODUCT_NAME)";
+			dstSubfolderSpec = 16;
+			files = (
+				F490B8E5FC494DE8F4E0196A /* core_internal.h in CopyFiles */,
+				D6D669683498716C786F235A /* dsxp_core.h in CopyFiles */,
+				40D02939E7634CEBE65EFFE3 /* module.modulemap in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0147E42859FA9C537C67E55D /* commands.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = commands.c; sourceTree = "<group>"; };
+		02A74D720715AD14BD89FC4D /* tests.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = tests.h; sourceTree = "<group>"; };
+		0A199EFBD645B9C13C476691 /* Paths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paths.swift; sourceTree = "<group>"; };
+		115AD210C39BBA5DA4EE2B65 /* ServiceManagement.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ServiceManagement.framework; path = System/Library/Frameworks/ServiceManagement.framework; sourceTree = SDKROOT; };
+		1316E52EC301AC97F4F0462A /* DSXP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DSXP.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1381BB7D80D3E3BF8C912583 /* api.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = api.c; sourceTree = "<group>"; };
+		19730D6C05D0C1873CECA9C8 /* xp_packets.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xp_packets.c; sourceTree = "<group>"; };
+		22272F917FCD3EA190A4E362 /* vocab.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vocab.c; sourceTree = "<group>"; };
+		2A060C65304C7024ACB7998F /* core.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core.c; sourceTree = "<group>"; };
+		2E0B58893B7048AD27E33B45 /* json_check.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = json_check.c; sourceTree = "<group>"; };
+		327DB461B1DB16B28C708494 /* SchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemeHandler.swift; sourceTree = "<group>"; };
+		33CE11B743D36E6156C53954 /* json.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = json.c; sourceTree = "<group>"; };
+		351B44CF55C376AB7ABD8C44 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		4BBE62913A773BBE6AFBFCBA /* wind.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = wind.c; sourceTree = "<group>"; };
+		56ACA707A5F4C06D8C30654B /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
+		5ACEBE82F08C7A87C6E8695E /* fileio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fileio.c; sourceTree = "<group>"; };
+		5BE23F6C11197224D8E95D71 /* log.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = log.c; sourceTree = "<group>"; };
+		5FE4790CDBF179FC5E3647EC /* xplane.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xplane.c; sourceTree = "<group>"; };
+		6077DA7750F4F319878D4556 /* rumble.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = rumble.c; sourceTree = "<group>"; };
+		60FE23D149AA8EF847C89233 /* runner.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = runner.c; sourceTree = "<group>"; };
+		66F62B881EB5C6AF1A09F413 /* StatusMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenuController.swift; sourceTree = "<group>"; };
+		681D9DD757FE29B841CB064F /* guard.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = guard.c; sourceTree = "<group>"; };
+		6C396E705CF6F207B918F8BC /* test_core.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_core.c; sourceTree = "<group>"; };
+		7087147C4534DDF6E82AA4CF /* dsxp-cli */ = {isa = PBXFileReference; includeInIndex = 0; path = "dsxp-cli"; sourceTree = BUILT_PRODUCTS_DIR; };
+		71DC65F09F3E439E29FE56E2 /* CoreTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CoreTests.m; sourceTree = "<group>"; };
+		72A8EDAE4788923AED068B9E /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		77D947CE78D5F79508C3FBDD /* web */ = {isa = PBXFileReference; lastKnownFileType = folder; name = web; path = App/Resources/web; sourceTree = SOURCE_ROOT; };
+		7CC4403B2CADF353C02BB9E3 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		82006AA1D5F3580361415314 /* output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = output.c; sourceTree = "<group>"; };
+		8C224981B7749122D39CBA1E /* SingleInstance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstance.swift; sourceTree = "<group>"; };
+		8E320CE3F8B63EFDDB3D98EE /* light.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = light.c; sourceTree = "<group>"; };
+		9141980519CBD984101D1425 /* decode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = decode.c; sourceTree = "<group>"; };
+		922F5EEB46C6DE976D45EF3A /* gate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = gate.c; sourceTree = "<group>"; };
+		9721656D640A6F1E1160906A /* core_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = core_internal.h; sourceTree = "<group>"; };
+		A468DCD6B1831D06AE5FD1C7 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A7EA2C4B6298357BF7701036 /* LoginItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItem.swift; sourceTree = "<group>"; };
+		A8664B4CD11BE2A8BC0EFF0B /* DSXP.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DSXP.entitlements; sourceTree = "<group>"; };
+		AB721C79E561D452ECBE5760 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AE07EDD83876D0CAAA6C8D06 /* telemetry.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = telemetry.c; sourceTree = "<group>"; };
+		AF20BD34357C0663959E3F51 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B9C0E38DB235D48825993FB9 /* core_thread.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core_thread.c; sourceTree = "<group>"; };
+		BC92844BB3C5698354333F21 /* test_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_input.c; sourceTree = "<group>"; };
+		BCA3FE7CB80211B2DEBE5F72 /* MapperWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapperWindowController.swift; sourceTree = "<group>"; };
+		CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libDSXPCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		D20976879F304F3D4B9EE53E /* test_wire.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_wire.c; sourceTree = "<group>"; };
+		D924C5A76991D3E003CC942C /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		DA2DF9E78F7458021E601A52 /* bindings.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bindings.c; sourceTree = "<group>"; };
+		DE57317E9D5B2A92B1956A53 /* test_api.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_api.c; sourceTree = "<group>"; };
+		E07244932A3089076FD71655 /* XPlaneLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPlaneLocator.swift; sourceTree = "<group>"; };
+		E1A784A30F7F7DB83D636069 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		E5260FD5B49C449BBC858901 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		EFF36B5CC890C9E3D521AB3E /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+		F00A221E204BB9F523FDC4D1 /* test_bindings.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_bindings.c; sourceTree = "<group>"; };
+		F2DB421CA57D6D03457C0321 /* CoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F6C970D6187067F35A54BEBB /* dsxp_core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = dsxp_core.h; sourceTree = "<group>"; };
+		FFADBE2F6727BA62E8B2DD8A /* CoreBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreBridge.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A57EE27CA90F161745D0B115 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B185862D5A097006AD526F6D /* libDSXPCore.a in Frameworks */,
+				FEF8FA27D6093FE0F9000EF3 /* IOKit.framework in Frameworks */,
+				2B3AC51C27DC762BD3D758C8 /* CoreFoundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CE8B605B268C03D47BC61BE2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B79CC97AB982D39A47E13FD2 /* libDSXPCore.a in Frameworks */,
+				643BE965211C61933980BA71 /* IOKit.framework in Frameworks */,
+				4AE3C4000806506C792C5E58 /* CoreFoundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE77A891456C0EE64CC78FC1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9AF0AF9AF042440CA572914 /* libDSXPCore.a in Frameworks */,
+				B037F7245A517B8A4355977C /* IOKit.framework in Frameworks */,
+				8278BEB4C8C89F4BAFA8B112 /* CoreFoundation.framework in Frameworks */,
+				B9F7F130AE005F72B1784125 /* WebKit.framework in Frameworks */,
+				C96BD1802E073C041BCA4E34 /* ServiceManagement.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		04A1A52E1610CE31F662E656 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				2E37589B1A443FFF7AE30217 /* CoreTests */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		2E37589B1A443FFF7AE30217 /* CoreTests */ = {
+			isa = PBXGroup;
+			children = (
+				71DC65F09F3E439E29FE56E2 /* CoreTests.m */,
+				2E0B58893B7048AD27E33B45 /* json_check.c */,
+				60FE23D149AA8EF847C89233 /* runner.c */,
+				DE57317E9D5B2A92B1956A53 /* test_api.c */,
+				F00A221E204BB9F523FDC4D1 /* test_bindings.c */,
+				6C396E705CF6F207B918F8BC /* test_core.c */,
+				BC92844BB3C5698354333F21 /* test_input.c */,
+				D20976879F304F3D4B9EE53E /* test_wire.c */,
+				02A74D720715AD14BD89FC4D /* tests.h */,
+			);
+			path = CoreTests;
+			sourceTree = "<group>";
+		};
+		30649CF92F837A5C89513E72 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				72A8EDAE4788923AED068B9E /* CoreFoundation.framework */,
+				EFF36B5CC890C9E3D521AB3E /* IOKit.framework */,
+				115AD210C39BBA5DA4EE2B65 /* ServiceManagement.framework */,
+				D924C5A76991D3E003CC942C /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		369D6C88783D74EDC3D35931 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				77D947CE78D5F79508C3FBDD /* web */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		3B7051E6BE0CC94710AC5CCD /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A468DCD6B1831D06AE5FD1C7 /* AppDelegate.swift */,
+				AB721C79E561D452ECBE5760 /* Assets.xcassets */,
+				FFADBE2F6727BA62E8B2DD8A /* CoreBridge.swift */,
+				A8664B4CD11BE2A8BC0EFF0B /* DSXP.entitlements */,
+				AF20BD34357C0663959E3F51 /* Info.plist */,
+				A7EA2C4B6298357BF7701036 /* LoginItem.swift */,
+				351B44CF55C376AB7ABD8C44 /* main.swift */,
+				BCA3FE7CB80211B2DEBE5F72 /* MapperWindowController.swift */,
+				0A199EFBD645B9C13C476691 /* Paths.swift */,
+				327DB461B1DB16B28C708494 /* SchemeHandler.swift */,
+				8C224981B7749122D39CBA1E /* SingleInstance.swift */,
+				66F62B881EB5C6AF1A09F413 /* StatusMenuController.swift */,
+				E07244932A3089076FD71655 /* XPlaneLocator.swift */,
+				369D6C88783D74EDC3D35931 /* Resources */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		46E35300C1539855377347F8 /* dsxp-cli */ = {
+			isa = PBXGroup;
+			children = (
+				E1A784A30F7F7DB83D636069 /* main.c */,
+			);
+			path = "dsxp-cli";
+			sourceTree = "<group>";
+		};
+		6B4084B9D9259B478ED98665 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				1381BB7D80D3E3BF8C912583 /* api.c */,
+				DA2DF9E78F7458021E601A52 /* bindings.c */,
+				0147E42859FA9C537C67E55D /* commands.c */,
+				9721656D640A6F1E1160906A /* core_internal.h */,
+				B9C0E38DB235D48825993FB9 /* core_thread.c */,
+				2A060C65304C7024ACB7998F /* core.c */,
+				9141980519CBD984101D1425 /* decode.c */,
+				5ACEBE82F08C7A87C6E8695E /* fileio.c */,
+				922F5EEB46C6DE976D45EF3A /* gate.c */,
+				681D9DD757FE29B841CB064F /* guard.c */,
+				33CE11B743D36E6156C53954 /* json.c */,
+				8E320CE3F8B63EFDDB3D98EE /* light.c */,
+				5BE23F6C11197224D8E95D71 /* log.c */,
+				82006AA1D5F3580361415314 /* output.c */,
+				6077DA7750F4F319878D4556 /* rumble.c */,
+				AE07EDD83876D0CAAA6C8D06 /* telemetry.c */,
+				22272F917FCD3EA190A4E362 /* vocab.c */,
+				4BBE62913A773BBE6AFBFCBA /* wind.c */,
+				19730D6C05D0C1873CECA9C8 /* xp_packets.c */,
+				5FE4790CDBF179FC5E3647EC /* xplane.c */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
+		75230BFB965B7DD6CF3D3E96 /* Tools */ = {
+			isa = PBXGroup;
+			children = (
+				46E35300C1539855377347F8 /* dsxp-cli */,
+			);
+			path = Tools;
+			sourceTree = "<group>";
+		};
+		7F1ABB89C61CF6AD820DCD59 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				97DAF3CD1CD79C94A6CAC6C2 /* include */,
+				6B4084B9D9259B478ED98665 /* src */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		96CB3B8A7030FE5C7F8F7AA8 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				E5260FD5B49C449BBC858901 /* Debug.xcconfig */,
+				7CC4403B2CADF353C02BB9E3 /* Release.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		97DAF3CD1CD79C94A6CAC6C2 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				F6C970D6187067F35A54BEBB /* dsxp_core.h */,
+				56ACA707A5F4C06D8C30654B /* module.modulemap */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
+		C1002A0C7820E30B987A793B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F2DB421CA57D6D03457C0321 /* CoreTests.xctest */,
+				7087147C4534DDF6E82AA4CF /* dsxp-cli */,
+				1316E52EC301AC97F4F0462A /* DSXP.app */,
+				CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EA66B9C59D83D767D4ECA3A7 = {
+			isa = PBXGroup;
+			children = (
+				3B7051E6BE0CC94710AC5CCD /* App */,
+				96CB3B8A7030FE5C7F8F7AA8 /* Config */,
+				7F1ABB89C61CF6AD820DCD59 /* Core */,
+				04A1A52E1610CE31F662E656 /* Tests */,
+				75230BFB965B7DD6CF3D3E96 /* Tools */,
+				30649CF92F837A5C89513E72 /* Frameworks */,
+				C1002A0C7820E30B987A793B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6BEED088FB8D81FC0E8B5D36 /* CoreTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3E921F4D5EB680CA3F836C99 /* Build configuration list for PBXNativeTarget "CoreTests" */;
+			buildPhases = (
+				98BA3AE97F1903BB59089BA3 /* Sources */,
+				CE8B605B268C03D47BC61BE2 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4DD3B69D059AACCF62BBD11F /* PBXTargetDependency */,
+			);
+			name = CoreTests;
+			packageProductDependencies = (
+			);
+			productName = CoreTests;
+			productReference = F2DB421CA57D6D03457C0321 /* CoreTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		AF92FCEDC5A3D4212CD43C1B /* DSXP */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9F8835FC79954E1A5AB18D8F /* Build configuration list for PBXNativeTarget "DSXP" */;
+			buildPhases = (
+				D3C4DFA83BC5CBE71D4042D9 /* Sources */,
+				99F38B0F31F850630DE29FE0 /* Resources */,
+				EE77A891456C0EE64CC78FC1 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				788DD714F45FD3599C29E7AB /* PBXTargetDependency */,
+			);
+			name = DSXP;
+			packageProductDependencies = (
+			);
+			productName = DSXP;
+			productReference = 1316E52EC301AC97F4F0462A /* DSXP.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B74BED7E904BA0898CEBAE96 /* DSXPCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C24A85CE767D5993355A4E08 /* Build configuration list for PBXNativeTarget "DSXPCore" */;
+			buildPhases = (
+				1D17A1FA33A70490FAA05876 /* CopyFiles */,
+				8EFB582258130F8A755C5D7B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DSXPCore;
+			packageProductDependencies = (
+			);
+			productName = DSXPCore;
+			productReference = CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		F6872E0A7539AA0B27118AAB /* dsxp-cli */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 409E348095CA1E6500A1C223 /* Build configuration list for PBXNativeTarget "dsxp-cli" */;
+			buildPhases = (
+				87513C5803B6C070419763D0 /* Sources */,
+				A57EE27CA90F161745D0B115 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E261B58B45052FC2B52705BB /* PBXTargetDependency */,
+			);
+			name = "dsxp-cli";
+			packageProductDependencies = (
+			);
+			productName = "dsxp-cli";
+			productReference = 7087147C4534DDF6E82AA4CF /* dsxp-cli */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2AB5927D9C09E9B30C33E43F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					6BEED088FB8D81FC0E8B5D36 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+					AF92FCEDC5A3D4212CD43C1B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+					B74BED7E904BA0898CEBAE96 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+					F6872E0A7539AA0B27118AAB = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = 8AE59F0307676EF61C883376 /* Build configuration list for PBXProject "DSXP" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = EA66B9C59D83D767D4ECA3A7;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C1002A0C7820E30B987A793B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B74BED7E904BA0898CEBAE96 /* DSXPCore */,
+				AF92FCEDC5A3D4212CD43C1B /* DSXP */,
+				6BEED088FB8D81FC0E8B5D36 /* CoreTests */,
+				F6872E0A7539AA0B27118AAB /* dsxp-cli */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		99F38B0F31F850630DE29FE0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6E2CEA0F59022960D74ADF13 /* Assets.xcassets in Resources */,
+				93975578703BAF61CAA3E6D0 /* web in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		87513C5803B6C070419763D0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AD28618A22919F9BC6EB93B3 /* main.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8EFB582258130F8A755C5D7B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4E973F4B9A8A9CE3158D6320 /* api.c in Sources */,
+				B1AD67F217C26D62315CD6D5 /* bindings.c in Sources */,
+				DC5A66824E5C25441C093E23 /* commands.c in Sources */,
+				89CB4DC4AA1DAEEF3C023170 /* core.c in Sources */,
+				97328F6202A3286C3C489F9C /* core_thread.c in Sources */,
+				2D445FB64B8C9EF19D981EEA /* decode.c in Sources */,
+				9D7839B3DD5E826D79A514F6 /* fileio.c in Sources */,
+				20FC29DB7F887A794197E268 /* gate.c in Sources */,
+				CECDB22160D255BC7B62EC5F /* guard.c in Sources */,
+				99AFF88008EAF9F91B189F31 /* json.c in Sources */,
+				34B5DC2C4C83A2FF626D3B23 /* light.c in Sources */,
+				11CB97FEE3FE62BD6F191095 /* log.c in Sources */,
+				4EC422D2F08F5CC52E17F0E5 /* output.c in Sources */,
+				CB5C867C0511842085C85DF6 /* rumble.c in Sources */,
+				646F02D017CC15EE6979EFED /* telemetry.c in Sources */,
+				9251CE797EE90E1A2D50C426 /* vocab.c in Sources */,
+				D96C611A0EFD5648F8634C0B /* wind.c in Sources */,
+				13A4742CF38F78E05B9BC77E /* xp_packets.c in Sources */,
+				F0C72962FD9CE15D035EC940 /* xplane.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		98BA3AE97F1903BB59089BA3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8F340CE59EED45B21A41315F /* CoreTests.m in Sources */,
+				B0708C1010934B642AFE5487 /* json_check.c in Sources */,
+				7210E72C7C669D1E78BA5EB1 /* runner.c in Sources */,
+				FFDC5CBF1D6B0C8CB055DE76 /* test_api.c in Sources */,
+				5D13B7D8BB5500745357C5F8 /* test_bindings.c in Sources */,
+				95AEFA60AF578142022B61ED /* test_core.c in Sources */,
+				9D85F7325217B012E7E04E4C /* test_input.c in Sources */,
+				05BEB6EDFC6B5E7970FF38E3 /* test_wire.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D3C4DFA83BC5CBE71D4042D9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9B5B59B007CD37AEA28D8338 /* AppDelegate.swift in Sources */,
+				0EF564F6922C9B92AB0A799B /* CoreBridge.swift in Sources */,
+				BB9359FD0C77E16852C6E4C6 /* LoginItem.swift in Sources */,
+				636DE4765797CCD362688938 /* MapperWindowController.swift in Sources */,
+				BBB15C9FD567A56C9D184D32 /* Paths.swift in Sources */,
+				02CE6183260673949C31B48D /* SchemeHandler.swift in Sources */,
+				BFA039EC5C73105C8A54315C /* SingleInstance.swift in Sources */,
+				3AD45AC1B3952EE312E34363 /* StatusMenuController.swift in Sources */,
+				09A1D05834E1DE362339874B /* XPlaneLocator.swift in Sources */,
+				764FFED3E298F3214E2C58DC /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4DD3B69D059AACCF62BBD11F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B74BED7E904BA0898CEBAE96 /* DSXPCore */;
+			targetProxy = 0737424B1C6469D44AB5BB7E /* PBXContainerItemProxy */;
+		};
+		788DD714F45FD3599C29E7AB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B74BED7E904BA0898CEBAE96 /* DSXPCore */;
+			targetProxy = B3CE2E666817F98016283DE1 /* PBXContainerItemProxy */;
+		};
+		E261B58B45052FC2B52705BB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B74BED7E904BA0898CEBAE96 /* DSXPCore */;
+			targetProxy = 7540448AE6AB7793E7281F39 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		01B1CCCB3CA243DDE58D4599 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Core/include $(SRCROOT)/Core/src";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.aakkss69.DSXP.CoreTests;
+				PRODUCT_NAME = CoreTests;
+				SDKROOT = macosx;
+				WARNING_CFLAGS = "$(DSXP_C_WARNINGS)";
+			};
+			name = Release;
+		};
+		129981CB58E15656DEE23DAF /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7CC4403B2CADF353C02BB9E3 /* Release.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		30AEE3EE22FC826824DD36F9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/DSXP.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_NAME = DSXP;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Core/include";
+			};
+			name = Debug;
+		};
+		5F933BE7768EA6EAB705BC65 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Core/include $(SRCROOT)/Core/src";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_NAME = DSXPCore;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				WARNING_CFLAGS = "$(DSXP_C_WARNINGS)";
+			};
+			name = Debug;
+		};
+		B3C7576303CDB9A7CFE1467C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/DSXP.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_NAME = DSXP;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/Core/include";
+			};
+			name = Release;
+		};
+		BA0E53D040F384BB417F96FC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E5260FD5B49C449BBC858901 /* Debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		BBFC3781B32512170BC6A122 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Core/include $(SRCROOT)/Core/src";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.aakkss69.DSXP.cli;
+				PRODUCT_NAME = "dsxp-cli";
+				SDKROOT = macosx;
+				WARNING_CFLAGS = "$(DSXP_C_WARNINGS)";
+			};
+			name = Release;
+		};
+		C63ADE7219F099867B832BB2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Core/include $(SRCROOT)/Core/src";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.aakkss69.DSXP.CoreTests;
+				PRODUCT_NAME = CoreTests;
+				SDKROOT = macosx;
+				WARNING_CFLAGS = "$(DSXP_C_WARNINGS)";
+			};
+			name = Debug;
+		};
+		DE21463A127F69890AB4DBA1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Core/include $(SRCROOT)/Core/src";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_NAME = DSXPCore;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				WARNING_CFLAGS = "$(DSXP_C_WARNINGS)";
+			};
+			name = Release;
+		};
+		E2A96610B75E7B3E34142E1E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Core/include $(SRCROOT)/Core/src";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.aakkss69.DSXP.cli;
+				PRODUCT_NAME = "dsxp-cli";
+				SDKROOT = macosx;
+				WARNING_CFLAGS = "$(DSXP_C_WARNINGS)";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3E921F4D5EB680CA3F836C99 /* Build configuration list for PBXNativeTarget "CoreTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C63ADE7219F099867B832BB2 /* Debug */,
+				01B1CCCB3CA243DDE58D4599 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		409E348095CA1E6500A1C223 /* Build configuration list for PBXNativeTarget "dsxp-cli" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E2A96610B75E7B3E34142E1E /* Debug */,
+				BBFC3781B32512170BC6A122 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8AE59F0307676EF61C883376 /* Build configuration list for PBXProject "DSXP" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BA0E53D040F384BB417F96FC /* Debug */,
+				129981CB58E15656DEE23DAF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9F8835FC79954E1A5AB18D8F /* Build configuration list for PBXNativeTarget "DSXP" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				30AEE3EE22FC826824DD36F9 /* Debug */,
+				B3C7576303CDB9A7CFE1467C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C24A85CE767D5993355A4E08 /* Build configuration list for PBXNativeTarget "DSXPCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5F933BE7768EA6EAB705BC65 /* Debug */,
+				DE21463A127F69890AB4DBA1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2AB5927D9C09E9B30C33E43F /* Project object */;
+}

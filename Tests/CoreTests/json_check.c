@@ -54,7 +54,7 @@ static bool lit(jp_t *p, const char *w) {
     return true;
 }
 
-static bool container(jp_t *p, char open, char close, bool obj) {
+static bool container(jp_t *p, char close, bool obj) {
     if (++p->depth > 64) return false;
     p->i++;                                   /* open */
     ws(p);
@@ -73,15 +73,14 @@ static bool container(jp_t *p, char open, char close, bool obj) {
         if (c == close) { p->depth--; return true; }
         if (c != ',') return false;
     }
-    (void)open;
 }
 
 static bool value(jp_t *p) {
     ws(p);
     if (p->i >= p->n) return false;
     char c = p->s[p->i];
-    if (c == '{') return container(p, '{', '}', true);
-    if (c == '[') return container(p, '[', ']', false);
+    if (c == '{') return container(p, '}', true);
+    if (c == '[') return container(p, ']', false);
     if (c == '"') return string(p);
     if (c == 't') return lit(p, "true");
     if (c == 'f') return lit(p, "false");

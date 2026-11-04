@@ -1,8 +1,8 @@
-/* dsxp mapper UI. Talks to the local bridge on 127.0.0.1:8765. */
+/* DSXP mapper UI. Served by the app on dsxp://app/ - relative URLs only. */
 
 let CMDS = [], SLOTS = [], SOURCES = [], TARGETS = [];
 let sel = -1, kidx = 0, shown = [];
-let bind = [], axismap = [], prevBtn = [], tune = { deadzone: 0.06, curve: 1 };
+let bind = [], axismap = [], prevBtn = [], tune = { deadzone: 0.06, curve: 1, gesture: 0.5 };
 let tuneDirty = 0, lightDirty = 0, fxDirty = 0, uiBusy = 0, fxmodeDirty = 0;
 let fxmode = 'manual', rmode = 'manual';
 let rumbleDirty = 0, rmodeDirty = 0;
@@ -12,7 +12,7 @@ let fx = [{mode:0,start:0,end:0,strength:0},{mode:0,start:0,end:0,strength:0}];
 let rumble = [0, 0];                 /* the slider wins while it is being dragged */
 
 const TRIGGER_SWEEP = 26;          /* degrees of blade travel, rest -> fully in */
-const STICK_TRAVEL  = 32;   /* traced well r~101, cap r~50 */          /* px the knob moves at full deflection      */
+const STICK_TRAVEL  = 32;          /* px the knob moves at full deflection (well r~101, cap r~50) */
 
 const $ = s => document.querySelector(s);
 const el = id => document.getElementById(id);
@@ -72,7 +72,20 @@ function renderResults() {
 
 /* ------------------------------------------------------------ mutations */
 
-const post = url => fetch(url, { method: 'POST' }).then(poll);
+/* Every change is a POST. The poll loop picks up the new state within 50 ms;
+   a refused change (e.g. 409 while the sim drives the triggers) is shown
+   briefly instead of being silently swallowed. */
+let toastTimer = 0;
+function flash(msg) {
+  const t = el('toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 2500);
+}
+const post = url => fetch(url, { method: 'POST' })
+  .then(r => { if (!r.ok) return r.text().then(t => flash(t || ('error ' + r.status))); })
+  .catch(() => {});
 
 function assign(cmd) {
   if (sel < 0) return;
@@ -163,40 +176,11 @@ const FX_DEFAULTS = {
   3: { start: 40,  end: 40,  strength: 180 },
 };
 
+/* Syncs the trigger panel to `fx`. It only renders: the listeners are attached
+   once, at the bottom of this file. (The prototype re-attached five listeners
+   here on every 50 ms poll, so one click fired dozens of requests.) */
 function renderFx() {
-  $('#rtabs').addEventListener('click', e => {
-  const b = e.target.closest('[data-rm]');
-  if (!b) return;
-  rmode = b.dataset.rm;
-  rmodeDirty = Date.now();
-  applyRumbleMode();
-  post('/api/rumblemode?mode=' + rmode);
-});
-$('.rparams').addEventListener('input', e => {
-  const i = e.target.id === 'r-r' ? 1 : 0;
-  rumble[i] = +e.target.value;
-  el(i ? 'r-rv' : 'r-lv').textContent = Math.round(rumble[i] / 255 * 100) + '%';
-  pushRumble();
-});
-$('#rv2').addEventListener('change', e => post('/api/rumblepath?v2=' + (e.target.checked ? 1 : 0)));
-$('.rtests').addEventListener('click', e => {
-  const b = e.target.closest('[data-test]');
-  if (!b) return;
-  rumble = RUMBLE_TESTS[b.dataset.test].slice();
-  el('r-l').value = rumble[0]; el('r-r').value = rumble[1];
-  el('r-lv').textContent = Math.round(rumble[0] / 255 * 100) + '%';
-  el('r-rv').textContent = Math.round(rumble[1] / 255 * 100) + '%';
-  pushRumble();
-});
-document.querySelector('.fxtabs').addEventListener('click', e => {
-  const b = e.target.closest('[data-fxm]');
-  if (!b) return;
-  fxmode = b.dataset.fxm;
-  fxmodeDirty = Date.now();
-  applyFxMode();
-  post('/api/fxmode?mode=' + fxmode);
-});
-document.querySelectorAll('.fxcol').forEach(col => {
+  document.querySelectorAll('.fxcol').forEach(col => {
     const i = col.dataset.side === 'r' ? 1 : 0;
     const f = fx[i];
     col.querySelectorAll('.modes button').forEach(b =>
@@ -312,7 +296,36 @@ function renderAxes() {
   }).join('');
 }
 
-/* mirrors shape() in src/dualsense.c so the preview matches what is sent */
+/* Keep the axis pickers and INV pills in step with the bridge. renderAxes()
+   only builds the rows once, so without this an INV click never showed. */
+function syncAxes() {
+  document.querySelectorAll('#axes .axrow').forEach((row, i) => {
+    const a = axismap[i];
+    if (!a) return;
+    const s = row.querySelector('select[data-ax]');
+    if (s && document.activeElement !== s && s.value !== a.t) s.value = a.t;
+    const inv = row.querySelector('.inv');
+    if (inv) inv.classList.toggle('on', !!a.inv);
+  });
+}
+
+/* The app strip: Input Monitoring state, X-Plane folder, command count. */
+let lastCmds = -1;
+function renderApp(app) {
+  const acc = el('app-access');
+  acc.hidden = app.access === 'granted' || app.input_live || app.access === undefined;
+  const dir = el('app-xpdir');
+  dir.textContent = app.xpdir ? app.xpdir.replace(/^\/Users\/[^/]+/, '~') : 'X-Plane folder not found';
+  dir.title = app.xpdir || 'Choose your X-Plane 12 folder to search its commands';
+  dir.classList.toggle('missing', !app.xpdir);
+  el('app-imported').hidden = !app.imported;
+  if (typeof app.cmds === 'number' && app.cmds !== lastCmds) {
+    if (lastCmds >= 0) loadInit();            /* catalogue changed: reload it */
+    lastCmds = app.cmds;
+  }
+}
+
+/* mirrors shape() in Core/src/decode.c so the preview matches what is sent */
 function shaped(v) {
   const dz = tune.deadzone, c = tune.curve;
   const s = v < 0 ? -1 : 1, a0 = Math.abs(v);
@@ -353,6 +366,8 @@ async function poll() {
   let st;
   try { st = await (await fetch('/api/state')).json(); } catch (e) { return; }
   bind = st.bind; axismap = st.axismap;
+  syncAxes();
+  renderApp(st.app || {});
 
   pill($('#g-bt'),  st.gate.bt,      'bluetooth '  + (st.gate.bt  ? 'yes' : 'no'));
   pill($('#g-usb'), !st.gate.usb,    'usb '        + (st.gate.usb ? 'connected' : 'clear'));
@@ -678,21 +693,46 @@ document.querySelectorAll('section').forEach(sec => {
 
 let stopped = false;
 $('#quit').addEventListener('click', async () => {
-  if (!confirm('Stop the bridge? X-Plane gets its controls back and the controller goes quiet.'))
+  if (!confirm('Quit DSXP? X-Plane gets its controls back and the controller goes quiet.'))
     return;
   stopped = true;
-  try { await fetch('/api/quit', { method: 'POST' }); } catch (e) { /* it died mid-reply */ }
   el('gone').hidden = false;
+  try { await fetch('/api/quit', { method: 'POST' }); } catch (e) { /* the app is closing */ }
 });
+
+el('app-pickxp').addEventListener('click', async () => {
+  try {
+    const r = await (await fetch('/api/pickxp', { method: 'POST' })).json();
+    if (r.ok) await loadInit();
+  } catch (e) { /* cancelled */ }
+});
+el('app-access').addEventListener('click', () => post('/api/openaccess'));
 
 /* ----------------------------------------------------------------- boot */
 
-(async () => {
+async function loadInit() {
   const init = await (await fetch('/api/init')).json();
   CMDS = init.commands.map(c => ({ c: c.c, d: c.d, lp: c.c.toLowerCase(), ld: (c.d || '').toLowerCase() }));
   SLOTS = init.slots; SOURCES = init.sources; TARGETS = init.targets;
-  $('#q').placeholder = 'Search ' + CMDS.length.toLocaleString() + ' X-Plane commands…';
+  $('#q').placeholder = CMDS.length
+    ? 'Search ' + CMDS.length.toLocaleString() + ' X-Plane commands…'
+    : 'No X-Plane command list yet - choose your X-Plane folder above';
+  renderResults();
+}
+
+/* One poll at a time, every 50 ms: the next starts only after the last one
+   finished, so slow replies can never pile up. */
+async function pollLoop() {
+  while (!stopped) {
+    const t0 = Date.now();
+    await poll();
+    await new Promise(r => setTimeout(r, Math.max(10, 50 - (Date.now() - t0))));
+  }
+}
+
+(async () => {
+  await loadInit();
   await poll();
   renderButtons(); renderAxes(); renderResults(); drawCurve(); renderFx(); applyFxMode(); applyRumbleMode(); applyLightMode();
-  setInterval(poll, 50);
+  pollLoop();
 })();

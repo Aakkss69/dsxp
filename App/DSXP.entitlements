@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened Runtime with no exceptions, and no App Sandbox: DSXP needs IOKit HID
+  access to a Bluetooth controller, the executable path of the running X-Plane
+  process (proc_pidpath), and read access to the X-Plane folder the user chose.
+-->
+<plist version="1.0">
+<dict/>
+</plist>

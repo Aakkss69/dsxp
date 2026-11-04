@@ -3,30 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>dsxp mapper</title>
+<title>DSXP</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
 <header>
-  <h1>dsxp</h1>
+  <h1>DSXP</h1>
   <span class="sub">DualSense &rarr; X-Plane 12</span>
+  <span class="appstrip">
+    <button id="app-access" class="warnbtn" hidden
+            title="The controller is connected but no input arrives. Open the Input Monitoring settings.">Input access…</button>
+    <span id="app-xpdir" class="xpdir"></span>
+    <button id="app-pickxp" title="Choose your X-Plane 12 folder">Choose…</button>
+    <span id="app-imported" class="pill" hidden
+          title="Your bindings were imported from the dualsense-xplane prototype">imported settings</span>
+  </span>
   <span class="spacer"></span>
   <span class="pill" id="g-bt">bluetooth</span>
   <span class="pill" id="g-usb">usb</span>
   <span class="pill" id="g-xp">x-plane 12</span>
   <span class="pill" id="g-eng">idle</span>
   <span class="pill" id="g-rep">0</span>
-  <button id="quit" title="stop the bridge and hand the controls back">Quit</button>
+  <button id="quit" title="quit DSXP and hand the controls back to X-Plane">Quit</button>
 </header>
 
 <div id="gone" hidden>
   <div>
-    <h2>Bridge stopped</h2>
+    <h2>DSXP has quit</h2>
     <p>The controller is quiet and X-Plane has its controls back.</p>
-    <p class="dim">Run <code>xplane_dualsense</code> to start it again.</p>
+    <p class="dim">Open DSXP again from Applications or Spotlight.</p>
   </div>
 </div>
+
+<div id="toast" role="status" hidden></div>
 
 <main>
     <section>

@@ -33,3 +33,6 @@ tools/out/
 
 # Local planning notes (contain local paths)
 plan/
+
+# Local preview config (machine-specific paths)
+.claude/launch.json

@@ -124,7 +124,11 @@ void dsxp_log(const char *fmt, ...) {
     va_end(ap);
     if (L.echo) fprintf(stderr, "[dsxp] %s\n", msg);
     if (!L.on) return;
+    /* the SDK's os_log macro carries an attribute this clang warns about */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-attributes"
     if (L.ol) os_log(L.ol, "%{public}s", msg);
+#pragma clang diagnostic pop
     enqueue("events", msg);
 }
 
