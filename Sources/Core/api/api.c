@@ -17,7 +17,9 @@
  * /api/quit, /api/pickxp and /api/openaccess are handled by the app itself.
  */
 #include "core_internal.h"
+#include <errno.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -44,12 +46,14 @@ static void respond_json(dsxp_response_t *out, jbuf_t *j) {
 
 static void ok(dsxp_response_t *out) { respond(out, 200, CT_JSON, "{\"ok\":true}"); }
 
+/* CERT ERR34-C: reject empty input, trailing junk ("12abc") and overflow. */
 static bool get_long(const char *qs, const char *key, long *v) {
     char buf[64];
     if (!qs_get(qs, key, buf, sizeof buf) || !buf[0]) return false;
     char *e;
+    errno = 0;
     long x = strtol(buf, &e, 10);
-    if (e == buf) return false;
+    if (e == buf || *e != 0 || errno == ERANGE) return false;
     *v = x;
     return true;
 }
@@ -58,8 +62,9 @@ static bool get_double(const char *qs, const char *key, double *v) {
     char buf[64];
     if (!qs_get(qs, key, buf, sizeof buf) || !buf[0]) return false;
     char *e;
+    errno = 0;
     double x = strtod(buf, &e);
-    if (e == buf || !isfinite(x)) return false;
+    if (e == buf || *e != 0 || errno == ERANGE || !isfinite(x)) return false;
     *v = x;
     return true;
 }
@@ -193,7 +198,7 @@ static void api_bind(const api_env_t *env, const char *qs, dsxp_response_t *out)
     qs_get(qs, "cmd", cmdbuf, sizeof cmdbuf);
     if (cmdbuf[0] && !cmd_valid(cmdbuf)) { respond(out, 400, CT_TEXT, "bad command"); return; }
     cmd_t c = { .kind = CMD_BIND, .key = (int)slot };
-    memcpy(c.u.bind.cmd, cmdbuf, strlen(cmdbuf) + 1);
+    snprintf(c.u.bind.cmd, sizeof c.u.bind.cmd, "%s", cmdbuf);   /* cmd_valid: < 256 chars */
     c.u.bind.repeat = rep != 0;
     submit(env, &c, out);
 }

@@ -22,9 +22,10 @@ void test_packets(void) {
     CHECK_INT(p[508], 0);
 
     n = xp_build_cmnd(p, "sim/general/zoom_in");
-    CHECK_INT(n, 5 + strlen("sim/general/zoom_in"));
+    CHECK_INT(n, 5 + strlen("sim/general/zoom_in") + 1);    /* trailing NUL */
     CHECK(!memcmp(p, "CMND\0sim/general/zoom_in", n));
     CHECK_INT(xp_build_cmnd(p, longp), 505);
+    CHECK_INT(p[504], 0);
 
     n = xp_build_rref(p, 10, 7, "sim/flightmodel/forces/g_nrml");
     CHECK_INT(n, 413);
@@ -80,6 +81,21 @@ void test_output(void) {
     put_effect(e, &fx);
     CHECK_INT(e[0], 0x26); CHECK_INT(e[9], 30);
 
+    /* weapon with a start near full travel still yields start < stop <= 8 (F11) */
+    fx = (trigger_fx_t){ TFX_WEAPON, 255, 255, 128 };
+    put_effect(e, &fx);
+    { int marks = e[1] | (e[2] << 8), lo = -1, hi = -1;
+      for (int z = 0; z < 10; z++) if (marks & (1 << z)) { if (lo < 0) lo = z; hi = z; }
+      CHECK(lo >= 2 && lo <= 7 && hi > lo && hi <= 8); }
+
+    /* fx_equal ignores the padding byte (F12) */
+    { trigger_fx_t a, b;
+      memset(&a, 0xAA, sizeof a); memset(&b, 0x55, sizeof b);
+      a.mode = b.mode = TFX_RESIST; a.start = b.start = 1; a.end = b.end = 2; a.strength = b.strength = 3;
+      CHECK(fx_equal(&a, &b));
+      b.strength = 4;
+      CHECK(!fx_equal(&a, &b)); }
+
     f.rumble_v2 = true;
     out_build_report(&f, 0, rep);
     CHECK_INT(rep[3] & 0x03, 0);
@@ -91,7 +107,25 @@ void test_output(void) {
     CHECK_INT(rep[46], 0); CHECK_INT(rep[47], 0);        /* light off sends zeros */
 }
 
+/* Commands.txt: path ends at the first space or tab (F10) */
+static void test_commands(void) {
+    const char *t = "sim/a/b  Two spaces.\nsim/audio_panel_copilot/monitor_audio_com_auto_off Copilot: one space.\n"
+                    "sim/c\tTabbed\nsim/d\n";
+    xcmd_t *c = NULL;
+    int n = commands_parse(t, strlen(t), &c);
+    CHECK_INT(n, 4);
+    if (n == 4) {
+        CHECK(!strcmp(c[0].path, "sim/a/b"));  CHECK(!strcmp(c[0].desc, "Two spaces."));
+        CHECK(!strcmp(c[1].path, "sim/audio_panel_copilot/monitor_audio_com_auto_off"));
+        CHECK(!strcmp(c[1].desc, "Copilot: one space."));
+        CHECK(!strcmp(c[2].path, "sim/c"));    CHECK(!strcmp(c[2].desc, "Tabbed"));
+        CHECK(!strcmp(c[3].path, "sim/d"));    CHECK(c[3].desc[0] == 0);
+    }
+    free(c);
+}
+
 void test_json(void) {
+    test_commands();
     char out[64];
     json_escape("a\"b\\c\n", out, sizeof out);
     CHECK(!strcmp(out, "a\\\"b\\\\c\\u000a"));

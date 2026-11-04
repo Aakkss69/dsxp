@@ -142,7 +142,7 @@ void telemetry_tick(core_t *c, double now) {
         if (c->s.fxmode == FXM_WIND) {
             trigger_fx_t before[2] = { c->fx_out[0], c->fx_out[1] };
             wind_apply(&c->wx, c->fx_out);
-            if (memcmp(before, c->fx_out, sizeof before)) out_mark(c);
+            if (!fx_equal(&before[0], &c->fx_out[0]) || !fx_equal(&before[1], &c->fx_out[1])) out_mark(c);
         } else {
             trigger_fx_t scratch[2];
             wind_apply(&c->wx, scratch);     /* keeps load/crosswind readouts live */

@@ -2,7 +2,7 @@
  * X-Plane UDP wire formats (port 49000). Pure.
  *
  *   DREF  "DREF" 0x00, float32 value, 500-byte NUL-padded path        = 509 bytes
- *   CMND  "CMND" 0x00, command path (no terminator needed)            = 5 + n
+ *   CMND  "CMND" 0x00, command path, NUL terminator                   = 5 + n + 1
  *   RREF  "RREF" 0x00, int32 frequency, int32 id, 400-byte path        = 413 bytes
  *         X-Plane answers with "RREF" + 1 byte, then {int32 id, float} pairs.
  *         Frequency 0 cancels a subscription.
@@ -22,12 +22,13 @@ size_t xp_build_dref(unsigned char *out, const char *path, float value) {
 }
 
 size_t xp_build_cmnd(unsigned char *out, const char *cmd) {
+    /* Laminar's "Exchanging Data with X-Plane" asks for NUL-terminated strings */
     size_t n = strlen(cmd);
-    if (n > CMND_MAX - 5) n = CMND_MAX - 5;
+    if (n > CMND_MAX - 6) n = CMND_MAX - 6;
     memset(out, 0, CMND_MAX);
     memcpy(out, "CMND", 4);
     memcpy(out + 5, cmd, n);
-    return 5 + n;
+    return 5 + n + 1;
 }
 
 size_t xp_build_rref(unsigned char *out, int32_t freq, int32_t id, const char *path) {

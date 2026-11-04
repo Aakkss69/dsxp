@@ -53,7 +53,7 @@ static int rrefs(int32_t freq) {
 static int cmnds(const char *cmd) {
     int n = 0;
     for (int i = 0; i < NP; i++)
-        if (!memcmp(P[i].d, "CMND", 4) && P[i].n == 5 + strlen(cmd) && !memcmp(P[i].d + 5, cmd, strlen(cmd))) n++;
+        if (!memcmp(P[i].d, "CMND", 4) && P[i].n == 5 + strlen(cmd) + 1 && !memcmp(P[i].d + 5, cmd, strlen(cmd))) n++;
     return n;
 }
 

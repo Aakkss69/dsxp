@@ -52,7 +52,7 @@ void test_bindings(void) {
 
     /* a customised configuration survives too */
     load_defaults(&a);
-    snprintf(a.bind[B_TP_SWIPE_UL].cmd, CMD_PATH_MAX, "sim/view/forward_with_panel");
+    snprintf(a.bind[B_TP_SWIPE_UL].cmd, CMD_PATH_MAX, "sim/view/forward_with_2d_panel");
     a.bind[B_TP_SWIPE_UL].repeat = true;
     a.axis[S_RY] = (axis_map_t){ AX_THROTTLE, true };
     a.tune = (tuning_t){ 0.1234, 2.5, 0.75 };

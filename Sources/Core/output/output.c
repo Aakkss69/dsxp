@@ -92,6 +92,7 @@ void put_effect(unsigned char *p, const trigger_fx_t *fx) {
         int start = to_zone(fx->start);
         int stop  = to_zone(fx->end);
         if (start < 2) start = 2;                 /* firmware ignores zone 0-1 here */
+        if (start > 7) start = 7;                 /* start must leave room for a stop zone (max 8) */
         if (stop <= start) stop = start + 1;
         if (stop > 8) stop = 8;
         uint16_t marks = (uint16_t)((1u << start) | (1u << stop));
@@ -111,6 +112,13 @@ void put_effect(unsigned char *p, const trigger_fx_t *fx) {
         p[0] = 0x00;
         break;
     }
+}
+
+/* Field-wise compare. memcmp on trigger_fx_t would also compare its padding byte,
+ * which is unspecified after a compound-literal assignment (CERT EXP42-C). */
+bool fx_equal(const trigger_fx_t *a, const trigger_fx_t *b) {
+    return a->mode == b->mode && a->start == b->start && a->end == b->end &&
+           a->strength == b->strength;
 }
 
 void out_build_report(const out_frame_t *f, unsigned char seq, unsigned char *rep) {

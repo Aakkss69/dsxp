@@ -316,6 +316,7 @@ int      to_zone(unsigned char v);
 int      to_level(unsigned char v);
 void     pack_zones(unsigned char *p, int from, int level);
 void     put_effect(unsigned char *p, const trigger_fx_t *fx);
+bool     fx_equal(const trigger_fx_t *a, const trigger_fx_t *b);   /* field-wise: the struct has padding */
 void     out_build_report(const out_frame_t *f, unsigned char seq, unsigned char *rep);
 
 /* wind.c / rumble.c / light.c */

@@ -55,6 +55,9 @@ void test_api(void) {
     CHECK_INT(call("POST", "/api/bind", "i=99&cmd=sim%2Fa"), 400);
     CHECK_INT(call("POST", "/api/bind", "i=-1&cmd=sim%2Fa"), 400);
     CHECK_INT(call("POST", "/api/bind", "cmd=sim%2Fa"), 400);
+    CHECK_INT(call("POST", "/api/bind", "i=3abc&cmd=sim%2Fa"), 400);
+    CHECK_INT(call("POST", "/api/bind", "i=99999999999999999999&cmd=sim%2Fa"), 400);
+    CHECK_INT(call("POST", "/api/bind", "i=-&cmd=sim%2Fa"), 400);
     CHECK_INT(call("POST", "/api/bind", "i=3&cmd=a%0Abutton%201%200%20x"), 400);
     CHECK_INT(call("POST", "/api/bind", "i=3&cmd=sim%2Fx%22y"), 400);
     CHECK_INT(call("POST", "/api/bind", "i=3&cmd=sim%2Fx%2Fy&repeat=1"), 200);

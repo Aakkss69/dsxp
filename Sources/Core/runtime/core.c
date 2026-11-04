@@ -300,7 +300,7 @@ void core_tick(core_t *c, double now) {
 
     /* manual mode: what goes out is exactly what the user set */
     if (!c->suspended && c->s.fxmode == FXM_MANUAL &&
-        memcmp(c->fx_out, c->s.fx_manual, sizeof c->fx_out) != 0) {
+        (!fx_equal(&c->fx_out[0], &c->s.fx_manual[0]) || !fx_equal(&c->fx_out[1], &c->s.fx_manual[1]))) {
         c->fx_out[0] = c->s.fx_manual[0];
         c->fx_out[1] = c->s.fx_manual[1];
         out_mark(c);
