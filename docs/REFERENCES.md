@@ -93,7 +93,7 @@ with [potrace](https://potrace.sourceforge.net/) from a stock wireframe image (a
 4706 × 3188 JPEG made in Photoshop CS6, embedded description "Sony Play Station 5
 dualsense wireless controller wireframe black and white icon"). **Its license is
 unknown.** The image itself is not in the repository (`.gitignore:26`);
-the traced outlines are (`Resources/web/index.html:58`).
+the traced outlines are (`Resources/web/index.html:74`).
 Before distributing DSXP widely, replace the drawing with one you have rights to,
 or confirm the image's license. The app icon is original
 (`Tools/make-icon.swift:1`).
@@ -143,13 +143,14 @@ What WebKit provides, and where DSXP uses it:
 
 | Fact | Source | Used at |
 |---|---|---|
-| `-apple-system-label`, `-secondary-label`, `-separator`, `-control-background`, `-green` and the other semantic color keywords resolve to the system's NSColors in a WKWebView, and `@supports (color: -apple-system-label)` is a valid test (checked in DSXP: `CSS.supports` returns true and the label color resolves to `rgba(0,0,0,0.847)` in light, `rgba(255,255,255,0.847)` in dark) | [CSSValueKeywords.in](https://raw.githubusercontent.com/WebKit/WebKit/main/Source/WebCore/css/CSSValueKeywords.in), WebKit `Source/WebCore/rendering/mac/RenderThemeMac.mm` | `Resources/web/app.css:32` |
-| Without `color-scheme: light dark`, system colors and native controls resolve light even in Dark Mode | WebKit `Source/WebCore/dom/Document.cpp` (`useDarkAppearance`) | `Resources/web/app.css:16`, `Resources/web/index.html:6` |
+| `-apple-system-label`, `-secondary-label`, `-separator`, `-control-background`, `-green` and the other semantic color keywords resolve to the system's NSColors in a WKWebView, and `@supports (color: -apple-system-label)` is a valid test (checked in DSXP: `CSS.supports` returns true and the label color resolves to `rgba(0,0,0,0.847)` in light, `rgba(255,255,255,0.847)` in dark) | [CSSValueKeywords.in](https://raw.githubusercontent.com/WebKit/WebKit/main/Source/WebCore/css/CSSValueKeywords.in), WebKit `Source/WebCore/rendering/mac/RenderThemeMac.mm` | `Resources/web/app.css:40` |
+| Without `color-scheme: light dark`, system colors and native controls resolve light even in Dark Mode | WebKit `Source/WebCore/dom/Document.cpp` (`useDarkAppearance`) | `Resources/web/app.css:21`, `Resources/web/index.html:6` |
 | There is no keyword for the window background, and `-apple-system-control-accent` is fixed blue (not the user's accent) in a normal WKWebView, so the app injects both | `RenderThemeMac.mm`; [WebKit commit 04c640bb](https://github.com/WebKit/WebKit/commit/04c640bb1dcea7ab1a75bbdc59a891dde2e9c499) | `Sources/App/UI/MapperWindowController.swift:63` |
-| `accent-color` left unset (`auto`) lets native sliders and checkboxes follow the user's accent | [MDN accent-color](https://developer.mozilla.org/en-US/docs/Web/CSS/accent-color) | `Resources/web/app.css:97` |
-| `-apple-system` / `system-ui` select San Francisco | [WebKit: Using the system font in web content](https://webkit.org/blog/3709/using-the-system-font-in-web-content/) | `Resources/web/app.css:21` |
-| `font-variant-numeric: tabular-nums` keeps changing numbers from jittering (the CSS form of `monospacedDigitSystemFont`) | [MDN browser compatibility data](https://github.com/mdn/browser-compat-data) | `Resources/web/app.css:55` |
-| `<input type=checkbox switch>` is drawn as a native switch (seen in DSXP's own WebKit render on macOS 27.2); a WebKit without it shows a plain checkbox, which works the same | DSXP render check | `Resources/web/index.html:338` |
+| `accent-color` left unset (`auto`) lets native sliders and checkboxes follow the user's accent | [MDN accent-color](https://developer.mozilla.org/en-US/docs/Web/CSS/accent-color) | `Resources/web/app.css:125` |
+| `-apple-system` / `system-ui` select San Francisco | [WebKit: Using the system font in web content](https://webkit.org/blog/3709/using-the-system-font-in-web-content/) | `Resources/web/app.css:26` |
+| `font-variant-numeric: tabular-nums` keeps changing numbers from jittering (the CSS form of `monospacedDigitSystemFont`) | [MDN browser compatibility data](https://github.com/mdn/browser-compat-data) | `Resources/web/app.css:64` |
+| The color picker is DSXP's own popover (field, hue strip, hex, presets, Cancel and OK), not `<input type=color>`, which opens the system color panel that has no OK button | — | `Resources/web/app.js:267`, `Resources/web/index.html:38` |
+| `<input type=checkbox switch>` is drawn as a native switch (seen in DSXP's own WebKit render on macOS 27.2); a WebKit without it shows a plain checkbox, which works the same | DSXP render check | `Resources/web/index.html:368` |
 
 ## Build and legal
 
@@ -302,9 +303,9 @@ These are in comments as "observed". What would settle each:
 |---|---|---|
 | Overrides reset when an aircraft is reloaded | `Sources/Core/sim/xplane.c:126` | Reload an aircraft while engaged and watch `override_joystick_*` in a dataref inspector |
 | `RREF` subscriptions are dropped across reloads | `Sources/Core/sim/telemetry.c:199` | Count replies before and after a reload with DSXP's resubscribe disabled |
-| X-Plane's null zone does not apply to override datarefs | `Sources/Core/input/decode.c:8`, `Sources/Core/settings/config_schema.c:126`, `Resources/web/index.html:250` | Set a large null zone in X-Plane and write small values through the override |
+| X-Plane's null zone does not apply to override datarefs | `Sources/Core/input/decode.c:8`, `Sources/Core/settings/config_schema.c:126`, `Resources/web/index.html:263` | Set a large null zone in X-Plane and write small values through the override |
 | Telemetry keeps streaming while paused | `Sources/Core/sim/telemetry.c:212` | Pause and count `RREF` replies |
-| macOS sets its own light bar color | `Sources/Core/runtime/core.c:49`, `Resources/web/app.js:172` | Stop the keepalive and watch the bar |
+| macOS sets its own light bar color | `Sources/Core/runtime/core.c:49`, `Resources/web/app.js:335` | Stop the keepalive and watch the bar |
 | `AppleGCHIDUserEventDriver` latches the controller into report 0x31 | `Sources/Core/internal/core_internal.h:12` | Compare report ids before and after the driver attaches (`ioreg`) |
 | The 824 pt body / 100 pt margin of the icon grid | `Tools/make-icon.swift:25` | Apple's macOS icon template |
 | "Accept incoming connections" is the setting's label | `README.md` (Requirements) | X-Plane 12 Settings › Network |
