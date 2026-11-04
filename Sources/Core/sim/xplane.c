@@ -121,9 +121,10 @@ void xp_release_tick(core_t *c, double now) {
 }
 
 /*
- * Override planner. A wanted override is re-asserted every second: X-Plane may
- * not be listening yet when the process first appears, and it resets overrides
- * on an aircraft reload. An override that stops being wanted (its axis was
+ * Override planner. A wanted override is re-asserted every second
+ * (timing.override_reassert): X-Plane may not be listening yet when the process
+ * first appears, and overrides have been observed to reset when an aircraft is
+ * reloaded (not documented by Laminar). An override that stops being wanted (its axis was
  * unmapped) gets a centered value, then "off", repeated a few times, so the axis
  * goes straight back to X-Plane instead of freezing where it was.
  */

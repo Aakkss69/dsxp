@@ -1,6 +1,7 @@
 /* The config files on disk: first run, the two imports, edits made outside
  * DSXP (applied, waited for, ignored when only touched), merges with the
- * mapper's changes, deletion, and the write path. File times are set
+ * mapper's changes, deletion, and the write path. Also the gate's X-Plane
+ * version check, which needs a folder on disk too. File times are set
  * explicitly, so nothing here depends on how fast the test runs. */
 #include "tests.h"
 #include <fcntl.h>
@@ -257,6 +258,28 @@ static void imports(time_t t0) {
     CHECK_INT(cfg_store_open(&S, longp, NULL, &L, (double)t0, NULL, NULL), -1);
 }
 
+/* F9: any install folder, but only X-Plane 12 or later (read from Info.plist) */
+static void gate_version(void) {
+    const char *vers[] = { "12.4.4-b3-5bfd5a53", "11.55r2", "13.0.0", "garbage" };
+    bool want[] = { true, false, true, false };
+    for (int i = 0; i < 4; i++) {
+        char app[1200], exe[1300], plist[1300];
+        snprintf(app, sizeof app, "%s/sims %d/My Sim/X-Plane.app", ROOT, i);
+        snprintf(exe, sizeof exe, "%s/Contents/MacOS", app);
+        CHECK(mkdir_p(exe, 0700));
+        snprintf(exe, sizeof exe, "%s/Contents/MacOS/X-Plane", app);
+        snprintf(plist, sizeof plist, "%s/Contents/Info.plist", app);
+        char text[600];
+        snprintf(text, sizeof text,
+                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict>"
+                 "<key>CFBundleShortVersionString</key><string>%s</string></dict></plist>\n", vers[i]);
+        CHECK(file_write_atomic(plist, text, strlen(text), 0644));
+        CHECK_INT(gate_version_ok(exe), want[i]);
+    }
+    CHECK(!gate_version_ok("/Applications/X-Plane 12/X-Plane.app/Contents/MacOS/X-Plane Installer"));
+    CHECK(!gate_version_ok("/nowhere/X-Plane.app/Contents/MacOS/X-Plane"));     /* no Info.plist */
+}
+
 void test_config_store(void) {
     const char *tmp = getenv("TMPDIR");
     snprintf(ROOT, sizeof ROOT, "%s/dsxp-conf-XXXXXX", tmp && *tmp ? tmp : "/tmp");
@@ -265,5 +288,6 @@ void test_config_store(void) {
     first_run(t0);
     outside_edits(t0 + 1000);
     imports(t0);
+    gate_version();
     nftw(ROOT, rm_entry, 16, FTW_DEPTH | FTW_PHYS);
 }

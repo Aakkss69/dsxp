@@ -9,8 +9,10 @@
  * Bluetooth it never sees an axis or a button. Over USB the real axes ride in
  * report 0x01 alongside the vendor blobs, so the same filter is harmless.
  *
- * macOS latches the controller into 0x31 mode (AppleGCHIDUserEventDriver reads
- * calibration feature report 0x05); that is not reversible from userspace. So the
+ * macOS latches the controller into 0x31 mode (observed: Apple's private
+ * AppleGCHIDUserEventDriver claims the device and from then on it sends 0x31;
+ * which request switches it is not documented); that is not reversible from
+ * userspace. So the
  * core reads report 0x31 itself and writes X-Plane's datarefs over UDP.
  *
  * Layout of Sources/Core (pure logic is testable and makes no system calls):
@@ -468,6 +470,7 @@ bool log_name_is_ours(const char *name);
 
 /* gate.c */
 bool gate_xplane_running(char *exe_out, size_t n);
+bool gate_version_ok(const char *exe_path);    /* X-Plane 12+ from its Info.plist */
 
 #include "config.h"
 

@@ -55,8 +55,8 @@ void load_defaults(settings_t *s) {
     s->axis[S_R2] = (axis_map_t){ AX_RUDD_R, false };
 
     /* Deadzone 0.06: measured drift at rest on the author's controller was about
-     * 5% (rx +0.0315, ry -0.0472), and the override datarefs bypass X-Plane's own
-     * null zone, so nothing else would filter it. */
+     * 5% (rx +0.0315, ry -0.0472), and X-Plane's own null zone does not apply to
+     * the override datarefs (observed), so nothing else would filter it. */
     s->tune = (tuning_t){ 0.06, 1.00, 0.5 };
     /* center lamp only is the DualSense's "player 1" indicator */
     s->light = (light_t){ 0, 90, 255, true, LP_SOLID, 0.5, 1.0, LM_MANUAL, 0x04 };

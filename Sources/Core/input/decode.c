@@ -4,8 +4,9 @@
 #include <string.h>
 
 /* Deadzone then optional power curve. Both are adjustable from the UI because
- * the override datarefs bypass X-Plane's own null zone and response curves -
- * nothing downstream will filter stick drift. */
+ * values written through the override datarefs are not filtered by X-Plane's
+ * own null zone or response curves (observed, not documented by Laminar; see
+ * docs/REFERENCES.md) - nothing downstream will filter stick drift. */
 double shape(double v, double deadzone, double curve) {
     if (!isfinite(v)) return 0.0;
     if (v >  1.0) v =  1.0;

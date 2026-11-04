@@ -21,7 +21,8 @@ func render(_ px: Int) -> CGImage {
     ctx.scaleBy(x: CGFloat(px) / 1024, y: CGFloat(px) / 1024)
     ctx.setShouldAntialias(true)
 
-    // background tile on Apple's 1024 grid (824 pt body, 100 pt margin)
+    // background tile on a 1024 canvas (Apple's size); the 824 pt body and 100 pt
+    // margin follow Apple's macOS icon template as measured, not a published figure
     let tile = CGPath(roundedRect: CGRect(x: 100, y: 100, width: 824, height: 824),
                       cornerWidth: 186, cornerHeight: 186, transform: nil)
     ctx.saveGState()

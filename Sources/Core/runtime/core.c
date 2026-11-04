@@ -46,8 +46,9 @@ static void out_send(core_t *c) {
 }
 
 /*
- * Writes are coalesced to at most one per frame. macOS re-asserts its own light
- * bar color, so ours is held with a slow keepalive even when nothing changed.
+ * Writes are coalesced to at most one per frame. macOS has been observed to set
+ * its own light bar color (not documented by Apple), so ours is held with a slow
+ * keepalive even when nothing changed.
  */
 void out_tick(core_t *c, double now) {
     if (!c->have_output_device) return;
