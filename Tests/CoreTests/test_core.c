@@ -203,7 +203,7 @@ static void telemetry_and_triggers(void) {
 
     core_set_gate(&C, false, false, true, "X-Plane", 1.0);   /* sim up, no controller */
     core_tick(&C, 1.0);
-    CHECK_INT(rrefs(TELEMETRY_HZ), 14);              /* all 14 datarefs subscribed */
+    CHECK_INT(rrefs(TELEMETRY_HZ), telemetry_rref_count());   /* every dataref subscribed */
 
     int32_t ids[] = { 1 };
     float vals[] = { 999.0f };
@@ -227,7 +227,7 @@ static void telemetry_and_triggers(void) {
     /* telemetry stops: everything sim-driven is released */
     cmd_t rm = { .kind = CMD_RUMBLEMODE }; rm.u.mode = RM_SIM;
     core_apply_cmd(&C, &rm, 1.2);
-    int32_t ids2[] = { 7, 9, 10, 11 };
+    int32_t ids2[] = { RR_CRASH, RR_STALL0, RR_STALL0 + 1, RR_STALL0 + 2 };
     float vals2[] = { 1.0f, 1.0f, 1.0f, 1.0f };       /* crashed, left wing stalled */
     udp_pairs(&C, ids2, vals2, 4, true, 1.3);
     core_tick(&C, 1.3);
@@ -237,7 +237,7 @@ static void telemetry_and_triggers(void) {
     CHECK(!C.wx.live);
     CHECK_INT(C.rumble.left, 0);
     CHECK(!C.wx.crashed);
-    CHECK_NEAR(C.sl[0] + C.sl[1] + C.sl[2], 0.0, 0);
+    CHECK_NEAR(C.stall_el[0][0] + C.stall_el[0][1] + C.stall_el[0][2], 0.0, 0);
     CHECK(!strcmp(C.wx.note, "telemetry lost"));
 }
 
@@ -257,7 +257,7 @@ static void light_sim_alone(void) {
     reset_cap();
     core_set_gate(&C, false, false, false, "", 2.0);
     core_tick(&C, 2.0);
-    CHECK_INT(rrefs(0), 14);
+    CHECK_INT(rrefs(0), telemetry_rref_count());
 }
 
 static void saves_and_output(void) {
@@ -286,6 +286,75 @@ static void saves_and_output(void) {
     CHECK_INT(OUTLAST[47], 0);
     core_on_device(&C, true, false);
     CHECK(!C.have_report);
+}
+
+/* F3, F4, F5: X-Plane 12 telemetry as it is published */
+static void xp12_telemetry(void) {
+    float t[WX_LAYERS] = { 0, 4, 8 }, a[WX_LAYERS] = { 0, 1000, 2000 };
+    for (int i = 3; i < WX_LAYERS; i++) { t[i] = 8; a[i] = 2000 + 1000.0f * (float)i; }
+    CHECK_NEAR(turb_at_altitude(t, a, WX_LAYERS, 1500), 6.0, 1e-9);
+    CHECK_NEAR(turb_at_altitude(t, a, WX_LAYERS, -50), 0.0, 1e-9);        /* below: lowest layer */
+    CHECK_NEAR(turb_at_altitude(t, a, WX_LAYERS, 99999), 8.0, 1e-9);      /* above: highest */
+    float tu[3] = { 8, 0, 4 }, au[3] = { 2000, 0, 1000 };                  /* unsorted input */
+    CHECK_NEAR(turb_at_altitude(tu, au, 3, 500), 2.0, 1e-9);
+    float tz[3] = { 3, 9, 9 }, az[3] = { 0, 0, 0 };                        /* altitudes not filled */
+    CHECK_NEAR(turb_at_altitude(tz, az, 3, 1500), 3.0, 1e-9);
+    float tn[2] = { NAN, 5 }, an[2] = { 0, 100 };
+    CHECK_NEAR(turb_at_altitude(tn, an, 2, 10), 5.0, 1e-9);               /* NaN layer skipped */
+
+    char p[128];
+    CHECK(telemetry_rref_path(RR_STALL0 + 1 * STALL_SAMPLES + 2, p, sizeof p));   /* wing 1, element 8 */
+    CHECK(!strcmp(p, "sim/flightmodel2/wing/elements/element_is_stalled[18]"));
+    CHECK(telemetry_rref_path(RR_TURB0 + 12, p, sizeof p));
+    CHECK(!strcmp(p, "sim/weather/aircraft/turbulence[12]"));
+    CHECK(!telemetry_rref_path(0, p, sizeof p) && !telemetry_rref_path(RR_COUNT, p, sizeof p));
+    for (int id = 1; id < RR_COUNT; id++) CHECK(telemetry_rref_path(id, p, sizeof p) && strlen(p) < 400);
+    CHECK_INT(telemetry_rref_count(), 47);
+
+    /* turbulence follows the aircraft through the layers */
+    fresh();
+    int32_t lid[7] = { RR_TURB0, RR_TURB0 + 1, RR_TURB0 + 2, RR_ALT0, RR_ALT0 + 1, RR_ALT0 + 2, RR_ELEV };
+    float lv[7] = { 0, 4, 8, 0, 1000, 2000, 1500 };
+    udp_pairs(&C, lid, lv, 7, true, 1.0);
+    CHECK_NEAR(C.wx.turb, 6.0, 1e-6);
+
+    /* stall on Plane Maker wing 2 (outer left) counts as the left wing */
+    int32_t sid[3] = { RR_STALL0 + 2 * STALL_SAMPLES, RR_STALL0 + 2 * STALL_SAMPLES + 1, RR_STALL0 + 2 * STALL_SAMPLES + 2 };
+    float sv[3] = { 1, 1, 1 };
+    udp_pairs(&C, sid, sv, 3, true, 1.1);
+    CHECK_NEAR(C.wx.stall_l, 1.0, 1e-6);
+    CHECK_NEAR(C.wx.stall_r, 0.0, 1e-6);
+    int32_t rid[1] = { RR_STALL0 + 3 * STALL_SAMPLES };                  /* wing 3 = right */
+    float rv[1] = { 1 };
+    udp_pairs(&C, rid, rv, 1, true, 1.2);
+    CHECK_NEAR(C.wx.stall_r, 1.0 / 3, 1e-6);
+
+    /* paused: sim rumble and wind triggers let go, still engaged; resume brings them back */
+    fresh();
+    C.s.rmode = RM_SIM; C.s.fxmode = FXM_WIND;
+    feed(&C, 128, 0x08, 1.0);
+    int32_t cid[2] = { RR_CRASH, RR_IAS };
+    float cv[2] = { 1, 120 };
+    udp_pairs(&C, cid, cv, 2, true, 1.0);
+    core_set_gate(&C, true, false, true, "X-Plane", 1.0);
+    core_tick(&C, 1.0);
+    CHECK_INT(C.rumble.left, 255);
+    CHECK(C.fx_out[0].mode != TFX_OFF);
+    int32_t pid[1] = { RR_PAUSED };
+    float pv[1] = { 1 };
+    udp_pairs(&C, pid, pv, 1, true, 1.1);
+    feed(&C, 128, 0x08, 1.1);
+    core_tick(&C, 1.1);
+    CHECK_INT(C.rumble.left, 0);
+    CHECK_INT(C.fx_out[0].mode, TFX_OFF);
+    CHECK(C.engaged);
+    CHECK(!strcmp(C.rnote, "paused"));
+    pv[0] = 0;
+    udp_pairs(&C, pid, pv, 1, true, 1.2);
+    feed(&C, 128, 0x08, 1.2);
+    core_tick(&C, 1.2);
+    CHECK_INT(C.rumble.left, 255);
+    CHECK(C.fx_out[0].mode != TFX_OFF);
 }
 
 /* F7: throttle has no override, so it is sent on change plus a slow keepalive */
@@ -341,6 +410,7 @@ void test_core(void) {
     saves_and_output();
     suspend_and_dry_run();
     throttle();
+    xp12_telemetry();
 
     CHECK(log_name_is_ours("reports-2026-01-02.log"));
     CHECK(log_name_is_ours("events-2026-11-05.log"));

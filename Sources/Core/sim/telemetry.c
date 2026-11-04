@@ -2,45 +2,94 @@
  * Sim telemetry over X-Plane's RREF subscription, feeding wind-mode triggers,
  * sim-mode rumble and the sim-mode light bar. Pure: packets go out through
  * c->sinks.udp_send and come back in through core_on_udp().
+ *
+ * RREF: "RREF" 0x00, int32 frequency, int32 id, 400-byte dataref path. X-Plane
+ * streams {int32 id, float value} pairs back to the sender's port at that rate;
+ * frequency 0 cancels. One request per array element. (Laminar, "Exchanging
+ * Data with X-Plane", in the X-Plane install's Instructions folder.)
  */
 #include "core_internal.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
-/* subscription ids */
-enum { RR_IAS = 1, RR_WSPD, RR_WDIR, RR_HDG, RR_TURB,
-       RR_STALLR, RR_CRASH, RR_GN,
-       RR_SL0, RR_SL1, RR_SL2,          /* left wing element samples  */
-       RR_SR0, RR_SR1, RR_SR2,          /* right wing element samples */
-       RR_COUNT };
-
-static const char *DREF[RR_COUNT] = {
-    NULL,
-    "sim/flightmodel/position/indicated_airspeed",
-    "sim/weather/aircraft/wind_now_speed_msc",
-    "sim/weather/aircraft/wind_now_direction_degt",
-    "sim/flightmodel/position/psi",
-    "sim/weather/aircraft/turbulence[0]",
-    "sim/cockpit2/annunciators/stall_warning_ratio",
-    "sim/flightmodel2/misc/has_crashed",
-    "sim/flightmodel/forces/g_nrml",
-    /* element_is_stalled is float[480]; X-Plane lays wings out in blocks of ten,
-     * so 0-9 is the left main and 10-19 the right. Mid-span samples avoid the
-     * root and tip, which stall last and first respectively. */
-    "sim/flightmodel2/wing/elements/element_is_stalled[2]",
-    "sim/flightmodel2/wing/elements/element_is_stalled[5]",
-    "sim/flightmodel2/wing/elements/element_is_stalled[8]",
-    "sim/flightmodel2/wing/elements/element_is_stalled[12]",
-    "sim/flightmodel2/wing/elements/element_is_stalled[15]",
-    "sim/flightmodel2/wing/elements/element_is_stalled[18]",
+static const char *SCALAR[RR_TURB0] = {
+    [RR_IAS]    = "sim/flightmodel/position/indicated_airspeed",
+    [RR_WSPD]   = "sim/weather/aircraft/wind_now_speed_msc",
+    [RR_WDIR]   = "sim/weather/aircraft/wind_now_direction_degt",
+    [RR_HDG]    = "sim/flightmodel/position/psi",
+    [RR_STALLR] = "sim/cockpit2/annunciators/stall_warning_ratio",
+    [RR_CRASH]  = "sim/flightmodel2/misc/has_crashed",
+    [RR_GN]     = "sim/flightmodel/forces/g_nrml",
+    [RR_PAUSED] = "sim/time/paused",
+    [RR_ELEV]   = "sim/flightmodel/position/elevation",
 };
+static const int STALL_ELEMENT[STALL_SAMPLES] = { 2, 5, 8 };
+
+int telemetry_rref_count(void) { return RR_COUNT - 1; }
+
+bool telemetry_rref_path(int id, char *out, size_t n) {
+    int w;
+    if (id >= 1 && id < RR_TURB0)
+        w = snprintf(out, n, "%s", SCALAR[id]);
+    else if (id >= RR_TURB0 && id < RR_ALT0)
+        w = snprintf(out, n, "sim/weather/aircraft/turbulence[%d]", id - RR_TURB0);
+    else if (id >= RR_ALT0 && id < RR_STALL0)
+        w = snprintf(out, n, "sim/weather/aircraft/wind_altitude_msl_m[%d]", id - RR_ALT0);
+    else if (id >= RR_STALL0 && id < RR_COUNT) {
+        int k = id - RR_STALL0, wing = k / STALL_SAMPLES, el = STALL_ELEMENT[k % STALL_SAMPLES];
+        w = snprintf(out, n, "sim/flightmodel2/wing/elements/element_is_stalled[%d]", wing * 10 + el);
+    } else return false;
+    return w > 0 && (size_t)w < n;
+}
+
+/* Turbulence at the aircraft: X-Plane 12 publishes it per weather layer, with
+ * each layer's centre altitude. Interpolate linearly between the two layers
+ * around the aircraft, holding the end values beyond them. If the altitudes are
+ * all zero (not filled in), fall back to the first layer. */
+double turb_at_altitude(const float *turb, const float *alt, int n, double elev_m) {
+    int idx[WX_LAYERS], m = 0;
+    bool any_alt = false;
+    for (int i = 0; i < n && i < WX_LAYERS; i++) {
+        if (!isfinite(turb[i]) || !isfinite(alt[i])) continue;
+        idx[m++] = i;
+        if (alt[i] != 0) any_alt = true;
+    }
+    double r;
+    if (m == 0) r = 0;
+    else if (!any_alt || !isfinite(elev_m)) r = turb[idx[0]];
+    else {
+        for (int i = 1; i < m; i++) {                 /* sort by altitude */
+            int v = idx[i], j = i - 1;
+            while (j >= 0 && alt[idx[j]] > alt[v]) { idx[j + 1] = idx[j]; j--; }
+            idx[j + 1] = v;
+        }
+        if (elev_m <= alt[idx[0]]) r = turb[idx[0]];
+        else if (elev_m >= alt[idx[m - 1]]) r = turb[idx[m - 1]];
+        else {
+            r = turb[idx[m - 1]];
+            for (int j = 0; j + 1 < m; j++) {
+                double a0 = alt[idx[j]], a1 = alt[idx[j + 1]];
+                if (elev_m >= a0 && elev_m <= a1) {
+                    r = a1 > a0 ? turb[idx[j]] + (turb[idx[j + 1]] - turb[idx[j]]) * (elev_m - a0) / (a1 - a0)
+                                : turb[idx[j]];
+                    break;
+                }
+            }
+        }
+    }
+    if (!isfinite(r) || r < 0) r = 0;
+    if (r > 10) r = 10;
+    return r;
+}
 
 static void send_rref_all(core_t *c, int32_t freq) {
     if (!c->sinks.udp_send) return;
     for (int i = 1; i < RR_COUNT; i++) {
+        char path[128];
+        if (!telemetry_rref_path(i, path, sizeof path)) continue;
         unsigned char p[RREF_LEN];
-        size_t n = xp_build_rref(p, freq, i, DREF[i]);
+        size_t n = xp_build_rref(p, freq, i, path);
         c->sinks.udp_send(c->sinks.ctx, p, n);
     }
 }
@@ -54,16 +103,16 @@ void telemetry_unsubscribe(core_t *c) {
 /*
  * Sim-driven effects latch on the controller: the last report sent stays in
  * force until another one replaces it. So when telemetry stops - X-Plane quits,
- * pauses, or the link drops - the computed values must be cleared, or a crash
- * rumble carries on after the sim is gone.
+ * or the link drops - the computed values must be cleared, or a crash rumble
+ * carries on after the sim is gone.
  */
 void sim_release(core_t *c, const char *why) {
     c->wx.live = false;
     c->wx.crashed = false;               /* a stale crash flag would re-arm */
+    c->wx.paused = false;
     c->wx.stall_l = c->wx.stall_r = c->wx.stall_ratio = 0;
     c->wx.ias = c->wx.turb = c->wx.gn = 0;
-    memset(c->sl, 0, sizeof c->sl);
-    memset(c->sr, 0, sizeof c->sr);
+    memset(c->stall_el, 0, sizeof c->stall_el);
     if (c->s.rmode == RM_SIM) c->rumble.left = c->rumble.right = 0;
     if (c->s.fxmode == FXM_WIND) {
         c->fx_out[0] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
@@ -74,33 +123,51 @@ void sim_release(core_t *c, const char *why) {
     out_mark(c);
 }
 
+static double wing_mean(const float *s) {
+    double t = 0;
+    for (int k = 0; k < STALL_SAMPLES; k++) t += s[k];
+    return t / STALL_SAMPLES;
+}
+
 void core_on_udp(core_t *c, const unsigned char *buf, size_t n, bool from_loopback, double now) {
     if (!from_loopback) return;           /* only X-Plane on this Mac may feed us */
-    rref_pair_t pairs[64];
-    int k = telemetry_parse(buf, n, pairs, 64);
+    rref_pair_t pairs[128];
+    int k = telemetry_parse(buf, n, pairs, 128);
     if (k <= 0) return;
-    bool got_l = false, got_r = false;
+    bool stall = false, weather = false;
     for (int i = 0; i < k; i++) {
         float v = pairs[i].value;
+        int id = pairs[i].id;
         if (!isfinite(v)) continue;
-        switch (pairs[i].id) {
-        case RR_IAS:    c->wx.ias = v;          break;
-        case RR_WSPD:   c->wx.wind_ms = v;      break;
-        case RR_WDIR:   c->wx.wind_dir = v;     break;
-        case RR_HDG:    c->wx.heading = v;      break;
-        case RR_TURB:   c->wx.turb = v;         break;
-        case RR_STALLR: c->wx.stall_ratio = v;  break;
+        switch (id) {
+        case RR_IAS:    c->wx.ias = v;           break;
+        case RR_WSPD:   c->wx.wind_ms = v;       break;
+        case RR_WDIR:   c->wx.wind_dir = v;      break;
+        case RR_HDG:    c->wx.heading = v;       break;
+        case RR_STALLR: c->wx.stall_ratio = v;   break;
         case RR_CRASH:  c->wx.crashed = v > 0.5f; break;
-        case RR_GN:     c->wx.gn = v;           break;
-        case RR_SL0: case RR_SL1: case RR_SL2:
-            c->sl[pairs[i].id - RR_SL0] = v; got_l = true; break;
-        case RR_SR0: case RR_SR1: case RR_SR2:
-            c->sr[pairs[i].id - RR_SR0] = v; got_r = true; break;
-        default: break;
+        case RR_GN:     c->wx.gn = v;            break;
+        case RR_PAUSED: c->wx.paused = v > 0.5f; break;
+        case RR_ELEV:   c->wx.elev_m = v; weather = true; break;
+        default:
+            if (id >= RR_TURB0 && id < RR_ALT0) { c->turb_layer[id - RR_TURB0] = v; weather = true; }
+            else if (id >= RR_ALT0 && id < RR_STALL0) { c->alt_layer[id - RR_ALT0] = v; weather = true; }
+            else if (id >= RR_STALL0 && id < RR_COUNT) {
+                int s = id - RR_STALL0;
+                c->stall_el[s / STALL_SAMPLES][s % STALL_SAMPLES] = v;
+                stall = true;
+            }
+            break;
         }
     }
-    if (got_l) c->wx.stall_l = (c->sl[0] + c->sl[1] + c->sl[2]) / 3.0;
-    if (got_r) c->wx.stall_r = (c->sr[0] + c->sr[1] + c->sr[2]) / 3.0;
+    if (weather) c->wx.turb = turb_at_altitude(c->turb_layer, c->alt_layer, WX_LAYERS, c->wx.elev_m);
+    if (stall) {
+        /* the main wing may be modelled as Plane Maker wing 1 or 2: take the worse */
+        double w[STALL_WINGS];
+        for (int i = 0; i < STALL_WINGS; i++) w[i] = wing_mean(c->stall_el[i]);
+        c->wx.stall_l = fmax(w[0], w[2]);
+        c->wx.stall_r = fmax(w[1], w[3]);
+    }
     c->wx.last_rx = now;
     if (!c->wx.live) c->force_gate = true;   /* X-Plane just started answering */
     c->wx.live = true;
@@ -129,8 +196,8 @@ void telemetry_tick(core_t *c, double now) {
             snprintf(c->rnote, sizeof c->rnote, "waiting for X-Plane");
         return;
     }
-    /* A subscription is not guaranteed to stick: X-Plane drops them across a
-     * reload. Resend every few seconds until data actually arrives. */
+    /* X-Plane does not always keep subscriptions (observed across reloads; not
+     * documented). Resend every few seconds until data actually arrives. */
     if (!c->wx.live && now - c->last_sub > TELEMETRY_RESUB_SEC) {
         send_rref_all(c, TELEMETRY_HZ);
         c->last_sub = now;
@@ -139,7 +206,19 @@ void telemetry_tick(core_t *c, double now) {
     bool was_live = c->wx.live;
     if (c->wx.live && now - c->wx.last_rx > TELEMETRY_TIMEOUT_SEC) c->wx.live = false;
 
-    if (c->wx.live) {
+    if (c->wx.live && c->wx.paused) {
+        /* paused: the sim keeps answering, but nothing should buzz or resist */
+        if (c->s.rmode == RM_SIM && (c->rumble.left || c->rumble.right)) {
+            c->rumble.left = c->rumble.right = 0;
+            out_mark(c);
+        }
+        if (c->s.fxmode == FXM_WIND && (c->fx_out[0].mode != TFX_OFF || c->fx_out[1].mode != TFX_OFF)) {
+            c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+            out_mark(c);
+        }
+        snprintf(c->wx.note, sizeof c->wx.note, "paused");
+        if (c->s.rmode == RM_SIM) snprintf(c->rnote, sizeof c->rnote, "paused");
+    } else if (c->wx.live) {
         if (c->s.fxmode == FXM_WIND) {
             trigger_fx_t before[2] = { c->fx_out[0], c->fx_out[1] };
             wind_apply(&c->wx, c->fx_out);
@@ -154,8 +233,8 @@ void telemetry_tick(core_t *c, double now) {
             if (before.left != c->rumble.left || before.right != c->rumble.right) out_mark(c);
         }
     } else if (was_live) {
-        /* the feed went quiet while the process is still around - paused, hung,
-         * or networking turned off. Do not leave anything latched. */
+        /* the feed went quiet while the process is still around - hung, or
+         * networking turned off. Do not leave anything latched. */
         sim_release(c, "telemetry lost");
     } else {
         snprintf(c->wx.note, sizeof c->wx.note, "waiting for X-Plane");

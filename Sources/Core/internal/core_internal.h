@@ -149,6 +149,8 @@ typedef struct {
     double stall_ratio;  /* 0-1 overall stall warning                           */
     double gn;           /* normal load factor, Gs                              */
     bool   crashed;
+    bool   paused;       /* sim/time/paused                              */
+    double elev_m;       /* aircraft elevation MSL, metres                 */
     double last_rx;
     bool   live;
     char   note[64];
@@ -181,6 +183,18 @@ typedef struct {
     int          rmode;         /* rmode_t  */
     bool         rumble_v2;
 } settings_t;
+
+/* X-Plane 12 telemetry (RREF ids). Weather is published per layer: 13 layers of
+ * turbulence with their centre altitudes (DataRefs.txt: sim/weather/aircraft/
+ * turbulence and wind_altitude_msl_m, both float[13]); DSXP interpolates at the
+ * aircraft elevation. Wing elements are float[480] laid out as [48 wings][10
+ * elements]; even wings are left, odd wings right. */
+#define WX_LAYERS     13
+#define STALL_WINGS   4
+#define STALL_SAMPLES 3      /* elements 2, 5, 8: mid-span, away from root and tip */
+enum { RR_IAS = 1, RR_WSPD, RR_WDIR, RR_HDG, RR_STALLR, RR_CRASH, RR_GN, RR_PAUSED, RR_ELEV,
+       RR_TURB0, RR_ALT0 = RR_TURB0 + WX_LAYERS, RR_STALL0 = RR_ALT0 + WX_LAYERS,
+       RR_COUNT = RR_STALL0 + STALL_WINGS * STALL_SAMPLES };
 
 /* Override datarefs the bridge may assert. */
 enum { OV_PITCH_I = 0, OV_ROLL_I, OV_HEADING_I, OV_BRAKES_I, OV_COUNT };
@@ -228,7 +242,8 @@ typedef struct core {
 
     /* telemetry */
     wx_t   wx;
-    float  sl[3], sr[3];
+    float  turb_layer[WX_LAYERS], alt_layer[WX_LAYERS];
+    float  stall_el[STALL_WINGS][STALL_SAMPLES];
     bool   subscribed;
     double last_sub;
 
@@ -376,6 +391,9 @@ void telemetry_tick(core_t *c, double now);
 void telemetry_unsubscribe(core_t *c);
 void core_on_udp(core_t *c, const unsigned char *buf, size_t n, bool from_loopback, double now);
 void sim_release(core_t *c, const char *why);
+int  telemetry_rref_count(void);                         /* ids 1..count */
+bool telemetry_rref_path(int id, char *out, size_t n);
+double turb_at_altitude(const float *turb, const float *alt, int n, double elev_m);
 
 /* core.c */
 void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks);
