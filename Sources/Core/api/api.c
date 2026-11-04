@@ -142,6 +142,11 @@ static void api_state(const api_env_t *env, dsxp_response_t *out) {
     for (int i = 0; i < 2; i++)
         jb_printf(&j, "%s{\"mode\":%d,\"start\":%d,\"end\":%d,\"strength\":%d}", i ? "," : "",
                   s->fx[i].mode, s->fx[i].start, s->fx[i].end, s->fx[i].strength);
+    /* fx = what goes to the controller now; fxm = the hand-set values the panel edits */
+    jb_printf(&j, "],\"fxm\":[");
+    for (int i = 0; i < 2; i++)
+        jb_printf(&j, "%s{\"mode\":%d,\"start\":%d,\"end\":%d,\"strength\":%d,\"freq\":%d}", i ? "," : "",
+                  s->fxm[i].mode, s->fxm[i].start, s->fxm[i].end, s->fxm[i].strength, s->fxm[i].freq);
     jb_printf(&j, "],\"fxmode\":\"%s\",", s->fxmode == FXM_WIND ? "wind" : "manual");
     jb_printf(&j, "\"wx\":{\"live\":%d,\"ias\":%.1f,\"wind\":%.1f,\"dir\":%.0f,\"hdg\":%.0f,"
                   "\"turb\":%.2f,\"xwind\":%.1f,\"load\":%.3f,\"note\":",
@@ -270,6 +275,7 @@ static void api_trigger(const api_env_t *env, const dsxp_snap_t *snap, const cha
     if (get_long(qs, "start", &x))    { c.u.trig.v.start    = (unsigned char)clampi(x, 0, 255); m |= TF_START; }
     if (get_long(qs, "end", &x))      { c.u.trig.v.end      = (unsigned char)clampi(x, 0, 255); m |= TF_END; }
     if (get_long(qs, "strength", &x)) { c.u.trig.v.strength = (unsigned char)clampi(x, 0, 255); m |= TF_STRENGTH; }
+    if (get_long(qs, "freq", &x))     { c.u.trig.v.freq     = (unsigned char)clampi(x, 1, 255); m |= TF_FREQ; }
     c.u.trig.mask = m;
     submit(env, &c, out);
 }

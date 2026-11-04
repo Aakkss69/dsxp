@@ -197,7 +197,7 @@ static void telemetry_and_triggers(void) {
     fresh();
     /* manual Resist 128 on L2, then wind mode */
     cmd_t t = { .kind = CMD_TRIGGER, .key = 0 };
-    t.u.trig.v = (trigger_fx_t){ TFX_RESIST, 30, 0, 128 };
+    t.u.trig.v = (trig_manual_t){ TFX_RESIST, 30, 0, 128, 40 };
     t.u.trig.mask = TF_MODE | TF_START | TF_END | TF_STRENGTH;
     core_apply_cmd(&C, &t, 1.0);
     CHECK_INT(C.fx_out[0].strength, 128);
@@ -222,7 +222,7 @@ static void telemetry_and_triggers(void) {
     CHECK_INT(C.s.fx_manual[0].strength, 128);       /* ...and never touches the manual one */
     char buf[16384];
     bindings_format(&C.s, buf, sizeof buf);
-    CHECK(strstr(buf, "trigger l 1 30 0 128\n") != NULL);
+    CHECK(strstr(buf, "trigger l 1 30 0 128 40\n") != NULL);
     w.u.mode = FXM_MANUAL;
     core_apply_cmd(&C, &w, 1.2);
     CHECK_INT(C.fx_out[0].strength, 128);

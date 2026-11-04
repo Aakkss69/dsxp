@@ -59,7 +59,7 @@ void load_defaults(settings_t *s) {
     s->tune = (tuning_t){ 0.06, 1.00, 0.5 };
     /* centre lamp only is the DualSense's "player 1" indicator */
     s->light = (light_t){ 0, 90, 255, true, LP_SOLID, 0.5, 1.0, LM_MANUAL, 0x04 };
-    s->fx_manual[0] = s->fx_manual[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+    s->fx_manual[0] = s->fx_manual[1] = (trig_manual_t){ TFX_OFF, 70, 160, 200, 40 };
     s->fxmode = FXM_MANUAL;
     s->rmode = RM_MANUAL;
     /* v2 produced no rumble at all on the author's controller; classic works */
@@ -133,15 +133,22 @@ static void parse_line(settings_t *s, const char *line) {
         char m[16] = "";
         if (sscanf(line, "%*s %15s", m) == 1) s->rumble_v2 = strcmp(m, "v2") == 0;
     } else if (!strcmp(what, "trigger")) {
-        char sd[4]; long m, st, en, sg;
-        if (sscanf(line, "%*s %3s %ld %ld %ld %ld", sd, &m, &st, &en, &sg) == 5 &&
-            (!strcmp(sd, "l") || !strcmp(sd, "r"))) {
+        char sd[4]; long m, st, en, sg, fq = -1;
+        int got = sscanf(line, "%*s %3s %ld %ld %ld %ld %ld", sd, &m, &st, &en, &sg, &fq);
+        if (got >= 5 && (!strcmp(sd, "l") || !strcmp(sd, "r"))) {
             int i = sd[0] == 'r' ? 1 : 0;
-            s->fx_manual[i] = (trigger_fx_t){
-                (m < TFX_OFF || m > TFX_VIBRATE) ? TFX_OFF : (int)m,
-                (unsigned char)clampi(st, 0, 255),
-                (unsigned char)clampi(en, 0, 255),
-                (unsigned char)clampi(sg, 0, 255) };
+            trig_manual_t *f = &s->fx_manual[i];
+            f->mode = (m < TFX_OFF || m > TFX_VIBRATE) ? TFX_OFF : (int)m;
+            f->start = (unsigned char)clampi(st, 0, 255);
+            f->strength = (unsigned char)clampi(sg, 0, 255);
+            if (got == 6) {                          /* end and frequency stored apart */
+                f->end = (unsigned char)clampi(en, 0, 255);
+                f->freq = (unsigned char)clampi(fq, 1, 255);
+            } else if (f->mode == TFX_VIBRATE) {     /* old files: vibrate's end WAS the frequency */
+                f->freq = (unsigned char)clampi(en, 1, 255);
+            } else {
+                f->end = (unsigned char)clampi(en, 0, 255);
+            }
         }
     } else if (!strcmp(what, "axis")) {
         char src[32], tgt[32]; int inv = 0;
@@ -209,9 +216,9 @@ size_t bindings_format(const settings_t *s, char *b, size_t cap) {
     put(b, cap, &o, "rumblepath %s\n", s->rumble_v2 ? "v2" : "classic");
     /* always the hand-set effects: wind mode computes its own and never saves them */
     for (int i = 0; i < 2; i++)
-        put(b, cap, &o, "trigger %c %d %d %d %d\n", i ? 'r' : 'l',
+        put(b, cap, &o, "trigger %c %d %d %d %d %d\n", i ? 'r' : 'l',
             s->fx_manual[i].mode, s->fx_manual[i].start, s->fx_manual[i].end,
-            s->fx_manual[i].strength);
+            s->fx_manual[i].strength, s->fx_manual[i].freq);
     put(b, cap, &o, "# axis <source> <target> <invert>\n");
     for (int i = 0; i < S_COUNT; i++) {
         int t = s->axis[i].target;

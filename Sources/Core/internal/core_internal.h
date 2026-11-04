@@ -128,7 +128,10 @@ typedef struct {
     unsigned char player;  /* player-indicator LED bitmask, 5 lamps */
 } light_t;
 typedef enum { TFX_OFF = 0, TFX_RESIST, TFX_WEAPON, TFX_VIBRATE } tfx_mode_t;
-typedef struct { int mode; unsigned char start, end, strength; } trigger_fx_t;
+typedef struct { int mode; unsigned char start, end, strength; } trigger_fx_t;   /* on the wire */
+/* What the user sets by hand. Vibrate's frequency has its own field; on the wire
+ * it travels in trigger_fx_t.end (see trig_effect). */
+typedef struct { int mode; unsigned char start, end, strength, freq; } trig_manual_t;
 typedef struct { bool active; double x, y; } touch_t;
 
 /* Trigger effects are either hand-set or driven from the sim, never both. */
@@ -178,7 +181,7 @@ typedef struct {
     axis_map_t   axis[S_COUNT];
     tuning_t     tune;
     light_t      light;
-    trigger_fx_t fx_manual[2];  /* [0] = L2, [1] = R2: what the user set by hand */
+    trig_manual_t fx_manual[2]; /* [0] = L2, [1] = R2: what the user set by hand */
     int          fxmode;        /* fxmode_t */
     int          rmode;         /* rmode_t  */
     bool         rumble_v2;
@@ -268,7 +271,7 @@ typedef struct core {
 typedef struct {
     bool connected; long reports, total; double report_hz;
     tuning_t tune; light_t light; char lnote[64];
-    trigger_fx_t fx[2]; int fxmode;
+    trigger_fx_t fx[2]; trig_manual_t fxm[2]; int fxmode;
     wx_t wx; int rmode; char rnote[64]; rumble_t rumble; bool rumble_v2;
     bool bt, usb, xp, engaged, suspended, imported;
     double axes[S_COUNT], raw[S_COUNT];
@@ -287,7 +290,7 @@ typedef enum {
 
 enum { LF_R = 1, LF_G = 2, LF_B = 4, LF_ON = 8, LF_PATTERN = 16, LF_SPEED = 32,
        LF_PLAYER = 64, LF_BRIGHT = 128, LF_MODE = 256 };
-enum { TF_MODE = 1, TF_START = 2, TF_END = 4, TF_STRENGTH = 8 };
+enum { TF_MODE = 1, TF_START = 2, TF_END = 4, TF_STRENGTH = 8, TF_FREQ = 16 };
 
 typedef struct {
     cmd_kind_t kind;
@@ -297,7 +300,7 @@ typedef struct {
         axis_map_t axis;
         struct { bool has_dz, has_cv, has_gs; double dz, cv, gs; } tune;
         struct { light_t v; unsigned mask; } light;
-        struct { trigger_fx_t v; unsigned mask; } trig;
+        struct { trig_manual_t v; unsigned mask; } trig;
         int mode;
         struct { bool has_l, has_r; unsigned char l, r; } rumble;
         bool flag;
@@ -335,6 +338,7 @@ int      to_level(unsigned char v);
 void     pack_zones(unsigned char *p, int from, int level);
 void     put_effect(unsigned char *p, const trigger_fx_t *fx);
 bool     fx_equal(const trigger_fx_t *a, const trigger_fx_t *b);   /* field-wise: the struct has padding */
+trigger_fx_t trig_effect(const trig_manual_t *m);              /* hand-set -> wire */
 void     out_build_report(const out_frame_t *f, unsigned char seq, unsigned char *rep);
 
 /* wind.c / rumble.c / light.c */

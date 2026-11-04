@@ -18,8 +18,8 @@ void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     snprintf(c->wx.note, sizeof c->wx.note, "%s",
              c->s.fxmode == FXM_WIND ? "waiting for X-Plane" : "manual");
     if (c->s.fxmode == FXM_MANUAL) {
-        c->fx_out[0] = c->s.fx_manual[0];
-        c->fx_out[1] = c->s.fx_manual[1];
+        c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
+        c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
     }
     c->out_dirty = true;
     c->force_gate = true;
@@ -166,7 +166,10 @@ void core_set_suspended(core_t *c, bool suspended, double now) {
     } else if (!suspended && c->suspended) {
         c->suspended = false;
         c->force_gate = true;
-        if (c->s.fxmode == FXM_MANUAL) { c->fx_out[0] = c->s.fx_manual[0]; c->fx_out[1] = c->s.fx_manual[1]; }
+        if (c->s.fxmode == FXM_MANUAL) {
+            c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
+            c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+        }
         out_mark(c);
         dsxp_log("resumed");
     }
@@ -209,7 +212,7 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
     case CMD_TRIGGER: {
         int i = cmd->key;
         if (i < 0 || i > 1 || s->fxmode == FXM_WIND) return;   /* wind mode owns them */
-        trigger_fx_t *f = &s->fx_manual[i];
+        trig_manual_t *f = &s->fx_manual[i];
         unsigned m = cmd->u.trig.mask;
         if (m & TF_MODE) {
             int md = cmd->u.trig.v.mode;
@@ -218,7 +221,8 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         if (m & TF_START)    f->start    = cmd->u.trig.v.start;
         if (m & TF_END)      f->end      = cmd->u.trig.v.end;
         if (m & TF_STRENGTH) f->strength = cmd->u.trig.v.strength;
-        if (!c->suspended) c->fx_out[i] = *f;
+        if (m & TF_FREQ)     f->freq     = cmd->u.trig.v.freq ? cmd->u.trig.v.freq : 1;
+        if (!c->suspended) c->fx_out[i] = trig_effect(f);
         core_mark_dirty(c, now);
         out_mark(c);
         break;
@@ -229,7 +233,7 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
             s->fxmode = want;
             if (want == FXM_MANUAL) {
                 /* hand-set effects come straight back: wind never touched them */
-                if (!c->suspended) { c->fx_out[0] = s->fx_manual[0]; c->fx_out[1] = s->fx_manual[1]; }
+                if (!c->suspended) { c->fx_out[0] = trig_effect(&s->fx_manual[0]); c->fx_out[1] = trig_effect(&s->fx_manual[1]); }
                 snprintf(c->wx.note, sizeof c->wx.note, "manual");
             } else {
                 c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
@@ -304,10 +308,11 @@ void core_tick(core_t *c, double now) {
     telemetry_tick(c, now);
 
     /* manual mode: what goes out is exactly what the user set */
+    trigger_fx_t want0 = trig_effect(&c->s.fx_manual[0]), want1 = trig_effect(&c->s.fx_manual[1]);
     if (!c->suspended && c->s.fxmode == FXM_MANUAL &&
-        (!fx_equal(&c->fx_out[0], &c->s.fx_manual[0]) || !fx_equal(&c->fx_out[1], &c->s.fx_manual[1]))) {
-        c->fx_out[0] = c->s.fx_manual[0];
-        c->fx_out[1] = c->s.fx_manual[1];
+        (!fx_equal(&c->fx_out[0], &want0) || !fx_equal(&c->fx_out[1], &want1))) {
+        c->fx_out[0] = want0;
+        c->fx_out[1] = want1;
         out_mark(c);
     }
     if (light_tick(c, now)) out_mark(c);
@@ -333,6 +338,8 @@ void core_snapshot(const core_t *c, dsxp_snap_t *o) {
     memcpy(o->lnote, c->lnote, sizeof o->lnote);
     o->fx[0] = c->fx_out[0];
     o->fx[1] = c->fx_out[1];
+    o->fxm[0] = c->s.fx_manual[0];
+    o->fxm[1] = c->s.fx_manual[1];
     o->fxmode = c->s.fxmode;
     o->wx = c->wx;
     o->rmode = c->s.rmode;

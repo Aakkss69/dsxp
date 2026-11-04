@@ -116,6 +116,12 @@ void put_effect(unsigned char *p, const trigger_fx_t *fx) {
 
 /* Field-wise compare. memcmp on trigger_fx_t would also compare its padding byte,
  * which is unspecified after a compound-literal assignment (CERT EXP42-C). */
+/* Hand-set settings to wire format: Vibrate sends its frequency in `end`. */
+trigger_fx_t trig_effect(const trig_manual_t *m) {
+    trigger_fx_t f = { m->mode, m->start, m->mode == TFX_VIBRATE ? m->freq : m->end, m->strength };
+    return f;
+}
+
 bool fx_equal(const trigger_fx_t *a, const trigger_fx_t *b) {
     return a->mode == b->mode && a->start == b->start && a->end == b->end &&
            a->strength == b->strength;

@@ -8,7 +8,7 @@ let fxmode = 'manual', rmode = 'manual';
 let rumbleDirty = 0, rmodeDirty = 0;
 let light = { r:0, g:90, b:255, on:true, pattern:0, speed:0.5, player:4,
               bright:1, lmode:'manual' };
-let fx = [{mode:0,start:0,end:0,strength:0},{mode:0,start:0,end:0,strength:0}];
+let fx = [{mode:0,start:70,end:160,strength:200,freq:40},{mode:0,start:70,end:160,strength:200,freq:40}];
 let rumble = [0, 0];                 /* the slider wins while it is being dragged */
 
 const TRIGGER_SWEEP = 26;          /* degrees of blade travel, rest -> fully in */
@@ -168,12 +168,12 @@ const FX_PARAMS = {
        strength: { label: 'Break force', ...PCT } },
   3: { start:    { label: 'Threshold',   ...PCT },
        strength: { label: 'Amplitude',   ...PCT },
-       end:      { label: 'Rate',        ...HZ  } },
+       freq:     { label: 'Rate',        ...HZ  } },
 };
 const FX_DEFAULTS = {
   1: { start: 70,  end: 0,   strength: 200 },
   2: { start: 60,  end: 160, strength: 255 },
-  3: { start: 40,  end: 40,  strength: 180 },
+  3: { start: 40,  freq: 40, strength: 180 },
 };
 
 /* Syncs the trigger panel to `fx`. It only renders: the listeners are attached
@@ -254,7 +254,7 @@ function pushFx(i) {
   fxDirty = Date.now();
   const f = fx[i];
   post('/api/trigger?side=' + (i ? 'r' : 'l') + '&mode=' + f.mode +
-       '&start=' + f.start + '&end=' + f.end + '&strength=' + f.strength);
+       '&start=' + f.start + '&end=' + f.end + '&strength=' + f.strength + '&freq=' + f.freq);
 }
 
 /* ------------------------------------------------------------ rendering */
@@ -387,7 +387,8 @@ async function poll() {
     drawCurve();
   }
 
-  if (Date.now() - fxDirty > 600 && st.fx) { fx = st.fx; renderFx(); }
+  /* the manual panel edits the hand-set values; in wind mode it is hidden */
+  if (Date.now() - fxDirty > 600 && (st.fxm || st.fx)) { fx = st.fxm || st.fx; renderFx(); }
   if (Date.now() - fxmodeDirty > 600 && st.fxmode && st.fxmode !== fxmode) {
     fxmode = st.fxmode; applyFxMode();
   }
@@ -436,8 +437,9 @@ async function poll() {
     const desc = f => f.mode === 0 ? 'free'
       : f.mode === 3 ? 'buzz ' + Math.round(f.strength / 255 * 100) + '% @ ' + f.end + ' Hz'
       : Math.round(f.strength / 255 * 100) + '% force';
-    el('wx-l').textContent = desc(fx[0]);
-    el('wx-r').textContent = desc(fx[1]);
+    /* wind readouts show what is actually on the triggers (st.fx), not the manual set */
+    el('wx-l').textContent = desc(st.fx[0]);
+    el('wx-r').textContent = desc(st.fx[1]);
   }
 
   if (Date.now() - lightDirty > 600 && st.light) {
@@ -623,7 +625,7 @@ document.querySelectorAll('.fxcol').forEach(col => {
     const b = e.target.closest('[data-m]');
     if (!b) return;
     const m = +b.dataset.m;
-    fx[i] = Object.assign({ start: 0, end: 0, strength: 0 }, FX_DEFAULTS[m] || {}, { mode: m });
+    fx[i] = Object.assign({}, fx[i], FX_DEFAULTS[m] || {}, { mode: m });
     renderFx(); pushFx(i);
   });
   col.querySelector('.fxparams').addEventListener('input', e => {

@@ -57,7 +57,7 @@ void test_bindings(void) {
     a.axis[S_RY] = (axis_map_t){ AX_THROTTLE, true };
     a.tune = (tuning_t){ 0.1234, 2.5, 0.75 };
     a.light = (light_t){ 1, 2, 3, false, LP_RAINBOW, 0.25, 0.5, LM_SIM, 0x1B };
-    a.fx_manual[1] = (trigger_fx_t){ TFX_WEAPON, 10, 200, 99 };
+    a.fx_manual[1] = (trig_manual_t){ TFX_WEAPON, 10, 200, 99, 25 };
     a.fxmode = FXM_WIND; a.rmode = RM_SIM; a.rumble_v2 = true;
     n = bindings_format(&a, buf, sizeof buf);
     load_defaults(&b);
@@ -99,6 +99,10 @@ void test_bindings(void) {
     CHECK_INT(b.light.pattern, LP_SOLID); CHECK_NEAR(b.light.speed, 1.0, 1e-12);
     CHECK_INT(b.light.player, 31); CHECK_NEAR(b.light.bright, 0.0, 1e-12);
     CHECK_INT(b.light.mode, LM_MANUAL);
+    /* old files: vibrate's end WAS the frequency; new lines carry both */
+    parse_str(&b, "trigger r 3 50 30 200\ntrigger l 2 10 160 90 44\n");
+    CHECK_INT(b.fx_manual[1].freq, 30); CHECK_INT(b.fx_manual[1].end, 160);
+    CHECK_INT(b.fx_manual[0].end, 160); CHECK_INT(b.fx_manual[0].freq, 44);
     parse_str(&b, "trigger x 1 2 3 4\ntrigger r 9 300 -4 128\n");
     CHECK_INT(b.fx_manual[0].mode, TFX_OFF);
     CHECK_INT(b.fx_manual[1].mode, TFX_OFF); CHECK_INT(b.fx_manual[1].start, 255);

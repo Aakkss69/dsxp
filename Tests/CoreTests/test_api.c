@@ -100,6 +100,12 @@ void test_api(void) {
     CHECK_INT(call("POST", "/api/trigger", "side=r&mode=2&start=10&end=999&strength=50"), 200);
     CHECK_INT(AC.s.fx_manual[1].mode, TFX_WEAPON);
     CHECK_INT(AC.s.fx_manual[1].end, 255);
+    /* vibrate keeps its frequency apart from the weapon band (step 8) */
+    CHECK_INT(call("POST", "/api/trigger", "side=r&mode=3&freq=30"), 200);
+    CHECK_INT(AC.s.fx_manual[1].freq, 30);
+    CHECK_INT(AC.s.fx_manual[1].end, 255);
+    CHECK_INT(AC.fx_out[1].end, 30);                  /* on the wire: end carries the Hz */
+    CHECK(body_has("GET", "/api/state", "", "\"fxm\":[", NULL));
     CHECK_INT(call("POST", "/api/rumblemode", "mode=sim"), 200);
     CHECK_INT(call("POST", "/api/rumble", "left=10"), 409);
     CHECK_INT(call("POST", "/api/rumblemode", "mode=manual"), 200);
