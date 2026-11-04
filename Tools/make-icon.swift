@@ -1,12 +1,12 @@
 // Draws DSXP's app icon (an original controller glyph, no third-party artwork)
-// into an .appiconset folder.  Usage: swift Scripts/make-icon.swift <appiconset dir>
+// into an .appiconset folder.  Usage: swift Tools/make-icon.swift <appiconset dir>
 import CoreGraphics
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
 let outDir = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1]
-                 : "App/Assets.xcassets/AppIcon.appiconset", isDirectory: true)
+                 : "Resources/Assets.xcassets/AppIcon.appiconset", isDirectory: true)
 try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
 func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {

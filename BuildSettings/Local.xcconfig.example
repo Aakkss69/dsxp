@@ -1,4 +1,4 @@
-// Copy to Config/Local.xcconfig (gitignored) and fill in your team ID.
+// Copy to BuildSettings/Local.xcconfig (gitignored) and fill in your team ID.
 //
 // One-time setup: Xcode > Settings > Accounts > add your Apple ID >
 // Manage Certificates > + > Apple Development. Your team ID is the

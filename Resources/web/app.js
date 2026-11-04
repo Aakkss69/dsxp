@@ -325,7 +325,7 @@ function renderApp(app) {
   }
 }
 
-/* mirrors shape() in Core/src/decode.c so the preview matches what is sent */
+/* mirrors shape() in Sources/Core/input/decode.c so the preview matches what is sent */
 function shaped(v) {
   const dz = tune.deadzone, c = tune.curve;
   const s = v < 0 ? -1 : 1, a0 = Math.abs(v);

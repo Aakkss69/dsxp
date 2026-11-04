@@ -8,20 +8,19 @@ options:
   createIntermediateGroups: true
   developmentLanguage: en
 configFiles:
-  Debug: Config/Debug.xcconfig
-  Release: Config/Release.xcconfig
+  Debug: BuildSettings/Debug.xcconfig
+  Release: BuildSettings/Release.xcconfig
 
 targets:
   DSXPCore:
     type: library.static
     platform: macOS
     sources:
-      - path: Core/src
-      - path: Core/include
+      - path: Sources/Core
     settings:
       base:
         PRODUCT_NAME: DSXPCore
-        HEADER_SEARCH_PATHS: $(SRCROOT)/Core/include $(SRCROOT)/Core/src
+        HEADER_SEARCH_PATHS: $(SRCROOT)/Sources/Core/include $(SRCROOT)/Sources/Core/internal
         WARNING_CFLAGS: $(DSXP_C_WARNINGS)
         SKIP_INSTALL: YES
         CODE_SIGNING_ALLOWED: NO
@@ -30,11 +29,9 @@ targets:
     type: application
     platform: macOS
     sources:
-      - path: App
-        excludes:
-          - "Resources/web"
-          - "Resources/web/**"
-      - path: App/Resources/web
+      - path: Sources/App
+      - path: Resources/Assets.xcassets
+      - path: Resources/web
         type: folder
         buildPhase: resources
     dependencies:
@@ -46,10 +43,10 @@ targets:
     settings:
       base:
         PRODUCT_NAME: DSXP
-        INFOPLIST_FILE: App/Info.plist
+        INFOPLIST_FILE: Sources/App/Support/Info.plist
         GENERATE_INFOPLIST_FILE: NO
-        CODE_SIGN_ENTITLEMENTS: App/DSXP.entitlements
-        SWIFT_INCLUDE_PATHS: $(SRCROOT)/Core/include
+        CODE_SIGN_ENTITLEMENTS: Sources/App/Support/DSXP.entitlements
+        SWIFT_INCLUDE_PATHS: $(SRCROOT)/Sources/Core/include
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
 
@@ -68,7 +65,7 @@ targets:
       base:
         PRODUCT_NAME: CoreTests
         PRODUCT_BUNDLE_IDENTIFIER: io.github.aakkss69.DSXP.CoreTests
-        HEADER_SEARCH_PATHS: $(SRCROOT)/Core/include $(SRCROOT)/Core/src
+        HEADER_SEARCH_PATHS: $(SRCROOT)/Sources/Core/include $(SRCROOT)/Sources/Core/internal
         GENERATE_INFOPLIST_FILE: YES
         WARNING_CFLAGS: $(DSXP_C_WARNINGS)
 
@@ -85,7 +82,7 @@ targets:
       base:
         PRODUCT_NAME: dsxp-cli
         PRODUCT_BUNDLE_IDENTIFIER: io.github.aakkss69.DSXP.cli
-        HEADER_SEARCH_PATHS: $(SRCROOT)/Core/include $(SRCROOT)/Core/src
+        HEADER_SEARCH_PATHS: $(SRCROOT)/Sources/Core/include $(SRCROOT)/Sources/Core/internal
         WARNING_CFLAGS: $(DSXP_C_WARNINGS)
 
 schemes:

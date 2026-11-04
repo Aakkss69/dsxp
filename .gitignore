@@ -10,7 +10,7 @@ xcuserdata/
 *.xcworkspace/xcuserdata/
 
 # Local signing settings (team ID)
-Config/Local.xcconfig
+BuildSettings/Local.xcconfig
 
 # Runtime data - never commit
 logs/

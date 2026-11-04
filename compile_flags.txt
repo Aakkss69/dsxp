@@ -1,5 +1,6 @@
 -std=c17
--ICore/include
--ICore/src
+-ISources/Core/include
+-ISources/Core/internal
+-ITests/CoreTests
 -Wall
 -Wextra

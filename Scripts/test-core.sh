@@ -8,8 +8,8 @@ mkdir -p "$OUT"
 xcrun clang -std=c17 -g -O1 -fno-omit-frame-pointer \
     -fsanitize=address,undefined -fno-sanitize-recover=undefined \
     -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes \
-    -ICore/include -ICore/src -ITests/CoreTests \
-    Core/src/*.c Tests/CoreTests/*.c \
+    -ISources/Core/include -ISources/Core/internal -ITests/CoreTests \
+    $(find Sources/Core -name "*.c" | LC_ALL=C sort) Tests/CoreTests/*.c \
     -framework IOKit -framework CoreFoundation \
     -o "$OUT/core-tests"
 "$OUT/core-tests"

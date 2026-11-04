@@ -29,7 +29,7 @@ extension dsxp_status_t {
     }
 }
 
-/// The app's single handle on the C core (Core/include/dsxp_core.h).
+/// The app's single handle on the C core (Sources/Core/include/dsxp_core.h).
 @MainActor
 final class CoreBridge {
     static let shared = CoreBridge()

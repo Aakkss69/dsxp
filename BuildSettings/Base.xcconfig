@@ -1,5 +1,5 @@
 // Shared build settings for every target. Local signing settings go in
-// Config/Local.xcconfig (gitignored); see Local.xcconfig.example.
+// BuildSettings/Local.xcconfig (gitignored); see Local.xcconfig.example.
 
 MACOSX_DEPLOYMENT_TARGET = 14.0
 PRODUCT_BUNDLE_IDENTIFIER = io.github.aakkss69.DSXP

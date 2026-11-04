@@ -13,11 +13,16 @@
  * calibration feature report 0x05); that is not reversible from userspace. So the
  * core reads report 0x31 itself and writes X-Plane's datarefs over UDP.
  *
- * Layout of the core:
- *   pure logic (testable, no system calls):  decode.c output.c wind.c rumble.c
- *       light.c xp_packets.c bindings.c commands.c json.c core.c xplane.c
- *       telemetry.c api.c
- *   I/O and threads:  core_thread.c hid.c gate.c fileio.c log.c guard.c
+ * Layout of Sources/Core (pure logic is testable and makes no system calls):
+ *   include/   public API (dsxp_core.h) - the only header Swift sees
+ *   internal/  shared internal headers (this file)
+ *   input/     decode.c vocab.c                     pure: report 0x31, shaping, gestures, names
+ *   output/    output.c wind.c rumble.c light.c     pure: output report and effect models
+ *   sim/       xplane.c telemetry.c xp_packets.c commands.c   pure: X-Plane side
+ *   settings/  bindings.c                           pure: defaults and settings text
+ *   api/       api.c json.c                         pure: the mapper's JSON API
+ *   runtime/   core.c (pure state machine), core_thread.c (threads, run loop, HID, UDP)
+ *   platform/  gate.c guard.c fileio.c log.c        macOS services
  */
 #ifndef DSXP_CORE_INTERNAL_H
 #define DSXP_CORE_INTERNAL_H

@@ -98,11 +98,13 @@ Quit DSXP, then delete `/Applications/DSXP.app`,
 
 | Path | Contents |
 |---|---|
-| `Core/` | The bridge, in C: HID decoding, X-Plane UDP, trigger/rumble/light output, settings, JSON API. Pure logic is separated from I/O so it can be tested without hardware. |
-| `App/` | The macOS app, in Swift: menu-bar item, mapper window, `dsxp://` scheme handler, lifecycle. |
-| `App/Resources/web/` | The mapper UI (plain HTML, CSS and JavaScript). |
+| `Sources/Core/` | The bridge, in C, by responsibility: `input/` (report decoding, gestures), `output/` (controller output, trigger/rumble/light models), `sim/` (X-Plane UDP), `settings/`, `api/` (mapper JSON API), `runtime/` (state machine, threads), `platform/` (macOS services). `include/` is the public API. Pure logic is separated from I/O so it can be tested without hardware. |
+| `Sources/App/` | The macOS app, in Swift: `Lifecycle/`, `Bridge/` (C bridge, `dsxp://` scheme), `UI/` (menu-bar item, mapper window), `System/`, `Support/` (Info.plist, entitlements). |
+| `Resources/` | What ships inside the app: `web/` (the mapper UI, plain HTML/CSS/JS) and the asset catalog. |
 | `Tests/CoreTests/` | C unit tests, run by `Scripts/test-core.sh` (AddressSanitizer + UBSan) and by `xcodebuild test`. |
-| `Tools/dsxp-cli/` | Headless runner: `--verify` shows live input, `--capture N` dumps raw reports. |
+| `Tools/` | `dsxp-cli/` (headless runner: `--verify`, `--capture N`) and `make-icon.swift`. |
+| `Scripts/` | `bootstrap.sh`, `build.sh`, `test-core.sh`. |
+| `BuildSettings/` | Xcode build settings (`.xcconfig`); your signing team goes in the gitignored `Local.xcconfig`. |
 | `project.yml` | XcodeGen spec; `DSXP.xcodeproj` is generated from it. |
 
 ## Licence and trademarks

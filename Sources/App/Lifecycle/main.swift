@@ -2,7 +2,7 @@ import AppKit
 import DSXPCore
 
 // Guard mode: the app re-executes itself with --dsxp-guard to clean up if it
-// ever dies without doing so (see Core/src/guard.c). Nothing else runs.
+// ever dies without doing so (see Sources/Core/platform/guard.c). Nothing else runs.
 let arguments = CommandLine.arguments
 if let i = arguments.firstIndex(of: "--dsxp-guard"), i + 1 < arguments.count,
    let fd = Int32(arguments[i + 1]) {
