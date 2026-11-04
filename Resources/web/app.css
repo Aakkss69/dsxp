@@ -69,21 +69,28 @@ h2{margin:0;font-size:13px;line-height:16px;font-weight:600}
 /* ------------------------------------------------------------ status strip */
 #strip{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:var(--gap);
   padding:8px var(--gap);background:var(--win);border-bottom:1px solid var(--sep)}
-.status{display:flex;align-items:center;gap:16px;flex-wrap:wrap;min-width:0}
-.status-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.status{display:flex;align-items:center;gap:16px;flex:1 1 auto;min-width:0;overflow:hidden}
+.status-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;min-width:0;flex:0 1 auto}
+.status-text{overflow:hidden;text-overflow:ellipsis}
 .status-detail{color:var(--label2);font-variant-numeric:tabular-nums}
 .dot{display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;background:var(--gray)}
 .dot.ok{background:var(--green)} .dot.warn{background:var(--orange)} .dot.bad{background:var(--red)}
-/* one line: the X-Plane folder path gives way (ellipsis) before anything wraps */
+/* One line. When space runs out the X-Plane folder path shortens first, then the
+ * status texts; the buttons never shrink or overlap. Below 1000 px it wraps. */
 #strip{flex-wrap:nowrap}
-.status{flex:none}
-.actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex:1 1 auto;min-width:0;
+/* the actions take nearly all of any shortfall (only the path can give), so the
+   status texts keep their words until the path is down to nothing */
+.actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex:0 1000 auto;min-width:min-content;
   justify-content:flex-end}
 .actions > *{flex:none}
 .actions > .xplane-folder{flex:0 1 auto;min-width:0}
 .xplane-folder{display:inline-flex;align-items:center;gap:8px;min-width:0}
 #xplane-folder{color:var(--label2);max-width:300px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media (max-width:1000px){ #strip,.actions{flex-wrap:wrap} }
+@media (max-width:1000px){
+  #strip{flex-wrap:wrap;row-gap:8px} .status{flex-basis:100%}
+  .actions{flex:1 1 100%;min-width:0}
+  #imported-note{display:none}
+}
 #xplane-folder.missing{color:var(--label)}
 #config-problems .dot{margin-right:6px;vertical-align:0}
 
@@ -102,8 +109,20 @@ section.wide{grid-column:1 / -1}
 .group-title{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:0 4px;min-width:0}
 .group-status{font-size:11px;line-height:14px;color:var(--label2);white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+/* a refused change replaces the status for a few seconds: same line, no layout shift */
+.group-error{display:inline-flex;align-items:center;gap:6px;min-width:0;font-size:11px;line-height:14px;
+  color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.group-error .dot{flex:none}
+.group-title.has-error .group-status{display:none}
 .box{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0;padding:var(--pad);
-  background:var(--box);border:1px solid var(--boxline);border-radius:10px}
+  background:var(--box);border:1px solid var(--boxline);border-radius:10px;container-type:inline-size}
+
+/* Mode-dependent content: every variant sits in the same cell and only the
+ * active one is shown, so the cell is always as big as the largest variant
+ * and switching a mode never moves anything else on the page. */
+.variants{display:grid;min-width:0}
+.variants > *{grid-area:1 / 1;min-width:0}
+.inactive{visibility:hidden}
 .box.center{justify-content:center}
 .box.flush{padding:0;gap:0;overflow:hidden}
 .stack{display:flex;flex-direction:column;gap:12px}
@@ -111,8 +130,6 @@ section.wide{grid-column:1 / -1}
 .note{margin:0;font-size:11px;line-height:14px;color:var(--label2)}
 .note:empty{display:none}
 .note b{font-weight:600;color:var(--label)}
-.inline-error{margin:4px 0 0;font-size:11px;line-height:14px;color:var(--label)}
-.inline-error .dot{margin-right:6px}
 
 /* label column, control, value: one right-aligned label column per form */
 .form{display:grid;grid-template-columns:var(--labelw) minmax(0,1fr) var(--valuew);gap:8px;align-items:center}
@@ -126,10 +143,11 @@ input[type=range]{width:100%;margin:0}
 .button-row{display:flex;flex-wrap:wrap;gap:8px}
 
 /* segmented control: equal widths, a neutral raised selection */
-.segmented{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;padding:2px;border-radius:6px;
-  background:var(--track);min-width:0;justify-self:start}
+.segmented{display:inline-grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);padding:2px;border-radius:6px;
+  background:var(--track);min-width:0;max-width:100%;justify-self:start}
 .segmented button{appearance:none;-webkit-appearance:none;border:0;background:none;color:var(--label);
-  font-size:12px;line-height:16px;padding:2px 12px;border-radius:4px;white-space:nowrap}
+  font-size:12px;line-height:16px;padding:2px 10px;border-radius:4px;white-space:nowrap;min-width:0;
+  overflow:hidden;text-overflow:ellipsis}
 .segmented button.on{background:var(--ctl);box-shadow:0 0 0 .5px rgba(0,0,0,.14),0 1px 1.5px rgba(0,0,0,.14)}
 @media (prefers-color-scheme:dark){
   .segmented button.on{background:color-mix(in srgb,var(--label) 24%,transparent);box-shadow:none}
@@ -227,7 +245,7 @@ mark{background:color-mix(in srgb,var(--orange) 35%,transparent);color:inherit;b
 .effect-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gap)}
 .effect-column{display:flex;flex-direction:column;gap:8px;min-width:0}
 .effect-title{font-weight:600}
-.form.effect-params{--labelw:84px;--valuew:44px}
+.form.effect-params{--labelw:84px;--valuew:44px;grid-template-rows:repeat(3,22px)}   /* room for the 3-row effects */
 .effect-params .off{grid-column:1 / -1;color:var(--label2)}
 
 /* ------------------------------------------------------------- light bar */
@@ -244,9 +262,11 @@ mark{background:color-mix(in srgb,var(--orange) 35%,transparent);color:inherit;b
 .at-1-5{grid-area:1/5} .at-1-6{grid-area:1/6/2/8}
 .at-2-5{grid-area:2/5} .at-2-6{grid-area:2/6} .at-2-7{grid-area:2/7}
 .at-3-5{grid-area:3/5} .at-3-6{grid-area:3/6/4/8}
-@media (max-width:1000px){
-  .light-grid{grid-template-columns:var(--labelw) minmax(0,1fr) var(--valuew);grid-template-rows:none}
-  .light-grid > *{grid-area:auto!important}
+@container (max-width:980px){
+  .light-grid{grid-template-columns:var(--labelw) minmax(0,1fr) var(--valuew);grid-template-rows:repeat(6,minmax(24px,auto))}
+  .at-1-5{grid-area:4/1} .at-1-6{grid-area:4/2/5/4}
+  .at-2-5{grid-area:5/1} .at-2-6{grid-area:5/2} .at-2-7{grid-area:5/3}
+  .at-3-5{grid-area:6/1} .at-3-6{grid-area:6/2/7/4}
 }
 .color-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .color-well{appearance:none;-webkit-appearance:none;width:44px;height:24px;padding:3px;border-radius:6px;
@@ -309,3 +329,14 @@ mark{background:color-mix(in srgb,var(--orange) 35%,transparent);color:inherit;b
   background:var(--win);text-align:center}
 #quit-overlay h2{font-size:17px;line-height:22px;margin-bottom:8px}
 #quit-overlay p{margin:4px 0;color:var(--label2)}
+
+/* ---------------------------------------------- narrow panels (container) */
+/* L2 and R2 side by side need about 560 px; below that they stack */
+@container (max-width:560px){ .effect-grid{grid-template-columns:minmax(0,1fr)} }
+@container (max-width:470px){
+  .button-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .axis-row{grid-template-columns:96px minmax(32px,1fr) minmax(0,auto) auto}
+  .stick-layout{grid-template-columns:minmax(0,1fr) 96px}
+  #curve-graph{width:96px;height:96px}
+}
+@container (max-width:360px){ .readouts{grid-template-columns:minmax(0,1fr)} }

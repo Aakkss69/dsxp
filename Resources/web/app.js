@@ -112,22 +112,35 @@ function toast(message) {
   toastTimer = setTimeout(() => { t.hidden = true; }, 3000);
 }
 
-/* A refused change (e.g. 409 while wind sets the triggers) is shown under the
-   panel it came from, not swallowed. */
+/* A refused change (e.g. 409 while wind sets the triggers) is shown in the
+   title row of the panel it came from, in place of its status for a few
+   seconds - the same line, so nothing on the page moves. */
 function panelError(message) {
   const panel = lastPanel || $('main section');
-  const foot = panel.querySelector('.group-foot');
-  let p = foot.querySelector('.inline-error');
-  if (!p) {
-    p = document.createElement('p');
-    p.className = 'inline-error';
-    p.setAttribute('role', 'alert');
-    foot.appendChild(p);
+  const title = panel.querySelector('.group-title');
+  let note = title.querySelector('.group-error');
+  if (!note) {
+    note = document.createElement('span');
+    note.className = 'group-error';
+    note.setAttribute('role', 'alert');
+    title.appendChild(note);
   }
-  p.innerHTML = '<i class="dot warn"></i>' + escapeHtml(message);
-  p.hidden = false;
-  clearTimeout(p.hideTimer);
-  p.hideTimer = setTimeout(() => { p.hidden = true; }, 4000);
+  note.innerHTML = '<i class="dot warn"></i>' + escapeHtml(message);
+  note.title = message;
+  title.classList.add('has-error');
+  clearTimeout(note.hideTimer);
+  note.hideTimer = setTimeout(() => { title.classList.remove('has-error'); note.textContent = ''; }, 4000);
+}
+
+/* Show one variant of a stacked cell; the others keep their space but are
+   invisible and out of reach (inert). */
+function showVariant(container, name) {
+  container.querySelectorAll(':scope > [data-variant]').forEach(element => {
+    const on = element.dataset.variant === name;
+    element.classList.toggle('inactive', !on);
+    element.inert = !on;
+    element.setAttribute('aria-hidden', on ? 'false' : 'true');
+  });
 }
 
 /* Every change is a POST. The poll loop picks up the new state within 50 ms. */
@@ -320,19 +333,15 @@ function showLightSource() {
   const isSim = light.source === 'sim';
   const tab = isSim ? 'sim' : (light.pattern !== 0 ? 'pattern' : 'solid');
   selectSegment(byId('light-source'), b => b.dataset.source === tab);
+  /* the three variants share their grid cells, so the panel keeps its size */
   for (const which of ['solid', 'pattern', 'sim'])
-    document.querySelectorAll('.when-' + which).forEach(e => { e.hidden = tab !== which; });
+    document.querySelectorAll('.when-' + which).forEach(e => {
+      e.classList.toggle('inactive', tab !== which);
+      e.inert = tab !== which;
+    });
   selectSegment(byId('light-patterns'), b => +b.dataset.pattern === light.pattern);
   selectSegment(byId('player-lamps'), b => +b.dataset.lamps === light.player);
-  byId('light-note').textContent = isSim
-    ? 'The light bar becomes an annunciator, most urgent first: a crash strobes red, a stall '
-    + 'pulses red, a stall warning breathes amber, high load holds amber, turbulence breathes '
-    + 'cyan, otherwise it is steady green. The thresholds are the light.sim settings in feedback.conf.'
-    : tab === 'pattern'
-    ? 'The pattern animates the color chosen under Solid. It refreshes 20 times a second, '
-    + 'which leaves the Bluetooth link free for input.'
-    : 'DSXP sends the color to the controller and repeats it every half second, because macOS '
-    + 'has been observed to set its own color.';
+  showVariant(byId('light-notes'), tab);
 }
 
 function selectSlot(slot, focusSearch) {
@@ -401,17 +410,8 @@ function renderTriggerEffects() {
 
 function showTriggerSource() {
   selectSegment(byId('trigger-source'), b => b.dataset.source === triggerSource);
-  byId('trigger-manual').hidden = triggerSource !== 'manual';
-  byId('trigger-wind').hidden   = triggerSource !== 'wind';
-  byId('trigger-note').innerHTML = triggerSource === 'wind'
-    ? 'Force follows dynamic pressure, so it grows with the square of indicated airspeed, '
-    + 'like the load on a real rudder pedal. A crosswind makes one trigger heavier, and '
-    + 'turbulence turns resistance into buffet. The numbers behind this are the wind settings '
-    + 'in feedback.conf; your manual effects come back when you switch to Manual.'
-    : '<b>Resist</b> holds a constant force past a point. <b>Weapon</b> resists across a band, '
-    + 'then breaks through like a gun trigger. <b>Vibrate</b> buzzes once you press past the '
-    + 'threshold. Positions are a share of trigger travel and force is a share of the maximum. '
-    + 'Squeeze a trigger to feel the change.';
+  showVariant(byId('trigger-variants'), triggerSource);
+  showVariant(byId('trigger-notes'), triggerSource);
 }
 
 /* ---------------------------------------------------------------- rumble */
@@ -426,15 +426,8 @@ const RUMBLE_TESTS = {
 
 function showRumbleSource() {
   selectSegment(byId('rumble-source'), b => b.dataset.source === rumbleSource);
-  byId('rumble-manual').hidden = rumbleSource !== 'manual';
-  byId('rumble-sim').hidden    = rumbleSource !== 'sim';
-  byId('rumble-note').textContent = rumbleSource === 'sim'
-    ? 'Set by the flight model. A stall on one wing buzzes that side harder, so you feel which '
-    + 'way the aircraft is about to roll; high load adds a jolt on both sides, and a crash shakes '
-    + 'both. The thresholds are the rumble settings in feedback.conf.'
-    : 'Run the motors by hand to feel their range. The left motor is the heavier one, so equal '
-    + 'values feel stronger on the left. Closing this window stops them. If the motors do '
-    + 'nothing, turn the v2 path off.';
+  showVariant(byId('rumble-variants'), rumbleSource);
+  showVariant(byId('rumble-notes'), rumbleSource);
 }
 
 /* ------------------------------------------------------------ rendering */
@@ -523,6 +516,9 @@ function renderApp(app, state) {
   const folder = byId('xplane-folder');
   setText(folder, app.xpdir ? app.xpdir.replace(/^\/Users\/[^/]+/, '~') : 'X-Plane folder not found');
   folder.title = app.xpdir || 'Choose your X-Plane 12 folder to search its commands';
+  /* the path may be truncated to nothing in a narrow window: the button still tells */
+  byId('choose-xplane').title = app.xpdir ? 'X-Plane folder: ' + app.xpdir + ' (choose another)'
+                                          : 'Choose your X-Plane 12 folder to search its commands';
   folder.classList.toggle('missing', !app.xpdir);
   byId('imported-note').hidden = !app.imported;
   renderConfig(app.config);

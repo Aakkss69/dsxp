@@ -269,7 +269,8 @@
       <div class="segmented full" id="trigger-source" role="radiogroup" aria-label="Trigger effects source">
         <button data-source="manual" role="radio">Manual</button><button data-source="wind" role="radio">Wind</button>
       </div>
-      <div id="trigger-wind" hidden>
+      <div class="variants" id="trigger-variants">
+      <div id="trigger-wind" data-variant="wind">
         <dl class="readouts">
           <div><dt>Indicated airspeed</dt><dd id="wind-ias">&mdash;</dd></div>
           <div><dt>Wind</dt><dd id="wind-speed">&mdash;</dd></div>
@@ -281,7 +282,7 @@
           <div><dt>R2</dt><dd id="wind-r2">&mdash;</dd></div>
         </dl>
       </div>
-      <div class="effect-grid" id="trigger-manual">
+      <div class="effect-grid" id="trigger-manual" data-variant="manual">
         <div class="effect-column" data-side="l">
           <div class="effect-title">L2</div>
           <div class="segmented full effect-modes" role="radiogroup" aria-label="L2 effect">
@@ -297,8 +298,12 @@
           <div class="form effect-params"></div>
         </div>
       </div>
+      </div>
     </div>
-    <footer class="group-foot"><p class="note" id="trigger-note"></p></footer>
+    <footer class="group-foot"><div class="variants" id="trigger-notes">
+      <p class="note" data-variant="manual"><b>Resist</b> holds a constant force past a point. <b>Weapon</b> resists across a band, then breaks through like a gun trigger. <b>Vibrate</b> buzzes once you press past the threshold. Positions are a share of trigger travel and force is a share of the maximum. Squeeze a trigger to feel the change.</p>
+      <p class="note" data-variant="wind">Force follows dynamic pressure, so it grows with the square of indicated airspeed, like the load on a real rudder pedal. A crosswind makes one trigger heavier, and turbulence turns resistance into buffet. The numbers behind this are the wind settings in feedback.conf; your manual effects come back when you switch to Manual.</p>
+    </div></footer>
   </section>
 
   <section id="panel-rumble">
@@ -307,7 +312,8 @@
       <div class="segmented full" id="rumble-source" role="radiogroup" aria-label="Rumble source">
         <button data-source="manual" role="radio">Manual</button><button data-source="sim" role="radio">Simulator</button>
       </div>
-      <div id="rumble-manual" class="stack">
+      <div class="variants" id="rumble-variants">
+      <div id="rumble-manual" class="stack" data-variant="manual">
         <div class="form">
           <label for="rumble-left">Left motor:</label>
           <input type="range" id="rumble-left" min="0" max="255" value="0"><output id="rumble-left-value" for="rumble-left">0%</output>
@@ -322,7 +328,7 @@
           <span></span>
         </div>
       </div>
-      <div id="rumble-sim" hidden>
+      <div id="rumble-sim" data-variant="sim">
         <dl class="readouts">
           <div><dt>Left wing stall</dt><dd id="rumble-stall-left">&mdash;</dd></div>
           <div><dt>Right wing stall</dt><dd id="rumble-stall-right">&mdash;</dd></div>
@@ -334,8 +340,12 @@
           <div><dt>Right motor</dt><dd id="rumble-out-right">&mdash;</dd></div>
         </dl>
       </div>
+      </div>
     </div>
-    <footer class="group-foot"><p class="note" id="rumble-note"></p></footer>
+    <footer class="group-foot"><div class="variants" id="rumble-notes">
+      <p class="note" data-variant="manual">Run the motors by hand to feel their range. The left motor is the heavier one, so equal values feel stronger on the left. Closing this window stops them. If the motors do nothing, turn the v2 path off.</p>
+      <p class="note" data-variant="sim">Set by the flight model. A stall on one wing buzzes that side harder, so you feel which way the aircraft is about to roll; high load adds a jolt on both sides, and a crash shakes both. The thresholds are the rumble settings in feedback.conf.</p>
+    </div></footer>
   </section>
 
   <section class="wide" id="panel-light">
@@ -375,7 +385,11 @@
         </div>
       </div>
     </div>
-    <footer class="group-foot"><p class="note" id="light-note"></p></footer>
+    <footer class="group-foot"><div class="variants" id="light-notes">
+      <p class="note" data-variant="solid">DSXP sends the color to the controller and repeats it every half second, because macOS has been observed to set its own color.</p>
+      <p class="note" data-variant="pattern">The pattern animates the color chosen under Solid. It refreshes 20 times a second, which leaves the Bluetooth link free for input.</p>
+      <p class="note" data-variant="sim">The light bar becomes an annunciator, most urgent first: a crash strobes red, a stall pulses red, a stall warning breathes amber, high load holds amber, turbulence breathes cyan, otherwise it is steady green. The thresholds are the light.sim settings in feedback.conf.</p>
+    </div></footer>
   </section>
 </main>
 
