@@ -24,11 +24,10 @@ typedef void (*dsxp_event_fn)(void *ctx, int event);
 typedef void (*dsxp_raw_fn)(void *ctx, const unsigned char *report, long len);
 
 typedef struct {
-    const char *data_dir;          /* settings live here (bindings.conf)            */
+    const char *data_dir;          /* bridge.conf, controls.conf, feedback.conf     */
     const char *log_dir;           /* reports-*.log and events-*.log                */
     const char *commands_path;     /* X-Plane Resources/plugins/Commands.txt, or "" */
     const char *import_bindings;   /* legacy bindings.conf to import once, or NULL  */
-    int         log_retention_days;/* <= 0 means 14                                 */
     bool        verbose;           /* also echo log lines to stderr                 */
     bool        dry_run;           /* decode and drive the controller, never X-Plane */
     dsxp_event_fn on_event;
@@ -57,6 +56,9 @@ typedef struct {
     int      hid_open_result; /* IOReturn of IOHIDManagerOpen, 0 = success       */
     int      ncmds;           /* X-Plane commands in the catalogue               */
     double   report_hz;       /* input report rate over the last 10 s window     */
+    int      xp_port;         /* X-Plane's UDP port (bridge.conf xplane.port)     */
+    int      config_warnings; /* problems found in the config files              */
+    char     config_warn_file[32];   /* first file with a problem, or ""         */
     char     xp_exe_path[1024];
     char     commands_path[1024];
 } dsxp_status_t;

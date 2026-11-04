@@ -92,8 +92,8 @@ void xp_disengage(core_t *c, double now) {
     }
     for (int i = 0; i < OV_COUNT; i++) {
         if (c->ov_on[i]) {
-            c->ov_release_left[i] = OVERRIDE_RELEASE_REPEAT;
-            c->ov_release_at[i] = now + OVERRIDE_REASSERT_SEC;
+            c->ov_release_left[i] = c->bridge.override_release_repeats;
+            c->ov_release_at[i] = now + c->bridge.override_reassert_s;
         }
         c->ov_on[i] = false;
     }
@@ -115,7 +115,7 @@ void xp_release_tick(core_t *c, double now) {
             centre_for(c, k);
             xp_send_dref(c, OV_PATH[k], 0.0f);
             c->ov_release_left[k]--;
-            c->ov_release_at[k] = now + OVERRIDE_REASSERT_SEC;
+            c->ov_release_at[k] = now + c->bridge.override_reassert_s;
         }
     }
 }
@@ -132,7 +132,7 @@ static void plan_overrides(core_t *c, double now) {
     xp_wanted_overrides(&c->s, want);
     for (int k = 0; k < OV_COUNT; k++) {
         if (want[k]) {
-            if (!c->ov_on[k] || now - c->ov_last[k] >= OVERRIDE_REASSERT_SEC) {
+            if (!c->ov_on[k] || now - c->ov_last[k] >= c->bridge.override_reassert_s) {
                 xp_send_dref(c, OV_PATH[k], 1.0f);
                 c->ov_on[k] = true;
                 c->ov_last[k] = now;
@@ -142,12 +142,12 @@ static void plan_overrides(core_t *c, double now) {
             centre_for(c, k);
             xp_send_dref(c, OV_PATH[k], 0.0f);
             c->ov_on[k] = false;
-            c->ov_release_left[k] = OVERRIDE_RELEASE_REPEAT;
-            c->ov_release_at[k] = now + OVERRIDE_REASSERT_SEC;
+            c->ov_release_left[k] = c->bridge.override_release_repeats;
+            c->ov_release_at[k] = now + c->bridge.override_reassert_s;
         } else if (c->ov_release_left[k] > 0 && now >= c->ov_release_at[k]) {
             xp_send_dref(c, OV_PATH[k], 0.0f);
             c->ov_release_left[k]--;
-            c->ov_release_at[k] = now + OVERRIDE_REASSERT_SEC;
+            c->ov_release_at[k] = now + c->bridge.override_reassert_s;
         }
     }
 }
@@ -159,7 +159,7 @@ void xp_push(core_t *c, double now) {
     const settings_t *s = &c->s;
     /* No fresh input (Bluetooth hiccup, controller switched off): hold every
      * axis neutral and release every button rather than replaying stale values. */
-    bool live = c->have_report && (now - c->last_report_at) <= INPUT_STALE_SEC;
+    bool live = c->have_report && (now - c->last_report_at) <= c->bridge.input_stale_s;
 
     double roll = 0, pitch = 0, yaw = 0, thr = -1, lb = -1, rb = -1;
     if (live) {
@@ -201,7 +201,7 @@ void xp_push(core_t *c, double now) {
     /* Throttle has no override, so writing it every tick would fight the mouse,
      * keyboard and autothrottle. Send it on change, plus a slow keepalive. */
     if (thr >= 0 && (!c->thr_sent || fabs(thr - c->last_thr) >= 0.002 ||
-                     (THROTTLE_KEEPALIVE_SEC > 0 && now - c->last_thr_at >= THROTTLE_KEEPALIVE_SEC))) {
+                     (c->bridge.throttle_keepalive_s > 0 && now - c->last_thr_at >= c->bridge.throttle_keepalive_s))) {
         xp_send_dref(c, DR_THROTL, (float)thr);
         c->last_thr = thr;
         c->last_thr_at = now;
@@ -219,7 +219,7 @@ void xp_push(core_t *c, double now) {
             c->last_cmd_time[i] = now;
             if (c->verbose) dsxp_log("%s -> %s", BTN_NAME[i], s->bind[i].cmd);
         } else if (down && was && s->bind[i].repeat &&
-                   now - c->last_cmd_time[i] >= 1.0 / CMD_REPEAT_HZ) {
+                   now - c->last_cmd_time[i] >= 1.0 / c->bridge.repeat_hz) {
             xp_send_cmnd(c, s->bind[i].cmd);
             c->last_cmd_time[i] = now;
         }

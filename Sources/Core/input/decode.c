@@ -38,11 +38,17 @@ void decode_touch(ds_state_t *st, const unsigned char *r) {
 
 /* A gesture is an event, not a state, so it is published as a short pulse on its
  * slot. That gives xp_push a clean press edge with no special-casing. */
-static void fire(gesture_t *g, int slot, double now) { g->pulse[slot] = now + GESTURE_PULSE_SEC; }
+static void fire(gesture_t *g, int slot, double pulse_s, double now) { g->pulse[slot] = now + pulse_s; }
 
 /* Tap vs swipe, decided on release. Sensitivity shortens the swipe a gesture
  * needs to travel: 0.0 wants a deliberate stroke, 1.0 triggers on a flick. */
 void detect_gestures(const ds_state_t *st, gesture_t *g, double sens, double now) {
+    detect_gestures_cfg(st, g, sens, NULL, now);
+}
+
+void detect_gestures_cfg(const ds_state_t *st, gesture_t *g, double sens,
+                         const gesture_cfg_t *gc, double now) {
+    if (!gc) gc = &GESTURE_DEFAULTS;
     bool now1 = st->touch[0].active;
     bool now2 = st->touch[1].active;
 
@@ -59,8 +65,8 @@ void detect_gestures(const ds_state_t *st, gesture_t *g, double sens, double now
         double dt = now - g->st;
         if (!isfinite(sens) || sens < 0) sens = 0;
         if (sens > 1) sens = 1;
-        double swipe_min = 0.30 - 0.22 * sens;
-        double tap_max   = 0.04 + 0.03 * (1.0 - sens);
+        double swipe_min = gc->swipe_at0 + (gc->swipe_at100 - gc->swipe_at0) * sens;
+        double tap_max   = gc->wander_at0 + (gc->wander_at100 - gc->wander_at0) * sens;
 
         if (dist >= swipe_min) {
             /* eight 45-degree sectors, starting at "right" and going clockwise
@@ -72,9 +78,9 @@ void detect_gestures(const ds_state_t *st, gesture_t *g, double sens, double now
             double deg = atan2(dy, dx) * 180.0 / M_PI;
             if (deg < 0) deg += 360.0;
             int sec = ((int)((deg + 22.5) / 45.0)) & 7;
-            fire(g, SECTOR[sec], now);
-        } else if (dist <= tap_max && dt <= 0.35) {
-            fire(g, g->saw_second ? B_TP_TAP2 : B_TP_TAP, now);
+            fire(g, SECTOR[sec], gc->pulse_s, now);
+        } else if (dist <= tap_max && dt <= gc->tap_time_s) {
+            fire(g, g->saw_second ? B_TP_TAP2 : B_TP_TAP, gc->pulse_s, now);
         }
         g->saw_second = false;
     }
@@ -83,6 +89,11 @@ void detect_gestures(const ds_state_t *st, gesture_t *g, double sens, double now
 
 bool ds_decode_report(ds_state_t *st, gesture_t *g, const tuning_t *tune,
                       const unsigned char *r, long len, double now) {
+    return ds_decode_report_cfg(st, g, tune, NULL, r, len, now);
+}
+
+bool ds_decode_report_cfg(ds_state_t *st, gesture_t *g, const tuning_t *tune,
+                          const gesture_cfg_t *gc, const unsigned char *r, long len, double now) {
     if (!r || len < IN_REPORT_MIN_LEN || r[0] != BT_REPORT_ID) return false;
     static const int off[S_COUNT] = { OFF_LX, OFF_LY, OFF_RX, OFF_RY, OFF_L2, OFF_R2 };
 
@@ -117,7 +128,7 @@ bool ds_decode_report(ds_state_t *st, gesture_t *g, const tuning_t *tune,
     st->btn[B_MUTE]     = (b2 & 0x04) != 0;
 
     decode_touch(st, r);
-    detect_gestures(st, g, tune->gesture, now);
+    detect_gestures_cfg(st, g, tune->gesture, gc, now);
     for (int i = B_TP_TAP; i < B_COUNT; i++)
         st->btn[i] = now < g->pulse[i];
     return true;

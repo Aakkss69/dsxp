@@ -43,7 +43,15 @@ typedef struct {
     CFRunLoopTimerRef timer;
     atomic_bool stop_req;
 
-    char data_dir[1024], log_dir[1024], settings_path[1100];
+    char data_dir[1024], log_dir[1024];
+
+    /* config files (core thread), and what is published about them (snap_lock) */
+    cfg_store_t store;
+    double last_cfg_poll;
+    double timer_hz;            /* rate the live CFRunLoopTimer was created with */
+    conf_warns_t pub_warns[CF_COUNT];
+    unsigned pub_gen;
+    int pub_last_reload;
     dsxp_event_fn on_event; void *event_ctx;
     dsxp_raw_fn on_raw; void *raw_ctx;
     bool verbose, dry_run;
@@ -136,25 +144,35 @@ static void sink_out(void *ctx, const unsigned char *rep) {
 }
 
 typedef struct { char path[1100]; char *data; size_t len; } save_job_t;
+static void save_job_noop(void *arg) { (void)arg; }
 
 static void save_job_run(void *arg) {
     save_job_t *j = arg;
-    if (!file_write_atomic(j->path, j->data, j->len, 0600))
+    if (!file_write_atomic(j->path, j->data, j->len, 0644))
         dsxp_log("cannot write %s", j->path);
     free(j->data);
     free(j);
 }
 
-static void sink_save(void *ctx, const char *text, size_t len) {
+/* The config store writes through here: synchronously at start and quit, on the
+ * io queue otherwise so the core loop never waits for the disk. */
+static bool store_write(void *ctx, const char *path, const char *text, size_t len, bool sync) {
     (void)ctx;
+    if (sync || !R.io) {
+        if (R.io) dispatch_sync_f(R.io, NULL, save_job_noop);      /* keep writes in order */
+        bool okw = file_write_atomic(path, text, len, 0644);
+        if (!okw) dsxp_log("cannot write %s", path);
+        return okw;
+    }
     save_job_t *j = malloc(sizeof *j);
-    if (!j) return;
+    if (!j) return false;
     j->data = malloc(len ? len : 1);
-    if (!j->data) { free(j); return; }
+    if (!j->data) { free(j); return false; }
     memcpy(j->data, text, len);
     j->len = len;
-    snprintf(j->path, sizeof j->path, "%s", R.settings_path);
+    snprintf(j->path, sizeof j->path, "%s", path);
     dispatch_async_f(R.io, j, save_job_run);
+    return true;
 }
 
 /* --------------------------------------------------------- writer thread */
@@ -339,6 +357,7 @@ static void publish(core_t *c, double now) {
     st.imported_legacy = R.imported;
     st.hid_open_result = R.hid_open_result;
     st.report_hz = c->report_hz;
+    st.xp_port = c->bridge.port;
     snprintf(st.xp_exe_path, sizeof st.xp_exe_path, "%s", c->xp_exe);
     /* the catalogue changes rarely: take its lock only when the generation moved,
      * not 60 times a second (F17) */
@@ -359,13 +378,18 @@ static void publish(core_t *c, double now) {
     pthread_mutex_lock(&R.snap_lock);
     R.snap = snap;
     st.seq = ++R.seq;
+    for (int f = 0; f < CF_COUNT; f++) {
+        st.config_warnings += R.pub_warns[f].n;
+        if (R.pub_warns[f].n && !st.config_warn_file[0])
+            snprintf(st.config_warn_file, sizeof st.config_warn_file, "%s", conf_schema((conf_file_t)f)->file);
+    }
     R.status = st;
     pthread_mutex_unlock(&R.snap_lock);
 
-    char sig[128];
-    snprintf(sig, sizeof sig, "%d%d%d%d%d%d%d%d%d", st.link, st.input_live, st.xp_running,
+    char sig[160];
+    snprintf(sig, sizeof sig, "%d%d%d%d%d%d%d%d%d|%d|%d", st.link, st.input_live, st.xp_running,
              st.xp_answering, st.engaged, st.suspended, st.ncmds > 0, st.hid_open_result,
-             atomic_load(&R.access));
+             atomic_load(&R.access), st.config_warnings, st.xp_port);
     if (strcmp(sig, R.status_sig) != 0) {
         snprintf(R.status_sig, sizeof R.status_sig, "%s", sig);
         if (R.on_event) R.on_event(R.event_ctx, DSXP_EV_STATUS);
@@ -404,16 +428,88 @@ static void shutdown_core(void) {
         dsxp_log("a controller write was still blocked at quit; left it behind");
     }
 
-    /* drain queued saves, then write the final state synchronously */
+    /* drain queued saves, then write what the mapper still had pending */
     dispatch_sync_f(R.io, NULL, noop);
-    if (c->cfg_dirty) {
-        char buf[16384];
-        size_t n = bindings_format(&c->s, buf, sizeof buf);
-        if (!file_write_atomic(R.settings_path, buf, n, 0600))
-            dsxp_log("cannot write %s", R.settings_path);
-        c->cfg_dirty = false;
+    if (c->cfg_dirty_mask) {
+        static config_t live;
+        core_get_config(c, &live);
+        cfg_store_flush(&R.store, &live, c->cfg_dirty_mask, wall_now(), true);
+        c->cfg_dirty_mask = 0;
     }
     dsxp_log("stopped. %ld reports processed.", c->reports_total + c->reports_window);
+}
+
+static void timer_cb(CFRunLoopTimerRef t, void *info);
+
+/* timing.tick_rate changed: replace the timer. Legal from the timer's own
+ * callback; the run loop keeps the old one alive until the callback returns. */
+static void retime_timer(double hz) {
+    if (!(hz >= 1)) return;
+    CFRunLoopTimerContext tc = { 0 };
+    CFRunLoopTimerRef nt = CFRunLoopTimerCreate(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + 1.0 / hz,
+                                                1.0 / hz, 0, 0, timer_cb, &tc);
+    CFRunLoopTimerSetTolerance(nt, 0.1 / hz);
+    CFRunLoopAddTimer(R.rl, nt, kCFRunLoopDefaultMode);
+    if (R.timer) { CFRunLoopTimerInvalidate(R.timer); CFRelease(R.timer); }
+    R.timer = nt;
+    R.timer_hz = hz;
+    dsxp_log("core loop now runs at %.0f Hz", hz);
+}
+
+static void publish_config(void) {
+    pthread_mutex_lock(&R.snap_lock);
+    memcpy(R.pub_warns, R.store.warns, sizeof R.pub_warns);
+    R.pub_gen = R.store.gen;
+    R.pub_last_reload = R.store.last_reload;
+    pthread_mutex_unlock(&R.snap_lock);
+}
+
+/* bridge.conf changed while running: apply what needs more than a new value. */
+static void apply_bridge_runtime(core_t *c, const bridge_cfg_t *old, double now) {
+    if (c->bridge.port != old->port) {
+        /* hand X-Plane back on the old port before talking to the new one */
+        xp_disengage(c, now);
+        telemetry_unsubscribe(c);
+        sim_release(c, "X-Plane port changed");
+        R.xp.sin_port = htons((uint16_t)c->bridge.port);
+        c->force_gate = true;
+        dsxp_log("X-Plane port is now %d", c->bridge.port);
+    }
+    if (c->bridge.telemetry_hz != old->telemetry_hz && c->subscribed) {
+        c->subscribed = false;              /* the next tick re-subscribes at the new rate */
+        c->last_sub = 0;
+    }
+    if (c->bridge.log_retention_days != old->log_retention_days ||
+        c->bridge.log_file_cap_mb != old->log_file_cap_mb || c->bridge.log_verbose != old->log_verbose)
+        log_configure(c->bridge.log_retention_days, (long)c->bridge.log_file_cap_mb * 1024 * 1024,
+                      R.verbose || c->bridge.log_verbose);
+    c->verbose = R.verbose || c->bridge.log_verbose;
+}
+
+/* Every CONFIG_POLL_SEC: apply edits made outside DSXP. Every tick: save what
+ * the mapper changed once save_delay has passed. */
+static void config_tick(core_t *c, double now) {
+    static config_t live;
+    if (now - R.last_cfg_poll >= CONFIG_POLL_SEC) {
+        R.last_cfg_poll = now;
+        core_get_config(c, &live);
+        bridge_cfg_t old = c->bridge;
+        unsigned ch = cfg_store_poll(&R.store, &live, c->cfg_dirty_mask, wall_now());
+        if (ch) {
+            core_apply_config(c, &live, ch, now);
+            if (ch & CFB_BRIDGE) apply_bridge_runtime(c, &old, now);
+            publish_config();
+        }
+    }
+    unsigned due = core_save_due(c, now);
+    if (due) {
+        core_get_config(c, &live);
+        unsigned ch = cfg_store_flush(&R.store, &live, due, wall_now(), false);
+        if (ch) {                            /* an outside edit was merged in */
+            core_apply_config(c, &live, ch, now);
+            publish_config();
+        }
+    }
 }
 
 static void timer_cb(CFRunLoopTimerRef t, void *info) {
@@ -446,7 +542,9 @@ static void timer_cb(CFRunLoopTimerRef t, void *info) {
         core_set_gate(c, bt, usb, xp, exe, now);
     }
     core_tick(c, now);
+    config_tick(c, now);
     publish(c, now);
+    if (R.timer_hz != c->bridge.tick_hz) retime_timer(c->bridge.tick_hz);
 }
 
 static void *core_main(void *arg) {
@@ -458,9 +556,10 @@ static void *core_main(void *arg) {
     R.mgr = runtime_test_disable_hid ? NULL : open_hid(R.rl, &R.hid_open_result);
 
     CFRunLoopTimerContext tc = { 0 };
+    R.timer_hz = R.core.bridge.tick_hz;
     R.timer = CFRunLoopTimerCreate(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + 0.01,
-                                   1.0 / TICK_HZ, 0, 0, timer_cb, &tc);
-    CFRunLoopTimerSetTolerance(R.timer, 0.001);
+                                   1.0 / R.timer_hz, 0, 0, timer_cb, &tc);
+    CFRunLoopTimerSetTolerance(R.timer, 0.1 / R.timer_hz);
     CFRunLoopAddTimer(R.rl, R.timer, kCFRunLoopDefaultMode);
 
     pthread_mutex_lock(&R.life);
@@ -522,7 +621,7 @@ static void cmds_job_run(void *arg) {
 
 /* ------------------------------------------------------------ public API */
 
-static bool open_udp(void) {
+static bool open_udp(int port) {
     R.sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (R.sock < 0) { dsxp_log("cannot create UDP socket"); return false; }
     fcntl(R.sock, F_SETFD, FD_CLOEXEC);
@@ -544,7 +643,7 @@ static bool open_udp(void) {
         dsxp_log("cannot bind the UDP socket to loopback");
     memset(&R.xp, 0, sizeof R.xp);
     R.xp.sin_family = AF_INET;
-    R.xp.sin_port = htons(XP_PORT);
+    R.xp.sin_port = htons((uint16_t)port);
     inet_pton(AF_INET, XP_IP, &R.xp.sin_addr);
     return true;
 }
@@ -583,7 +682,6 @@ int dsxp_start(const dsxp_config_t *cfg) {
     memset(&R.status, 0, sizeof R.status);
     snprintf(R.data_dir, sizeof R.data_dir, "%s", cfg->data_dir);
     snprintf(R.log_dir, sizeof R.log_dir, "%s", cfg->log_dir);
-    snprintf(R.settings_path, sizeof R.settings_path, "%s/bindings.conf", R.data_dir);
     R.on_event = cfg->on_event; R.event_ctx = cfg->event_ctx;
     R.on_raw = cfg->on_raw_report; R.raw_ctx = cfg->raw_ctx;
     R.verbose = cfg->verbose;
@@ -591,43 +689,35 @@ int dsxp_start(const dsxp_config_t *cfg) {
 
     mkdir_p(R.data_dir, 0700);
     mkdir_p(R.log_dir, 0755);
-    log_init(R.log_dir, cfg->log_retention_days, cfg->verbose);
+    log_init(R.log_dir, BRIDGE_DEFAULTS.log_retention_days, cfg->verbose);
     if (!R.io) {
         dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
             DISPATCH_QUEUE_SERIAL, QOS_CLASS_UTILITY, 0);
         R.io = dispatch_queue_create("dsxp.io", attr);
     }
 
-    /* settings: our own file, else a one-time import of the prototype's, else defaults */
-    settings_t s;
-    load_defaults(&s);
-    bool need_save = false;
-    size_t len = 0;
-    char *text = file_read_all(R.settings_path, SETTINGS_MAX_BYTES, &len);
-    if (text) {
-        bindings_parse(&s, text, len);
-        dsxp_log("loaded settings from %s", R.settings_path);
-    } else if (cfg->import_bindings && *cfg->import_bindings &&
-               (text = file_read_all(cfg->import_bindings, SETTINGS_MAX_BYTES, &len)) != NULL) {
-        bindings_parse(&s, text, len);
-        R.imported = true;
-        need_save = true;
-        dsxp_log("imported settings from %s", cfg->import_bindings);
-    } else {
-        need_save = true;
-        dsxp_log("no settings yet - using profile defaults");
+    /* the three config files: written on first run, older settings imported once */
+    static config_t conf;
+    if (cfg_store_open(&R.store, R.data_dir, cfg->import_bindings, &conf, wall_now(), store_write, NULL) != 0) {
+        start_rollback();
+        pthread_mutex_unlock(&R.life);
+        return -1;
     }
-    free(text);
+    R.imported = R.store.imported_prototype || R.store.migrated_v2;
+    log_configure(conf.bridge.log_retention_days, (long)conf.bridge.log_file_cap_mb * 1024 * 1024,
+                  cfg->verbose || conf.bridge.log_verbose);
+    publish_config();
+    R.last_cfg_poll = now_sec();
 
-    open_udp();
+    open_udp(conf.bridge.port);
     load_commands_now(cfg->commands_path);
 
-    core_sinks_t sinks = { NULL, sink_udp, sink_out, sink_save };
-    core_init(&R.core, &s, &sinks);
-    R.core.verbose = R.verbose;
+    core_sinks_t sinks = { NULL, sink_udp, sink_out };
+    core_init(&R.core, &conf.s, &sinks);
+    R.core.bridge = conf.bridge;
+    R.core.verbose = R.verbose || conf.bridge.log_verbose;
     R.core.dry_run = R.dry_run;
     R.core.imported = R.imported;
-    if (need_save) { R.core.cfg_dirty = true; R.core.cfg_dirty_at = 0; }
 
     /* Backstop for a previous instance that died without cleanup: if X-Plane is
      * up, make sure no stale override is holding its controls. */
@@ -789,10 +879,34 @@ static void runtime_app_info(void *ctx, jbuf_t *j) {
     jb_printf(j, "{\"access\":\"%s\",\"cmds\":%d,\"xpdir\":", access, st.ncmds);
     jb_str(j, xpdir);
     jb_printf(j, ",\"imported\":%s,\"xp_answering\":%s,\"input_live\":%s,\"hid_open\":%d,"
-                 "\"hz\":%.1f,\"suspended\":%s}",
+                 "\"hz\":%.1f,\"suspended\":%s,\"config\":{\"dir\":",
               st.imported_legacy ? "true" : "false", st.xp_answering ? "true" : "false",
               st.input_live ? "true" : "false", st.hid_open_result, st.report_hz,
               st.suspended ? "true" : "false");
+    jb_str(j, R.data_dir);
+    static conf_warns_t w[CF_COUNT];
+    pthread_mutex_lock(&R.snap_lock);
+    memcpy(w, R.pub_warns, sizeof w);
+    unsigned gen = R.pub_gen;
+    int last = R.pub_last_reload;
+    pthread_mutex_unlock(&R.snap_lock);
+    jb_printf(j, ",\"gen\":%u,\"reloaded\":", gen);
+    jb_str(j, last > 0 ? conf_schema((conf_file_t)(last - 1))->file : "");
+    jb_printf(j, ",\"warnings\":[");
+    int nw = 0, dropped = 0;
+    for (int f = 0; f < CF_COUNT; f++) {
+        dropped += w[f].dropped;
+        for (int i = 0; i < w[f].n; i++) {
+            jb_printf(j, "%s{\"file\":", nw++ ? "," : "");
+            jb_str(j, conf_schema((conf_file_t)f)->file);
+            jb_printf(j, ",\"line\":%d,\"key\":", w[f].w[i].line);
+            jb_str(j, w[f].w[i].key);
+            jb_printf(j, ",\"msg\":");
+            jb_str(j, w[f].w[i].msg);
+            jb_printf(j, "}");
+        }
+    }
+    jb_printf(j, "],\"dropped\":%d}}", dropped);
 }
 
 void dsxp_api(const char *method, const char *path, const char *query, dsxp_response_t *out) {

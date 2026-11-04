@@ -1,4 +1,5 @@
-/* Settings: profile defaults, and the bindings.conf text format. Pure. */
+/* Settings: profile defaults, and the importer for the old bindings.conf format
+ * (the prototype and DSXP before the config files). Pure. */
 #include "core_internal.h"
 #include <math.h>
 #include <stdarg.h>
@@ -64,6 +65,10 @@ void load_defaults(settings_t *s) {
     s->rmode = RM_MANUAL;
     /* v2 produced no rumble at all on the author's controller; classic works */
     s->rumble_v2 = false;
+    s->gesture = GESTURE_DEFAULTS;
+    s->wind = WIND_DEFAULTS;
+    s->rumble = RUMBLE_DEFAULTS;
+    s->lsim = LIGHTSIM_DEFAULTS;
 }
 
 /* X-Plane command paths look like sim/flight_controls/flaps_up. Restricting the
@@ -187,47 +192,4 @@ bool bindings_parse(settings_t *s, const char *text, size_t len) {
         parse_line(s, line);
     }
     return true;
-}
-
-static void put(char *b, size_t cap, size_t *o, const char *fmt, ...)
-    __attribute__((format(printf, 4, 5)));
-static void put(char *b, size_t cap, size_t *o, const char *fmt, ...) {
-    if (cap == 0 || *o >= cap - 1) return;
-    va_list ap;
-    va_start(ap, fmt);
-    int n = vsnprintf(b + *o, cap - *o, fmt, ap);
-    va_end(ap);
-    if (n < 0) return;
-    *o += (size_t)n;
-    if (*o > cap - 1) *o = cap - 1;
-}
-
-size_t bindings_format(const settings_t *s, char *b, size_t cap) {
-    size_t o = 0;
-    put(b, cap, &o, "# dsxp bindings v2 - rewritten by DSXP\n");
-    put(b, cap, &o, "tune deadzone %.4f\n", s->tune.deadzone);
-    put(b, cap, &o, "tune curve %.4f\n",    s->tune.curve);
-    put(b, cap, &o, "tune gesture %.4f\n",  s->tune.gesture);
-    put(b, cap, &o, "light %d %d %d %d %d %.3f %d %.3f %d\n", s->light.r, s->light.g, s->light.b,
-        s->light.on ? 1 : 0, s->light.pattern, s->light.speed, s->light.player,
-        s->light.bright, s->light.mode);
-    put(b, cap, &o, "fxmode %s\n", s->fxmode == FXM_WIND ? "wind" : "manual");
-    put(b, cap, &o, "rumblemode %s\n", s->rmode == RM_SIM ? "sim" : "manual");
-    put(b, cap, &o, "rumblepath %s\n", s->rumble_v2 ? "v2" : "classic");
-    /* always the hand-set effects: wind mode computes its own and never saves them */
-    for (int i = 0; i < 2; i++)
-        put(b, cap, &o, "trigger %c %d %d %d %d %d\n", i ? 'r' : 'l',
-            s->fx_manual[i].mode, s->fx_manual[i].start, s->fx_manual[i].end,
-            s->fx_manual[i].strength, s->fx_manual[i].freq);
-    put(b, cap, &o, "# axis <source> <target> <invert>\n");
-    for (int i = 0; i < S_COUNT; i++) {
-        int t = s->axis[i].target;
-        if (t < 0 || t >= AX_TARGET_COUNT) t = AX_NONE;
-        put(b, cap, &o, "axis %s %s %d\n", SRC_KEY[i], AX_KEY[t], s->axis[i].invert ? 1 : 0);
-    }
-    put(b, cap, &o, "# button <slot> <repeat> <command>\n");
-    for (int i = 0; i < B_COUNT; i++)
-        if (s->bind[i].cmd[0] && cmd_valid(s->bind[i].cmd))
-            put(b, cap, &o, "button %d %d %s\n", i, s->bind[i].repeat ? 1 : 0, s->bind[i].cmd);
-    return o;
 }

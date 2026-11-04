@@ -31,6 +31,9 @@ void test_output(void);
 void test_json(void);
 void test_api(void);
 void test_core(void);
+void test_config(void);
+void test_config_store(void);
+int  test_write_configs(const char *dir);
 
 int dsxp_core_tests_run(void);
 

@@ -1,4 +1,5 @@
-/* bindings.conf: round trip, legacy files, hostile input, fuzzing. */
+/* The old bindings.conf format (imported once, never written): legacy files,
+ * hostile input, fuzzing. The config files have their own tests (test_config.c). */
 #include "tests.h"
 #include <stdlib.h>
 #include <string.h>
@@ -17,19 +18,17 @@ static void check_invariants(const settings_t *s) {
     for (int i = 0; i < B_COUNT; i++) CHECK(!s->bind[i].cmd[0] || cmd_valid(s->bind[i].cmd));
 }
 
-static bool same(const settings_t *a, const settings_t *b) {
-    if (memcmp(a->bind, b->bind, sizeof a->bind)) return false;
-    for (int i = 0; i < S_COUNT; i++)
-        if (a->axis[i].target != b->axis[i].target || a->axis[i].invert != b->axis[i].invert) return false;
-    if (fabs(a->tune.deadzone - b->tune.deadzone) > 1e-4 || fabs(a->tune.curve - b->tune.curve) > 1e-4 ||
-        fabs(a->tune.gesture - b->tune.gesture) > 1e-4) return false;
-    const light_t *x = &a->light, *y = &b->light;
-    if (x->r != y->r || x->g != y->g || x->b != y->b || x->on != y->on || x->pattern != y->pattern ||
-        fabs(x->speed - y->speed) > 1e-3 || fabs(x->bright - y->bright) > 1e-3 ||
-        x->mode != y->mode || x->player != y->player) return false;
-    if (memcmp(a->fx_manual, b->fx_manual, sizeof a->fx_manual)) return false;
-    return a->fxmode == b->fxmode && a->rmode == b->rmode && a->rumble_v2 == b->rumble_v2;
-}
+/* a file as the previous DSXP build wrote it (every line kind, real command paths) */
+static const char V2_FILE[] =
+    "# dsxp bindings - rewritten by the mapper UI\n"
+    "tune deadzone 0.1234\ntune curve 2.5000\ntune gesture 0.7500\n"
+    "light 1 2 3 0 3 0.250 27 0.500 1\n"
+    "fxmode wind\nrumblemode sim\nrumblepath v2\n"
+    "trigger l 0 70 160 200 40\ntrigger r 2 10 200 99 25\n"
+    "axis lx roll 0\naxis ly pitch 0\naxis rx yaw 0\naxis ry throttle 1\n"
+    "axis l2 brake_left 0\naxis r2 brake_right 0\n"
+    "button 3 0 sim/flight_controls/landing_gear_down\n"
+    "button 28 1 sim/view/forward_with_2d_panel\n";
 
 static void parse_str(settings_t *s, const char *text) {
     load_defaults(s);
@@ -40,29 +39,30 @@ void test_bindings(void) {
     settings_t a, b;
     char buf[16384];
 
-    /* defaults survive a round trip */
+    /* the defaults: D-pad Up deliberately unbound */
     load_defaults(&a);
-    size_t n = bindings_format(&a, buf, sizeof buf);
-    CHECK(n > 0 && n < sizeof buf);
-    load_defaults(&b);
-    bindings_parse(&b, buf, n);
-    CHECK(same(&a, &b));
-    CHECK(!b.bind[B_DP_UP].cmd[0]);                 /* D-pad Up deliberately unbound */
-    CHECK(!strcmp(b.bind[B_DP_R].cmd, "sim/flight_controls/landing_gear_down"));
+    CHECK(!a.bind[B_DP_UP].cmd[0]);
+    CHECK(!strcmp(a.bind[B_DP_R].cmd, "sim/flight_controls/landing_gear_down"));
 
-    /* a customised configuration survives too */
-    load_defaults(&a);
-    snprintf(a.bind[B_TP_SWIPE_UL].cmd, CMD_PATH_MAX, "sim/view/forward_with_2d_panel");
-    a.bind[B_TP_SWIPE_UL].repeat = true;
-    a.axis[S_RY] = (axis_map_t){ AX_THROTTLE, true };
-    a.tune = (tuning_t){ 0.1234, 2.5, 0.75 };
-    a.light = (light_t){ 1, 2, 3, false, LP_RAINBOW, 0.25, 0.5, LM_SIM, 0x1B };
-    a.fx_manual[1] = (trig_manual_t){ TFX_WEAPON, 10, 200, 99, 25 };
-    a.fxmode = FXM_WIND; a.rmode = RM_SIM; a.rumble_v2 = true;
-    n = bindings_format(&a, buf, sizeof buf);
-    load_defaults(&b);
-    bindings_parse(&b, buf, n);
-    CHECK(same(&a, &b));
+    /* a file the previous DSXP build wrote: every field comes through */
+    size_t n = sizeof V2_FILE - 1;
+    memcpy(buf, V2_FILE, n);
+    parse_str(&b, V2_FILE);
+    CHECK_NEAR(b.tune.deadzone, 0.1234, 1e-9); CHECK_NEAR(b.tune.curve, 2.5, 1e-9);
+    CHECK_NEAR(b.tune.gesture, 0.75, 1e-9);
+    CHECK_INT(b.light.r, 1); CHECK_INT(b.light.g, 2); CHECK_INT(b.light.b, 3);
+    CHECK(!b.light.on); CHECK_INT(b.light.pattern, 3); CHECK_NEAR(b.light.speed, 0.25, 1e-9);
+    CHECK_INT(b.light.player, 27); CHECK_NEAR(b.light.bright, 0.5, 1e-9); CHECK_INT(b.light.mode, LM_SIM);
+    CHECK_INT(b.fxmode, FXM_WIND); CHECK_INT(b.rmode, RM_SIM); CHECK(b.rumble_v2);
+    CHECK_INT(b.fx_manual[0].mode, TFX_OFF);
+    CHECK_INT(b.fx_manual[1].mode, TFX_WEAPON); CHECK_INT(b.fx_manual[1].start, 10);  /* F11 clamps at output, not here */
+    CHECK_INT(b.fx_manual[1].end, 200); CHECK_INT(b.fx_manual[1].strength, 99);
+    CHECK_INT(b.fx_manual[1].freq, 25);
+    CHECK_INT(b.axis[S_RY].target, AX_THROTTLE); CHECK(b.axis[S_RY].invert);
+    CHECK_INT(b.axis[S_L2].target, AX_BRAKE_L);
+    CHECK(!strcmp(b.bind[3].cmd, "sim/flight_controls/landing_gear_down"));
+    CHECK(!strcmp(b.bind[28].cmd, "sim/view/forward_with_2d_panel")); CHECK(b.bind[28].repeat);
+    CHECK(!b.bind[B_DP_R].cmd[0]);                  /* file is authoritative for buttons */
 
     /* the prototype's file format (fake commands) loads unchanged */
     parse_str(&b,
@@ -134,9 +134,7 @@ void test_bindings(void) {
     CHECK(!cmd_valid("sim/a b"));
     CHECK(!cmd_valid("sim/a\nbutton 1 0 x"));
 
-    /* random mutation: whatever the bytes, the result must satisfy the invariants */
-    load_defaults(&a);
-    n = bindings_format(&a, buf, sizeof buf);
+    /* random mutation of the v2 file: whatever the bytes, the invariants hold */
     uint32_t x = 2463534242u;
     char m[16384];
     int bad = 0;

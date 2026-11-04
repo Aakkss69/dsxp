@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "dsxp_core.h"
+#include "tunables.h"
 
 /* ------------------------------------------------------------- constants */
 
@@ -185,6 +186,10 @@ typedef struct {
     int          fxmode;        /* fxmode_t */
     int          rmode;         /* rmode_t  */
     bool         rumble_v2;
+    gesture_cfg_t  gesture;     /* controls.conf: gesture thresholds  */
+    wind_cfg_t     wind;        /* feedback.conf: wind trigger model  */
+    rumble_cfg_t   rumble;      /* feedback.conf: sim rumble model    */
+    lightsim_cfg_t lsim;        /* feedback.conf: light bar sim cues  */
 } settings_t;
 
 /* X-Plane 12 telemetry (RREF ids). Weather is published per layer: 13 layers of
@@ -207,12 +212,12 @@ typedef struct {
     void *ctx;
     void (*udp_send)(void *ctx, const unsigned char *buf, size_t len);  /* to X-Plane */
     void (*out_report)(void *ctx, const unsigned char *rep);           /* 78 bytes    */
-    void (*save)(void *ctx, const char *text, size_t len);             /* settings    */
 } core_sinks_t;
 
 typedef struct core {
     settings_t   s;
     core_sinks_t sinks;
+    bridge_cfg_t bridge;     /* bridge.conf: timing, port, telemetry, logging */
     bool         verbose;
     bool         dry_run;    /* never engage or talk to X-Plane (diagnostics) */
 
@@ -262,8 +267,10 @@ typedef struct core {
     bool         have_output_device;
 
     /* persistence */
-    bool   cfg_dirty;
+    unsigned cfg_dirty_mask;   /* CFB_* files the mapper changed, not yet saved */
     double cfg_dirty_at;
+    double crash_at;           /* when has_crashed last became true */
+    bool   crash_seen;
     bool   imported;
 } core_t;
 
@@ -320,6 +327,11 @@ extern const char *AX_LABEL[AX_TARGET_COUNT];
 /* decode.c */
 double shape(double v, double deadzone, double curve);
 void   decode_touch(ds_state_t *st, const unsigned char *r);
+/* gc may be NULL for the defaults */
+void   detect_gestures_cfg(const ds_state_t *st, gesture_t *g, double sens,
+                           const gesture_cfg_t *gc, double now);
+bool   ds_decode_report_cfg(ds_state_t *st, gesture_t *g, const tuning_t *tune,
+                            const gesture_cfg_t *gc, const unsigned char *r, long len, double now);
 void   detect_gestures(const ds_state_t *st, gesture_t *g, double sens, double now);
 bool   ds_decode_report(ds_state_t *st, gesture_t *g, const tuning_t *tune,
                         const unsigned char *r, long len, double now);
@@ -342,11 +354,13 @@ trigger_fx_t trig_effect(const trig_manual_t *m);              /* hand-set -> wi
 void     out_build_report(const out_frame_t *f, unsigned char seq, unsigned char *rep);
 
 /* wind.c / rumble.c / light.c */
-void wind_apply(wx_t *wx, trigger_fx_t fx[2]);
-void rumble_apply(const wx_t *wx, rumble_t *out, char *note, size_t note_n);
+void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg);                 /* cfg NULL = defaults */
+void rumble_apply(const wx_t *wx, rumble_t *out, char *note, size_t note_n,
+                  const rumble_cfg_t *cfg, double crash_age);
 void hsv(double h, double s, double v, unsigned char *R, unsigned char *G, unsigned char *B);
 void light_sim(const wx_t *wx, int *pat, unsigned char *r, unsigned char *g,
-               unsigned char *b, double *rate, char *note, size_t note_n);
+               unsigned char *b, double *rate, char *note, size_t note_n,
+               const lightsim_cfg_t *cfg);
 bool light_tick(core_t *c, double now);     /* true if the emitted colour changed */
 
 /* xp_packets.c - X-Plane UDP wire formats */
@@ -365,7 +379,6 @@ bool   cmd_valid(const char *cmd);
 double clampd(double v, double lo, double hi, double dflt);
 int    clampi(long v, int lo, int hi);
 bool   bindings_parse(settings_t *s, const char *text, size_t len);
-size_t bindings_format(const settings_t *s, char *buf, size_t cap);
 
 /* commands.c */
 int    commands_parse(const char *text, size_t len, xcmd_t **out);
@@ -409,8 +422,10 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now);
 void core_set_suspended(core_t *c, bool suspended, double now);
 void core_tick(core_t *c, double now);
 void core_snapshot(const core_t *c, dsxp_snap_t *out);
-void core_mark_dirty(core_t *c, double now);
-void core_flush_save(core_t *c);
+void core_mark_dirty(core_t *c, double now, unsigned files);
+unsigned core_save_due(core_t *c, double now);      /* CFB_* mask due for saving, cleared */
+void core_set_fxmode(core_t *c, int mode, double now);
+void core_set_rmode(core_t *c, int mode, double now);
 void out_tick(core_t *c, double now);
 void out_quiet(core_t *c);
 void out_mark(core_t *c);
@@ -445,6 +460,7 @@ bool  mkdir_p(const char *path, unsigned mode);
 
 /* log.c */
 void log_init(const char *dir, int retention_days, bool echo_stderr);
+void log_configure(int retention_days, long file_cap_bytes, bool echo_stderr);
 void log_shutdown(void);
 void dsxp_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void log_report_line(const char *line);
@@ -452,5 +468,11 @@ bool log_name_is_ours(const char *name);
 
 /* gate.c */
 bool gate_xplane_running(char *exe_out, size_t n);
+
+#include "config.h"
+
+/* config-aware core entry points (need config_t) */
+void core_get_config(const core_t *c, config_t *out);
+void core_apply_config(core_t *c, const config_t *cfg, unsigned files, double now);
 
 #endif /* DSXP_CORE_INTERNAL_H */

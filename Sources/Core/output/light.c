@@ -24,7 +24,9 @@ void hsv(double h, double s, double v, unsigned char *R, unsigned char *G, unsig
 /* Sim mode: the bar becomes an annunciator. Ordered by urgency, because only one
  * thing can be shown at a time and the worst news should win. */
 void light_sim(const wx_t *wx, int *pat, unsigned char *r, unsigned char *g,
-               unsigned char *b, double *rate, char *note, size_t note_n) {
+               unsigned char *b, double *rate, char *note, size_t note_n,
+               const lightsim_cfg_t *cfg) {
+    if (!cfg) cfg = &LIGHTSIM_DEFAULTS;
     if (!wx->live) {                         /* no telemetry: dim amber standby */
         *pat = LP_BREATHE; *r = 120; *g = 70; *b = 0; *rate = 0.3;
         snprintf(note, note_n, "waiting for X-Plane");
@@ -33,16 +35,16 @@ void light_sim(const wx_t *wx, int *pat, unsigned char *r, unsigned char *g,
     if (wx->crashed) {
         *pat = LP_STROBE;  *r = 255; *g = 0; *b = 0; *rate = 3.0;
         snprintf(note, note_n, "CRASH");
-    } else if (wx->stall_ratio > 0.6) {
+    } else if (wx->stall_ratio > cfg->stall_alarm) {
         *pat = LP_PULSE;   *r = 255; *g = 0; *b = 0; *rate = 2.5;
         snprintf(note, note_n, "stall %.0f%%", wx->stall_ratio * 100);
-    } else if (wx->stall_ratio > 0.15) {
+    } else if (wx->stall_ratio > cfg->stall_caution) {
         *pat = LP_BREATHE; *r = 255; *g = 120; *b = 0; *rate = 1.5;
         snprintf(note, note_n, "stall warning");
-    } else if (fabs(wx->gn) > 2.5) {
+    } else if (fabs(wx->gn) > cfg->g_caution) {
         *pat = LP_SOLID;   *r = 255; *g = 150; *b = 0; *rate = 1.0;
         snprintf(note, note_n, "%.1f g", wx->gn);
-    } else if (wx->turb > 1.5) {
+    } else if (wx->turb > cfg->turb_caution) {
         *pat = LP_BREATHE; *r = 0; *g = 200; *b = 220; *rate = 1.2;
         snprintf(note, note_n, "turbulence %.1f", wx->turb);
     } else {
@@ -62,7 +64,7 @@ bool light_tick(core_t *c, double now) {
 
     /* sim mode overrides colour, pattern and rate; manual mode uses the picker */
     if (L->mode == LM_SIM) light_sim(&c->wx, &pattern, &br, &bg, &bb, &rate,
-                                     c->lnote, sizeof c->lnote);
+                                     c->lnote, sizeof c->lnote, &c->s.lsim);
     else snprintf(c->lnote, sizeof c->lnote, "manual");
 
     if (!isfinite(k0) || k0 < 0) k0 = 0;

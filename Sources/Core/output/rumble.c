@@ -18,9 +18,7 @@
 #include <math.h>
 #include <stdio.h>
 
-/* above this load factor a hard landing or overstress adds a jolt */
-#define G_JOLT      2.5
-#define G_JOLT_FULL 6.0
+/* Thresholds come from feedback.conf (rumble_cfg_t). */
 
 static unsigned char clamp8(double v) {
     if (!isfinite(v) || v < 0) return 0;
@@ -33,9 +31,13 @@ static double unit(double v) {
     return v > 1 ? 1 : v;
 }
 
-void rumble_apply(const wx_t *wx, rumble_t *out, char *note, size_t note_n) {
+void rumble_apply(const wx_t *wx, rumble_t *out, char *note, size_t note_n,
+                  const rumble_cfg_t *cfg, double crash_age) {
+    if (!cfg) cfg = &RUMBLE_DEFAULTS;
     if (wx->crashed) {
-        out->left = out->right = 255;
+        /* full shake for crash_duration, then quiet: a crash must not buzz forever */
+        bool shaking = cfg->crash_s > 0 && crash_age < cfg->crash_s;
+        out->left = out->right = shaking ? 255 : 0;
         snprintf(note, note_n, "CRASH");
         return;
     }
@@ -44,14 +46,15 @@ void rumble_apply(const wx_t *wx, rumble_t *out, char *note, size_t note_n) {
      * floor so a clean straight-ahead stall still buzzes both sides. */
     double sym = unit(wx->stall_ratio);
     double sl = unit(wx->stall_l), sr = unit(wx->stall_r);
-    double l = fmax(sl, sym * 0.60);
-    double r = fmax(sr, sym * 0.60);
+    double l = fmax(sl, sym * cfg->stall_floor);
+    double r = fmax(sr, sym * cfg->stall_floor);
 
     /* g-load jolt, symmetric - overstress is felt through the whole airframe */
-    double gexc = (isfinite(wx->gn) ? fabs(wx->gn) : 0) - G_JOLT;
+    double gexc = (isfinite(wx->gn) ? fabs(wx->gn) : 0) - cfg->jolt_start_g;
     double jolt = 0;
     if (gexc > 0) {
-        jolt = gexc / (G_JOLT_FULL - G_JOLT);
+        double span = cfg->jolt_full_g - cfg->jolt_start_g;
+        jolt = span > 0 ? gexc / span : 1;
         if (jolt > 1) jolt = 1;
     }
     l = fmax(l, jolt);

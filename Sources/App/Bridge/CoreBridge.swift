@@ -57,7 +57,6 @@ final class CoreBridge {
                         cfg.log_dir = l
                         cfg.commands_path = c
                         cfg.import_bindings = lg
-                        cfg.log_retention_days = 14
                         cfg.verbose = verbose
                         cfg.on_event = coreEvent
                         return dsxp_start(&cfg)

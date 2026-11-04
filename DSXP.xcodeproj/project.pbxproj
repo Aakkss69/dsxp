@@ -10,6 +10,7 @@
 		05BEB6EDFC6B5E7970FF38E3 /* test_wire.c in Sources */ = {isa = PBXBuildFile; fileRef = D20976879F304F3D4B9EE53E /* test_wire.c */; };
 		0DD3E8453890E75C1FA34720 /* module.modulemap in CopyFiles */ = {isa = PBXBuildFile; fileRef = D2D61D18E188FDB56CDF5908 /* module.modulemap */; };
 		1C9FD23FF51A6902607D0C9A /* light.c in Sources */ = {isa = PBXBuildFile; fileRef = D4DD3BAA21F2DFDFEB5FE4CF /* light.c */; };
+		217996041F98E3D156FAB4B3 /* test_config.c in Sources */ = {isa = PBXBuildFile; fileRef = DA0CD0D345451065EC593F54 /* test_config.c */; };
 		25796C2008DD182BCA1B8AA3 /* vocab.c in Sources */ = {isa = PBXBuildFile; fileRef = 2AAB056A375C784B8B7CDE6E /* vocab.c */; };
 		2B3AC51C27DC762BD3D758C8 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72A8EDAE4788923AED068B9E /* CoreFoundation.framework */; };
 		2E87F17BCF7B47DAF764C739 /* SchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEFF885B880EF0AE9897CDB /* SchemeHandler.swift */; };
@@ -20,6 +21,9 @@
 		45DA0E8B561EB81913AB3290 /* api.c in Sources */ = {isa = PBXBuildFile; fileRef = 54A50BD476384BB513E06473 /* api.c */; };
 		4AE3C4000806506C792C5E58 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72A8EDAE4788923AED068B9E /* CoreFoundation.framework */; };
 		4D81372753BAC05286274FAB /* gate.c in Sources */ = {isa = PBXBuildFile; fileRef = E862B95012569681D49E0684 /* gate.c */; };
+		4DA315CB4AC0D127C6A051C7 /* config_schema.c in Sources */ = {isa = PBXBuildFile; fileRef = 9C8B147E2C40B8445F7A85AD /* config_schema.c */; };
+		54D1ED4D4FE424B3580B76C5 /* test_config_store.c in Sources */ = {isa = PBXBuildFile; fileRef = F03E8209B168F06D3278A579 /* test_config_store.c */; };
+		565EBD38B3F253B2FE5DA92F /* settings.c in Sources */ = {isa = PBXBuildFile; fileRef = BBFC6AB79EC1F5E41D066254 /* settings.c */; };
 		5D13B7D8BB5500745357C5F8 /* test_bindings.c in Sources */ = {isa = PBXBuildFile; fileRef = F00A221E204BB9F523FDC4D1 /* test_bindings.c */; };
 		62124E997B1E0271504595BF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC19376167E23340EEADD882 /* main.swift */; };
 		643BE965211C61933980BA71 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFF36B5CC890C9E3D521AB3E /* IOKit.framework */; };
@@ -30,12 +34,14 @@
 		84E1DEBB602FE4F198C83F21 /* guard.c in Sources */ = {isa = PBXBuildFile; fileRef = 3B0F49CEF2F3168715A24DE1 /* guard.c */; };
 		862FF71419FC8D404220842B /* Paths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC2DFB993B9DD616AA69897 /* Paths.swift */; };
 		86FD6B9C45E98FFC8DB5A422 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EABE9D3BF3C0A6E79AC27A77 /* Assets.xcassets */; };
+		88D1AC9DCE951EB3048E27A2 /* conf.c in Sources */ = {isa = PBXBuildFile; fileRef = CE2F512C1732C71A3DF350E3 /* conf.c */; };
 		8ABDCAC5C82E3C786337F586 /* output.c in Sources */ = {isa = PBXBuildFile; fileRef = 12952A221DF21A79D2902963 /* output.c */; };
 		8F340CE59EED45B21A41315F /* CoreTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 71DC65F09F3E439E29FE56E2 /* CoreTests.m */; };
 		95AEFA60AF578142022B61ED /* test_core.c in Sources */ = {isa = PBXBuildFile; fileRef = 6C396E705CF6F207B918F8BC /* test_core.c */; };
 		98C09553DA09C7011F5C25DA /* xp_packets.c in Sources */ = {isa = PBXBuildFile; fileRef = 90C28191C0E3D3396C80F4DD /* xp_packets.c */; };
 		9D85F7325217B012E7E04E4C /* test_input.c in Sources */ = {isa = PBXBuildFile; fileRef = BC92844BB3C5698354333F21 /* test_input.c */; };
 		9E4FA9FEDED4ADC05D0879AB /* fileio.c in Sources */ = {isa = PBXBuildFile; fileRef = 418DB24306AB6E921DDC9364 /* fileio.c */; };
+		9E8B0F17944C3016F078D30F /* config.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 5D38BD40D0DB50B2C60BE855 /* config.h */; };
 		A3ECB0B5A236941D9A5BF8A1 /* commands.c in Sources */ = {isa = PBXBuildFile; fileRef = 8D13A771B15B03CE505CD5A8 /* commands.c */; };
 		AD28618A22919F9BC6EB93B3 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = E1A784A30F7F7DB83D636069 /* main.c */; };
 		B037F7245A517B8A4355977C /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFF36B5CC890C9E3D521AB3E /* IOKit.framework */; };
@@ -47,10 +53,12 @@
 		B79CC97AB982D39A47E13FD2 /* libDSXPCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */; };
 		B9EB06A45C0F4A4DB96B5688 /* dsxp_core.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = F3CF113567E8FB1C80B1651B /* dsxp_core.h */; };
 		B9F7F130AE005F72B1784125 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D924C5A76991D3E003CC942C /* WebKit.framework */; };
+		BFA4F9BF43208EBC18A92BDD /* tunables.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = E668BC3CD5E8FE73A0B785CC /* tunables.h */; };
 		C02BC2B8AC2166D4C9BF4F2D /* XPlaneLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782C9136DD7E6CB247394CA0 /* XPlaneLocator.swift */; };
 		C96BD1802E073C041BCA4E34 /* ServiceManagement.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 115AD210C39BBA5DA4EE2B65 /* ServiceManagement.framework */; };
 		CE57692D3D39A29BF849847B /* xplane.c in Sources */ = {isa = PBXBuildFile; fileRef = 321C073363E50D93AE004347 /* xplane.c */; };
 		CEECB10CC2B6C711447AFEAB /* LoginItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8B4670C5772629361ABCBD /* LoginItem.swift */; };
+		D01EFA852628FB77141AE7B9 /* config_store.c in Sources */ = {isa = PBXBuildFile; fileRef = 29B8D41A0362C5ACD1CF73CA /* config_store.c */; };
 		D0F362FB5BBB03C26B931479 /* web in Resources */ = {isa = PBXBuildFile; fileRef = 8C9F603621B4EF571298E7E0 /* web */; };
 		D9002C6F9F9AC5560BF2A085 /* log.c in Sources */ = {isa = PBXBuildFile; fileRef = 9D24135E2D0614620A84B6AB /* log.c */; };
 		E3D74F3C27EA475A1CDD68C5 /* MapperWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590F0B87E64DBA093B8A69C3 /* MapperWindowController.swift */; };
@@ -94,9 +102,11 @@
 			dstPath = "include/$(PRODUCT_NAME)";
 			dstSubfolderSpec = 16;
 			files = (
+				9E8B0F17944C3016F078D30F /* config.h in CopyFiles */,
 				B34359F0202EF122FAD64CE0 /* core_internal.h in CopyFiles */,
 				B9EB06A45C0F4A4DB96B5688 /* dsxp_core.h in CopyFiles */,
 				0DD3E8453890E75C1FA34720 /* module.modulemap in CopyFiles */,
+				BFA4F9BF43208EBC18A92BDD /* tunables.h in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -113,6 +123,7 @@
 		237F0DCEA8ECC2130CBD1956 /* core_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = core_internal.h; sourceTree = "<group>"; };
 		27646B66C3C5AE8DA85A05B2 /* SingleInstance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstance.swift; sourceTree = "<group>"; };
 		27DA0FD85535B3669D2EB47A /* CoreBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreBridge.swift; sourceTree = "<group>"; };
+		29B8D41A0362C5ACD1CF73CA /* config_store.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = config_store.c; sourceTree = "<group>"; };
 		2AAB056A375C784B8B7CDE6E /* vocab.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vocab.c; sourceTree = "<group>"; };
 		2E0B58893B7048AD27E33B45 /* json_check.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = json_check.c; sourceTree = "<group>"; };
 		321C073363E50D93AE004347 /* xplane.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xplane.c; sourceTree = "<group>"; };
@@ -122,7 +133,10 @@
 		4AF1934402A0453BC90D4EB7 /* StatusMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenuController.swift; sourceTree = "<group>"; };
 		5410869D92A5612DBF70B2F8 /* core_thread.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core_thread.c; sourceTree = "<group>"; };
 		54A50BD476384BB513E06473 /* api.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = api.c; sourceTree = "<group>"; };
+		56CDD349F8FB8AC4FCE0A07C /* feedback.conf */ = {isa = PBXFileReference; path = feedback.conf; sourceTree = "<group>"; };
 		590F0B87E64DBA093B8A69C3 /* MapperWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapperWindowController.swift; sourceTree = "<group>"; };
+		5B22F289B83270511C71B7B6 /* controls.conf */ = {isa = PBXFileReference; path = controls.conf; sourceTree = "<group>"; };
+		5D38BD40D0DB50B2C60BE855 /* config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = config.h; sourceTree = "<group>"; };
 		60FE23D149AA8EF847C89233 /* runner.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = runner.c; sourceTree = "<group>"; };
 		662787DC65C3B03CBBEBF99B /* bindings.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bindings.c; sourceTree = "<group>"; };
 		69770139073E8E8FD9DB2C11 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -138,25 +152,32 @@
 		8D13A771B15B03CE505CD5A8 /* commands.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = commands.c; sourceTree = "<group>"; };
 		90C28191C0E3D3396C80F4DD /* xp_packets.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xp_packets.c; sourceTree = "<group>"; };
 		92084FAD03F7E4E90EF7778B /* core.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core.c; sourceTree = "<group>"; };
+		9C8B147E2C40B8445F7A85AD /* config_schema.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = config_schema.c; sourceTree = "<group>"; };
 		9D24135E2D0614620A84B6AB /* log.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = log.c; sourceTree = "<group>"; };
 		A5995EA892A12032C85F196E /* decode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = decode.c; sourceTree = "<group>"; };
 		AC19376167E23340EEADD882 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		B3F1AB6F2D779C2679F6D119 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		B5D0080D474B6360E8A70EE7 /* rumble.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = rumble.c; sourceTree = "<group>"; };
+		BBFC6AB79EC1F5E41D066254 /* settings.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = settings.c; sourceTree = "<group>"; };
 		BC92844BB3C5698354333F21 /* test_input.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_input.c; sourceTree = "<group>"; };
 		BF0B1374C3F89C98C3B40FC2 /* DSXP.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DSXP.entitlements; sourceTree = "<group>"; };
 		CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libDSXPCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		CE2F512C1732C71A3DF350E3 /* conf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = conf.c; sourceTree = "<group>"; };
 		D20976879F304F3D4B9EE53E /* test_wire.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_wire.c; sourceTree = "<group>"; };
+		D28CCE7F654FF7513602C771 /* bridge.conf */ = {isa = PBXFileReference; path = bridge.conf; sourceTree = "<group>"; };
 		D2D61D18E188FDB56CDF5908 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		D4DD3BAA21F2DFDFEB5FE4CF /* light.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = light.c; sourceTree = "<group>"; };
 		D7E8F2A96331E34142459355 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D924C5A76991D3E003CC942C /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		DA0CD0D345451065EC593F54 /* test_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_config.c; sourceTree = "<group>"; };
 		DE57317E9D5B2A92B1956A53 /* test_api.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_api.c; sourceTree = "<group>"; };
 		E1A784A30F7F7DB83D636069 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		E668BC3CD5E8FE73A0B785CC /* tunables.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = tunables.h; sourceTree = "<group>"; };
 		E862B95012569681D49E0684 /* gate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = gate.c; sourceTree = "<group>"; };
 		EABE9D3BF3C0A6E79AC27A77 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EFF36B5CC890C9E3D521AB3E /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		F00A221E204BB9F523FDC4D1 /* test_bindings.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_bindings.c; sourceTree = "<group>"; };
+		F03E8209B168F06D3278A579 /* test_config_store.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_config_store.c; sourceTree = "<group>"; };
 		F2DB421CA57D6D03457C0321 /* CoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F3CF113567E8FB1C80B1651B /* dsxp_core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = dsxp_core.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -271,6 +292,8 @@
 				60FE23D149AA8EF847C89233 /* runner.c */,
 				DE57317E9D5B2A92B1956A53 /* test_api.c */,
 				F00A221E204BB9F523FDC4D1 /* test_bindings.c */,
+				F03E8209B168F06D3278A579 /* test_config_store.c */,
+				DA0CD0D345451065EC593F54 /* test_config.c */,
 				6C396E705CF6F207B918F8BC /* test_core.c */,
 				BC92844BB3C5698354333F21 /* test_input.c */,
 				D20976879F304F3D4B9EE53E /* test_wire.c */,
@@ -347,6 +370,7 @@
 		765118602AE3738C6984C851 /* runtime */ = {
 			isa = PBXGroup;
 			children = (
+				29B8D41A0362C5ACD1CF73CA /* config_store.c */,
 				5410869D92A5612DBF70B2F8 /* core_thread.c */,
 				92084FAD03F7E4E90EF7778B /* core.c */,
 			);
@@ -367,7 +391,9 @@
 		88B76F253234CD9ACF6EBE05 /* internal */ = {
 			isa = PBXGroup;
 			children = (
+				5D38BD40D0DB50B2C60BE855 /* config.h */,
 				237F0DCEA8ECC2130CBD1956 /* core_internal.h */,
+				E668BC3CD5E8FE73A0B785CC /* tunables.h */,
 			);
 			path = internal;
 			sourceTree = "<group>";
@@ -420,6 +446,16 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		CD1A8F305BDB84F2578D30F6 /* configs */ = {
+			isa = PBXGroup;
+			children = (
+				D28CCE7F654FF7513602C771 /* bridge.conf */,
+				5B22F289B83270511C71B7B6 /* controls.conf */,
+				56CDD349F8FB8AC4FCE0A07C /* feedback.conf */,
+			);
+			path = configs;
+			sourceTree = "<group>";
+		};
 		E8216F6884C98CAC8F82E288 /* BuildSettings */ = {
 			isa = PBXGroup;
 			children = (
@@ -433,6 +469,7 @@
 			isa = PBXGroup;
 			children = (
 				E8216F6884C98CAC8F82E288 /* BuildSettings */,
+				CD1A8F305BDB84F2578D30F6 /* configs */,
 				22E6A4764EA11B9F04C83EC7 /* Resources */,
 				2F4C1C6B08DB54C44A8B0D77 /* Sources */,
 				04A1A52E1610CE31F662E656 /* Tests */,
@@ -446,6 +483,9 @@
 			isa = PBXGroup;
 			children = (
 				662787DC65C3B03CBBEBF99B /* bindings.c */,
+				CE2F512C1732C71A3DF350E3 /* conf.c */,
+				9C8B147E2C40B8445F7A85AD /* config_schema.c */,
+				BBFC6AB79EC1F5E41D066254 /* settings.c */,
 			);
 			path = settings;
 			sourceTree = "<group>";
@@ -615,6 +655,9 @@
 				45DA0E8B561EB81913AB3290 /* api.c in Sources */,
 				3E5EE31E1AC9EE4659BCC02A /* bindings.c in Sources */,
 				A3ECB0B5A236941D9A5BF8A1 /* commands.c in Sources */,
+				88D1AC9DCE951EB3048E27A2 /* conf.c in Sources */,
+				4DA315CB4AC0D127C6A051C7 /* config_schema.c in Sources */,
+				D01EFA852628FB77141AE7B9 /* config_store.c in Sources */,
 				FAAF0F26091F64A7CF69244C /* core.c in Sources */,
 				EA18F4E70424F30DF4300B9C /* core_thread.c in Sources */,
 				3900A9A4559BEA6172E48FA2 /* decode.c in Sources */,
@@ -626,6 +669,7 @@
 				D9002C6F9F9AC5560BF2A085 /* log.c in Sources */,
 				8ABDCAC5C82E3C786337F586 /* output.c in Sources */,
 				697E6EC8EBBF50D884B8D508 /* rumble.c in Sources */,
+				565EBD38B3F253B2FE5DA92F /* settings.c in Sources */,
 				F72FDE8E8F4A291F8DD095BD /* telemetry.c in Sources */,
 				25796C2008DD182BCA1B8AA3 /* vocab.c in Sources */,
 				2EDB4CEECE782B73617B8562 /* wind.c in Sources */,
@@ -643,6 +687,8 @@
 				7210E72C7C669D1E78BA5EB1 /* runner.c in Sources */,
 				FFDC5CBF1D6B0C8CB055DE76 /* test_api.c in Sources */,
 				5D13B7D8BB5500745357C5F8 /* test_bindings.c in Sources */,
+				217996041F98E3D156FAB4B3 /* test_config.c in Sources */,
+				54D1ED4D4FE424B3580B76C5 /* test_config_store.c in Sources */,
 				95AEFA60AF578142022B61ED /* test_core.c in Sources */,
 				9D85F7325217B012E7E04E4C /* test_input.c in Sources */,
 				05BEB6EDFC6B5E7970FF38E3 /* test_wire.c in Sources */,

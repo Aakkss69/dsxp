@@ -12,6 +12,7 @@
 void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     memset(c, 0, sizeof *c);
     c->s = *s;
+    c->bridge = BRIDGE_DEFAULTS;
     if (sinks) c->sinks = *sinks;
     snprintf(c->rnote, sizeof c->rnote, "%s", c->s.rmode == RM_SIM ? "waiting for X-Plane" : "manual");
     snprintf(c->lnote, sizeof c->lnote, "manual");
@@ -50,7 +51,7 @@ static void out_send(core_t *c) {
  */
 void out_tick(core_t *c, double now) {
     if (!c->have_output_device) return;
-    if (c->out_dirty && now - c->last_send >= 1.0 / TICK_HZ) {
+    if (c->out_dirty && now - c->last_send >= 1.0 / c->bridge.tick_hz) {
         c->out_dirty = false;
         c->last_send = c->last_keep = now;
         out_send(c);
@@ -78,7 +79,7 @@ void out_quiet(core_t *c) {
 }
 
 void core_on_report(core_t *c, const unsigned char *buf, long len, double now) {
-    if (ds_decode_report(&c->state, &c->gest, &c->s.tune, buf, len, now)) {
+    if (ds_decode_report_cfg(&c->state, &c->gest, &c->s.tune, &c->s.gesture, buf, len, now)) {
         c->have_report = true;
         c->last_report_at = now;
         c->reports_window++;
@@ -94,11 +95,11 @@ void core_on_device(core_t *c, bool bluetooth, bool added) {
 }
 
 bool core_input_live(const core_t *c, double now) {
-    return c->have_report && now - c->last_report_at <= INPUT_LOST_SEC;
+    return c->have_report && now - c->last_report_at <= c->bridge.input_lost_s;
 }
 
 bool core_gate_due(const core_t *c, double now, double last_gate) {
-    return c->force_gate || now - last_gate >= GATE_POLL_SEC;
+    return c->force_gate || now - last_gate >= c->bridge.gate_poll_s;
 }
 
 /*
@@ -128,18 +129,76 @@ void core_set_gate(core_t *c, bool bt, bool usb, bool xp, const char *xp_exe, do
     }
 }
 
-void core_mark_dirty(core_t *c, double now) {
-    c->cfg_dirty = true;
+/* The mapper changed something that lives in `files` (CFB_*). It is saved once
+ * bridge.save_delay has passed without further changes. */
+void core_mark_dirty(core_t *c, double now, unsigned files) {
+    c->cfg_dirty_mask |= files;
     c->cfg_dirty_at = now;
 }
 
-void core_flush_save(core_t *c) {
-    if (!c->cfg_dirty) return;
-    c->cfg_dirty = false;
-    if (!c->sinks.save) return;
-    char buf[16384];
-    size_t n = bindings_format(&c->s, buf, sizeof buf);
-    c->sinks.save(c->sinks.ctx, buf, n);
+unsigned core_save_due(core_t *c, double now) {
+    if (!c->cfg_dirty_mask || now - c->cfg_dirty_at < c->bridge.save_delay_s) return 0;
+    unsigned m = c->cfg_dirty_mask;
+    c->cfg_dirty_mask = 0;
+    return m;
+}
+
+void core_set_fxmode(core_t *c, int mode, double now) {
+    (void)now;
+    int want = mode == FXM_WIND ? FXM_WIND : FXM_MANUAL;
+    if (want == c->s.fxmode) return;
+    c->s.fxmode = want;
+    if (want == FXM_MANUAL) {
+        /* hand-set effects come straight back: wind never touched them */
+        if (!c->suspended) { c->fx_out[0] = trig_effect(&c->s.fx_manual[0]); c->fx_out[1] = trig_effect(&c->s.fx_manual[1]); }
+        snprintf(c->wx.note, sizeof c->wx.note, "manual");
+    } else {
+        c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+        snprintf(c->wx.note, sizeof c->wx.note, "waiting for X-Plane");
+    }
+    out_mark(c);
+    dsxp_log("trigger source -> %s", want == FXM_WIND ? "wind" : "manual");
+}
+
+void core_set_rmode(core_t *c, int mode, double now) {
+    (void)now;
+    int want = mode == RM_SIM ? RM_SIM : RM_MANUAL;
+    if (want == c->s.rmode) return;
+    c->s.rmode = want;
+    /* never leave the motors spinning when handing control over */
+    c->rumble.left = c->rumble.right = 0;
+    snprintf(c->rnote, sizeof c->rnote, "%s", want == RM_SIM ? "waiting for X-Plane" : "manual");
+    out_mark(c);
+    dsxp_log("rumble source -> %s", want == RM_SIM ? "sim" : "manual");
+}
+
+void core_get_config(const core_t *c, config_t *out) {
+    out->bridge = c->bridge;
+    out->s = c->s;
+}
+
+/* Apply what the config files say (an edit outside the mapper, or a merge),
+ * through the same mode setters the mapper uses. Nothing is marked for saving. */
+void core_apply_config(core_t *c, const config_t *cfg, unsigned files, double now) {
+    static config_t cur;
+    core_get_config(c, &cur);
+    int old_fx = cur.s.fxmode, old_rm = cur.s.rmode;
+    for (int f = 0; f < CF_COUNT; f++)
+        if (files & (1u << f)) config_copy_file(&cur, cfg, (conf_file_t)f);
+    int new_fx = cur.s.fxmode, new_rm = cur.s.rmode;
+    cur.s.fxmode = old_fx;
+    cur.s.rmode = old_rm;
+    c->s = cur.s;
+    c->bridge = cur.bridge;
+    if (new_fx != old_fx) core_set_fxmode(c, new_fx, now);
+    if (new_rm != old_rm) core_set_rmode(c, new_rm, now);
+    if (files & CFB_FEEDBACK) {
+        if (c->s.fxmode == FXM_MANUAL && !c->suspended) {
+            c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
+            c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+        }
+        out_mark(c);
+    }
 }
 
 static void apply_light(light_t *L, const light_t *v, unsigned m) {
@@ -184,7 +243,7 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         if (cmd->u.bind.cmd[0] && !cmd_valid(cmd->u.bind.cmd)) return;
         snprintf(s->bind[i].cmd, CMD_PATH_MAX, "%s", cmd->u.bind.cmd);
         s->bind[i].repeat = cmd->u.bind.repeat;
-        core_mark_dirty(c, now);
+        core_mark_dirty(c, now, CFB_CONTROLS);
         dsxp_log("bind %s -> %s%s", BTN_NAME[i], s->bind[i].cmd[0] ? s->bind[i].cmd : "(cleared)",
                  s->bind[i].repeat ? " [hold]" : "");
         break;
@@ -193,7 +252,7 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         int i = cmd->key, t = cmd->u.axis.target;
         if (i < 0 || i >= S_COUNT || t < 0 || t >= AX_TARGET_COUNT) return;
         s->axis[i] = cmd->u.axis;
-        core_mark_dirty(c, now);
+        core_mark_dirty(c, now, CFB_CONTROLS);
         /* the override planner in xp_push picks the change up on the next tick */
         dsxp_log("axis %s -> %s%s", SRC_LABEL[i], AX_LABEL[t], s->axis[i].invert ? " (inverted)" : "");
         break;
@@ -202,11 +261,11 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         if (cmd->u.tune.has_dz) s->tune.deadzone = clampd(cmd->u.tune.dz, 0, 0.45, s->tune.deadzone);
         if (cmd->u.tune.has_cv) s->tune.curve    = clampd(cmd->u.tune.cv, 0.4, 3.0, s->tune.curve);
         if (cmd->u.tune.has_gs) s->tune.gesture  = clampd(cmd->u.tune.gs, 0, 1, s->tune.gesture);
-        core_mark_dirty(c, now);
+        core_mark_dirty(c, now, CFB_CONTROLS);
         break;
     case CMD_LIGHT:
         apply_light(&s->light, &cmd->u.light.v, cmd->u.light.mask);
-        core_mark_dirty(c, now);
+        core_mark_dirty(c, now, CFB_FEEDBACK);
         out_mark(c);
         break;
     case CMD_TRIGGER: {
@@ -223,25 +282,13 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         if (m & TF_STRENGTH) f->strength = cmd->u.trig.v.strength;
         if (m & TF_FREQ)     f->freq     = cmd->u.trig.v.freq ? cmd->u.trig.v.freq : 1;
         if (!c->suspended) c->fx_out[i] = trig_effect(f);
-        core_mark_dirty(c, now);
+        core_mark_dirty(c, now, CFB_FEEDBACK);
         out_mark(c);
         break;
     }
     case CMD_FXMODE: {
-        int want = cmd->u.mode == FXM_WIND ? FXM_WIND : FXM_MANUAL;
-        if (want != s->fxmode) {
-            s->fxmode = want;
-            if (want == FXM_MANUAL) {
-                /* hand-set effects come straight back: wind never touched them */
-                if (!c->suspended) { c->fx_out[0] = trig_effect(&s->fx_manual[0]); c->fx_out[1] = trig_effect(&s->fx_manual[1]); }
-                snprintf(c->wx.note, sizeof c->wx.note, "manual");
-            } else {
-                c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
-                snprintf(c->wx.note, sizeof c->wx.note, "waiting for X-Plane");
-            }
-            dsxp_log("trigger source -> %s", want == FXM_WIND ? "wind" : "manual");
-        }
-        core_mark_dirty(c, now);
+        core_set_fxmode(c, cmd->u.mode, now);
+        core_mark_dirty(c, now, CFB_FEEDBACK);
         out_mark(c);
         break;
     }
@@ -253,21 +300,14 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         out_mark(c);
         break;
     case CMD_RUMBLEMODE: {
-        int want = cmd->u.mode == RM_SIM ? RM_SIM : RM_MANUAL;
-        if (want != s->rmode) {
-            s->rmode = want;
-            /* never leave the motors spinning when handing control over */
-            c->rumble.left = c->rumble.right = 0;
-            snprintf(c->rnote, sizeof c->rnote, "%s", want == RM_SIM ? "waiting for X-Plane" : "manual");
-            dsxp_log("rumble source -> %s", want == RM_SIM ? "sim" : "manual");
-        }
-        core_mark_dirty(c, now);
+        core_set_rmode(c, cmd->u.mode, now);
+        core_mark_dirty(c, now, CFB_FEEDBACK);
         out_mark(c);
         break;
     }
     case CMD_RUMBLEPATH:
         s->rumble_v2 = cmd->u.flag;
-        core_mark_dirty(c, now);
+        core_mark_dirty(c, now, CFB_FEEDBACK);
         out_mark(c);
         dsxp_log("rumble path -> %s", s->rumble_v2 ? "v2" : "classic");
         break;
@@ -282,7 +322,7 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
 static void reports_tick(core_t *c, double now) {
     if (c->window_start == 0) { c->window_start = now; return; }
     double elapsed = now - c->window_start;
-    if (elapsed < REPORT_WINDOW_SEC) return;
+    if (elapsed < c->bridge.report_window_s) return;
 
     long n = c->reports_window;
     c->reports_window = 0;
@@ -293,7 +333,7 @@ static void reports_tick(core_t *c, double now) {
     char sig[64];
     snprintf(sig, sizeof sig, "%s bt=%d usb=%d xp=%d %s", core_input_live(c, now) ? "up" : "down",
              c->bt_present, c->usb_present, c->xp_running, c->engaged ? "engaged" : "idle");
-    if (n > 0 || strcmp(sig, c->last_log_sig) != 0 || now - c->last_report_log >= REPORT_IDLE_LOG_SEC) {
+    if (n > 0 || strcmp(sig, c->last_log_sig) != 0 || now - c->last_report_log >= c->bridge.idle_report_s) {
         char line[256];
         snprintf(line, sizeof line, "reports=%-5ld rate=%6.1f Hz  total=%-8ld link=%s",
                  n, c->report_hz, c->reports_total, sig);
@@ -324,7 +364,6 @@ void core_tick(core_t *c, double now) {
     xp_release_tick(c, now);
     out_tick(c, now);
 
-    if (c->cfg_dirty && now - c->cfg_dirty_at >= SAVE_DEBOUNCE_SEC) core_flush_save(c);
 }
 
 void core_snapshot(const core_t *c, dsxp_snap_t *o) {

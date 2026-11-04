@@ -8,6 +8,8 @@ int dsxp_core_tests_run(void) {
     test_shape();
     test_gesture();
     test_bindings();
+    test_config();
+    test_config_store();
     test_packets();
     test_output();
     test_json();

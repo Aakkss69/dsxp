@@ -4,6 +4,9 @@
  *   dsxp-cli               bridge, prints a status line twice a second
  *   dsxp-cli --verify      decode and show live input; never talks to X-Plane
  *   dsxp-cli --capture N   print N raw Bluetooth 0x31 reports as hex (test fixtures)
+ *   dsxp-cli --write-default-configs DIR
+ *                          write bridge.conf, controls.conf and feedback.conf with
+ *                          their defaults into DIR (this is how configs/ is made)
  *   options: --data DIR  --logs DIR  --commands FILE  --run-for SEC  -v
  *
  * It uses the same settings folder as the app, so it refuses to run while the
@@ -50,7 +53,8 @@ static void raw_cb(void *ctx, const unsigned char *r, long len) {
 
 static void usage(const char *p) {
     fprintf(stderr, "usage: %s [--verify | --capture N] [--data DIR] [--logs DIR] "
-                    "[--commands FILE] [--run-for SEC] [-v]\n", p);
+                    "[--commands FILE] [--run-for SEC] [-v]\n"
+                    "       %s --write-default-configs DIR\n", p, p);
 }
 
 static const char *link_name(int l) {
@@ -73,7 +77,16 @@ int main(int argc, char **argv) {
     double run_for = 0;   /* seconds; 0 = until Ctrl-C */
 
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--verify")) g_verify = true;
+        if (!strcmp(argv[i], "--write-default-configs") && i + 1 < argc) {
+            /* no controller, no lock, no X-Plane: just the three commented files */
+            if (!mkdir_p(argv[i + 1], 0755) || config_write_default_files(argv[i + 1]) != 0) {
+                fprintf(stderr, "cannot write the config files into %s\n", argv[i + 1]);
+                return 1;
+            }
+            printf("wrote bridge.conf, controls.conf, feedback.conf into %s\n", argv[i + 1]);
+            return 0;
+        }
+        else if (!strcmp(argv[i], "--verify")) g_verify = true;
         else if (!strcmp(argv[i], "--capture") && i + 1 < argc) {
             /* a typo must not silently turn a passive capture into live driving */
             char *e; errno = 0;
@@ -112,7 +125,6 @@ int main(int argc, char **argv) {
     cfg.data_dir = data;
     cfg.log_dir = logs;
     cfg.commands_path = access(cmds, R_OK) == 0 ? cmds : "";
-    cfg.log_retention_days = 14;
     long capture = atomic_load(&g_capture_left);
     cfg.verbose = verbose || (!g_verify && capture == 0);
     cfg.dry_run = g_verify || capture > 0;

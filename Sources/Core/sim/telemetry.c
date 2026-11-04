@@ -180,7 +180,7 @@ void telemetry_tick(core_t *c, double now) {
     bool want = c->xp_running && !c->suspended && !c->dry_run;
 
     if (want && !c->subscribed) {
-        send_rref_all(c, TELEMETRY_HZ);
+        send_rref_all(c, (int32_t)lround(c->bridge.telemetry_hz));
         c->subscribed = true;
         c->last_sub = now;
     }
@@ -198,13 +198,16 @@ void telemetry_tick(core_t *c, double now) {
     }
     /* X-Plane does not always keep subscriptions (observed across reloads; not
      * documented). Resend every few seconds until data actually arrives. */
-    if (!c->wx.live && now - c->last_sub > TELEMETRY_RESUB_SEC) {
-        send_rref_all(c, TELEMETRY_HZ);
+    if (!c->wx.live && now - c->last_sub > c->bridge.telemetry_resub_s) {
+        send_rref_all(c, (int32_t)lround(c->bridge.telemetry_hz));
         c->last_sub = now;
     }
 
     bool was_live = c->wx.live;
-    if (c->wx.live && now - c->wx.last_rx > TELEMETRY_TIMEOUT_SEC) c->wx.live = false;
+    if (c->wx.live && now - c->wx.last_rx > c->bridge.telemetry_timeout_s) c->wx.live = false;
+    /* crash shake is timed from the moment has_crashed became true */
+    if (c->wx.crashed && !c->crash_seen) { c->crash_seen = true; c->crash_at = now; }
+    if (!c->wx.crashed) c->crash_seen = false;
 
     if (c->wx.live && c->wx.paused) {
         /* paused: the sim keeps answering, but nothing should buzz or resist */
@@ -221,15 +224,15 @@ void telemetry_tick(core_t *c, double now) {
     } else if (c->wx.live) {
         if (c->s.fxmode == FXM_WIND) {
             trigger_fx_t before[2] = { c->fx_out[0], c->fx_out[1] };
-            wind_apply(&c->wx, c->fx_out);
+            wind_apply(&c->wx, c->fx_out, &c->s.wind);
             if (!fx_equal(&before[0], &c->fx_out[0]) || !fx_equal(&before[1], &c->fx_out[1])) out_mark(c);
         } else {
             trigger_fx_t scratch[2];
-            wind_apply(&c->wx, scratch);     /* keeps load/crosswind readouts live */
+            wind_apply(&c->wx, scratch, &c->s.wind);     /* keeps load/crosswind readouts live */
         }
         if (c->s.rmode == RM_SIM) {
             rumble_t before = c->rumble;
-            rumble_apply(&c->wx, &c->rumble, c->rnote, sizeof c->rnote);
+            rumble_apply(&c->wx, &c->rumble, c->rnote, sizeof c->rnote, &c->s.rumble, now - c->crash_at);
             if (before.left != c->rumble.left || before.right != c->rumble.right) out_mark(c);
         }
     } else if (was_live) {

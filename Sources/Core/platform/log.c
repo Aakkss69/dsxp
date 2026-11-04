@@ -3,9 +3,9 @@
  * files in the log directory:
  *   events-YYYY-MM-DD.log   what the bridge did (engage, binds, errors)
  *   reports-YYYY-MM-DD.log  input report rate windows
- * Files older than the retention period are deleted at start and at every date
- * rollover; a file stops growing at 5 MB. All file work happens on a private
- * serial queue so callers never block on disk.
+ * Files older than log.retention_days (bridge.conf) are deleted at start and at
+ * every date rollover; a file stops growing at log.file_cap. All file work
+ * happens on a private serial queue so callers never block on disk.
  */
 #include "core_internal.h"
 #include <dirent.h>
@@ -20,12 +20,13 @@
 #include <time.h>
 #include <unistd.h>
 
-#define LOG_FILE_CAP (5L * 1024 * 1024)
+#define LOG_FILE_CAP_DEFAULT (5L * 1024 * 1024)
 
 static struct {
     atomic_bool on, echo;     /* read from every thread that logs (F18) */
     char dir[1024];
-    int  retention_days;
+    atomic_int  retention_days;
+    atomic_long file_cap;
     int  last_yday, last_year;
     dispatch_queue_t q;
     os_log_t ol;
@@ -51,7 +52,7 @@ bool log_name_is_ours(const char *name) {
 static void sweep(void) {
     DIR *d = opendir(L.dir);
     if (!d) return;
-    time_t cutoff = time(NULL) - (time_t)L.retention_days * 86400;
+    time_t cutoff = time(NULL) - (time_t)atomic_load(&L.retention_days) * 86400;
     struct dirent *e;
     while ((e = readdir(d)) != NULL) {
         if (!log_name_is_ours(e->d_name)) continue;
@@ -80,7 +81,7 @@ static void append_job(void *arg) {
              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
     strftime(stamp, sizeof stamp, "%H:%M:%S", &tm);
     struct stat st;
-    if (!(stat(path, &st) == 0 && st.st_size > LOG_FILE_CAP)) {
+    if (!(stat(path, &st) == 0 && st.st_size > atomic_load(&L.file_cap))) {
         FILE *f = fopen(path, "a");
         if (f) { fprintf(f, "%s  %s\n", stamp, j->line); fclose(f); }
     }
@@ -100,7 +101,8 @@ static void enqueue(const char *prefix, const char *line) {
 
 void log_init(const char *dir, int retention_days, bool echo_stderr) {
     snprintf(L.dir, sizeof L.dir, "%s", dir ? dir : "");
-    L.retention_days = retention_days > 0 ? retention_days : 14;
+    atomic_store(&L.retention_days, retention_days > 0 ? retention_days : 14);
+    atomic_store(&L.file_cap, LOG_FILE_CAP_DEFAULT);
     atomic_store(&L.echo, echo_stderr);
     L.last_yday = -1;
     L.last_year = -1;
@@ -108,6 +110,15 @@ void log_init(const char *dir, int retention_days, bool echo_stderr) {
     if (!L.ol) L.ol = os_log_create("io.github.aakkss69.DSXP", "core");
     atomic_store(&L.on, L.dir[0] != 0);
     if (atomic_load(&L.on)) dispatch_async_f(L.q, NULL, sweep_job);
+}
+
+/* bridge.conf log.* values, at start and whenever the file changes */
+void log_configure(int retention_days, long file_cap_bytes, bool echo_stderr) {
+    int old = atomic_exchange(&L.retention_days, retention_days > 0 ? retention_days : 14);
+    atomic_store(&L.file_cap, file_cap_bytes > 0 ? file_cap_bytes : LOG_FILE_CAP_DEFAULT);
+    atomic_store(&L.echo, echo_stderr);
+    if (old != atomic_load(&L.retention_days) && atomic_load(&L.on) && L.q)
+        dispatch_async_f(L.q, NULL, sweep_job);
 }
 
 static void noop(void *arg) { (void)arg; }

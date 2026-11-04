@@ -21,12 +21,9 @@
 #include <math.h>
 #include <stdio.h>
 
-/* Reference speed the load curve saturates against. 160 kias is a reasonable
- * light-aircraft full-scale; faster aircraft just reach full force sooner. */
-#define VREF_KIAS      160.0
-#define XWIND_FULL_MS   12.0    /* crosswind giving full asymmetry            */
-#define TURB_BUFFET      1.5    /* above this, buffet takes the trigger over  */
-#define RESIST_START      30    /* a little free play before force builds     */
+/* All numbers come from feedback.conf (wind_cfg_t); the comments there say what
+ * each one does when flying. */
+#define KT_TO_MS 0.514444
 
 static unsigned char clamp8(double v) {
     if (!isfinite(v) || v < 0) return 0;
@@ -34,9 +31,10 @@ static unsigned char clamp8(double v) {
     return (unsigned char)(v + 0.5);
 }
 
-void wind_apply(wx_t *wx, trigger_fx_t fx[2]) {
+void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg) {
+    if (!cfg) cfg = &WIND_DEFAULTS;
     double ias = (isfinite(wx->ias) && wx->ias > 0) ? wx->ias : 0;
-    double q = ias / VREF_KIAS;
+    double q = ias / (cfg->full_force_kt > 0 ? cfg->full_force_kt : 160.0);
     if (q > 1.0) q = 1.0;
     q = q * q;                                   /* hinge moment goes as IAS^2 */
     wx->load = q;
@@ -46,30 +44,33 @@ void wind_apply(wx_t *wx, trigger_fx_t fx[2]) {
     double xw = wx->wind_ms * sin(rel);
     if (!isfinite(xw)) xw = 0;
     wx->crosswind = xw;
-    double asym = xw / XWIND_FULL_MS;
+    double asym = xw / (cfg->xwind_full_kt * KT_TO_MS);
     if (asym >  1) asym =  1;
     if (asym < -1) asym = -1;
 
-    double base = 30.0 + 200.0 * q;              /* byte-space force */
+    double base = (cfg->base_force + cfg->airspeed_force * q) * 255.0;   /* byte-space force */
     /* wind from the right loads the left rudder, and unloads the right */
-    double fl = base * (1.0 + 0.45 * asym);
-    double fr = base * (1.0 - 0.45 * asym);
+    double fl = base * (1.0 + cfg->xwind_bias * asym);
+    double fr = base * (1.0 - cfg->xwind_bias * asym);
 
-    if (wx->turb > TURB_BUFFET) {
-        double t = (wx->turb - TURB_BUFFET) / (10.0 - TURB_BUFFET);
+    if (wx->turb > cfg->buffet_turb && cfg->buffet_turb < 10.0) {
+        double t = (wx->turb - cfg->buffet_turb) / (10.0 - cfg->buffet_turb);
         if (t > 1) t = 1;
-        unsigned char amp = clamp8(60 + 180 * t);
-        unsigned char hz  = clamp8(18 + 22 * t);
-        fx[0] = (trigger_fx_t){ TFX_VIBRATE, 20, hz, amp };
-        fx[1] = (trigger_fx_t){ TFX_VIBRATE, 20, hz, amp };
+        unsigned char amp = clamp8((cfg->buffet_str_min + (cfg->buffet_str_max - cfg->buffet_str_min) * t) * 255.0);
+        unsigned char hz  = clamp8(cfg->buffet_hz_min + (cfg->buffet_hz_max - cfg->buffet_hz_min) * t);
+        unsigned char at  = clamp8(cfg->buffet_start * 255.0);
+        if (hz < 1) hz = 1;
+        fx[0] = (trigger_fx_t){ TFX_VIBRATE, at, hz, amp };
+        fx[1] = (trigger_fx_t){ TFX_VIBRATE, at, hz, amp };
         snprintf(wx->note, sizeof wx->note, "buffet %.1f/10", wx->turb);
-    } else if (ias < 5.0) {
+    } else if (ias < cfg->no_airflow_kt) {
         fx[0] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
         fx[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
         snprintf(wx->note, sizeof wx->note, "static - no airflow");
     } else {
-        fx[0] = (trigger_fx_t){ TFX_RESIST, RESIST_START, 0, clamp8(fl) };
-        fx[1] = (trigger_fx_t){ TFX_RESIST, RESIST_START, 0, clamp8(fr) };
+        unsigned char free_play = clamp8(cfg->free_play * 255.0);
+        fx[0] = (trigger_fx_t){ TFX_RESIST, free_play, 0, clamp8(fl) };
+        fx[1] = (trigger_fx_t){ TFX_RESIST, free_play, 0, clamp8(fr) };
         snprintf(wx->note, sizeof wx->note, "aero load %.0f%%", q * 100);
     }
 }

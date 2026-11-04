@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusMenu: StatusMenuController?
     private let mapper = MapperWindowController()
     private var guardFD: Int32 = -1
+    private var guardPort: Int32 = 0           // X-Plane port the guard was last told
     private var signalSources: [DispatchSourceSignal] = []
     private var observers: [NSObjectProtocol] = []
     private var refreshTimer: Timer?
@@ -37,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the crash guard: cleans up after us if we ever die without doing so. Spawned
         // after the core starts so it inherits the core's UDP socket.
         guardFD = dsxp_guard_spawn(Bundle.main.executablePath ?? CommandLine.arguments[0])
+        guardPort = CoreBridge.shared.status.xp_port
 
         let menu = StatusMenuController()
         menu.openMapper = { [weak self] in self?.mapper.show() }
@@ -82,6 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let s = CoreBridge.shared.status
         statusMenu?.update(s, accessProblem: accessProblem(s))
         updateActivity(s)
+
+        // xplane.port changed in bridge.conf: the guard must clean up on the new port
+        if guardFD >= 0, s.xp_port > 0, s.xp_port != guardPort {
+            dsxp_guard_port(guardFD, s.xp_port)
+            guardPort = s.xp_port
+        }
 
         // no command list yet, but X-Plane is running: learn its folder from the process
         if s.ncmds == 0, s.xp_running {

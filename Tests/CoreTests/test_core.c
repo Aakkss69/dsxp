@@ -8,22 +8,15 @@
 
 typedef struct { unsigned char d[520]; size_t n; } pkt_t;
 static pkt_t P[8192];
-static int NP, OUTN, SAVES;
+static int NP, OUTN;
 static unsigned char OUTLAST[OUT_REPORT_LEN];
-static char SAVED[16384];
-static size_t SAVEDN;
 
 static void cap_udp(void *ctx, const unsigned char *b, size_t n) {
     (void)ctx;
     if (NP < 8192) { memcpy(P[NP].d, b, n < 520 ? n : 520); P[NP].n = n; NP++; }
 }
 static void cap_out(void *ctx, const unsigned char *r) { (void)ctx; OUTN++; memcpy(OUTLAST, r, OUT_REPORT_LEN); }
-static void cap_save(void *ctx, const char *t, size_t n) {
-    (void)ctx; SAVES++;
-    SAVEDN = n < sizeof SAVED - 1 ? n : sizeof SAVED - 1;
-    memcpy(SAVED, t, SAVEDN); SAVED[SAVEDN] = 0;
-}
-static void reset_cap(void) { NP = OUTN = SAVES = 0; }
+static void reset_cap(void) { NP = OUTN = 0; }
 
 /* how many DREFs to `path` were sent, and the last value */
 static int drefs(const char *path, float *last) {
@@ -84,7 +77,7 @@ static void tele(core_t *c, double now) {
     udp_pairs(c, ids, vals, 1, true, now);
 }
 
-static const core_sinks_t SK = { NULL, cap_udp, cap_out, cap_save };
+static const core_sinks_t SK = { NULL, cap_udp, cap_out };
 #define OV_ROLL  "sim/operation/override/override_joystick_roll"
 #define OV_PITCH "sim/operation/override/override_joystick_pitch"
 #define OV_HDG   "sim/operation/override/override_joystick_heading"
@@ -220,9 +213,9 @@ static void telemetry_and_triggers(void) {
     CHECK_INT(C.fx_out[0].mode, TFX_RESIST);
     CHECK(C.fx_out[0].strength != 128);              /* wind computes its own */
     CHECK_INT(C.s.fx_manual[0].strength, 128);       /* ...and never touches the manual one */
-    char buf[16384];
-    bindings_format(&C.s, buf, sizeof buf);
-    CHECK(strstr(buf, "trigger l 1 30 0 128 40\n") != NULL);
+    const trig_manual_t *fm = &C.s.fx_manual[0];
+    CHECK_INT(fm->mode, TFX_RESIST); CHECK_INT(fm->start, 30); CHECK_INT(fm->end, 0);
+    CHECK_INT(fm->strength, 128); CHECK_INT(fm->freq, 40);
     w.u.mode = FXM_MANUAL;
     core_apply_cmd(&C, &w, 1.2);
     CHECK_INT(C.fx_out[0].strength, 128);
@@ -268,20 +261,41 @@ static void saves_and_output(void) {
     cmd_t tn = { .kind = CMD_TUNE };
     tn.u.tune.has_dz = true; tn.u.tune.dz = 0.2;
     core_apply_cmd(&C, &tn, 20.0);
-    core_tick(&C, 20.4);
-    CHECK_INT(SAVES, 0);                             /* debounced */
-    core_tick(&C, 20.6);
-    CHECK_INT(SAVES, 1);
-    settings_t s;
-    load_defaults(&s);
-    bindings_parse(&s, SAVED, SAVEDN);
-    CHECK_NEAR(s.tune.deadzone, 0.2, 1e-4);
+    CHECK_INT(core_save_due(&C, 20.4), 0);           /* debounced by timing.save_delay */
+    CHECK_INT(core_save_due(&C, 20.6), CFB_CONTROLS); /* only the file that changed */
+    CHECK_INT(core_save_due(&C, 20.7), 0);
+    static config_t cf;
+    core_get_config(&C, &cf);
+    CHECK_NEAR(cf.s.tune.deadzone, 0.2, 1e-12);
+    cmd_t lt = { .kind = CMD_LIGHT };
+    lt.u.light.mask = LF_ON;
+    core_apply_cmd(&C, &lt, 20.8);
+    core_apply_cmd(&C, &tn, 20.9);
+    CHECK_INT(core_save_due(&C, 21.5), CFB_CONTROLS | CFB_FEEDBACK);
+
+    /* an outside edit arrives through core_apply_config: nothing marked for saving,
+     * and a mode change goes through the same setter as the mapper's */
+    core_get_config(&C, &cf);
+    cf.s.tune.curve = 2.0;
+    cf.s.fxmode = FXM_WIND;
+    cf.bridge.telemetry_hz = 20;
+    core_apply_config(&C, &cf, CFB_CONTROLS | CFB_FEEDBACK, 21.6);
+    CHECK_NEAR(C.s.tune.curve, 2.0, 1e-12);
+    CHECK_INT(C.s.fxmode, FXM_WIND);
+    CHECK(!strcmp(C.wx.note, "waiting for X-Plane"));
+    CHECK_NEAR(C.bridge.telemetry_hz, 10, 1e-12);     /* bridge.conf was not in the mask */
+    CHECK_INT(core_save_due(&C, 30.0), 0);
+    cf.s.fxmode = FXM_MANUAL;
+    core_apply_config(&C, &cf, CFB_FEEDBACK | CFB_BRIDGE, 21.7);
+    CHECK_INT(C.s.fxmode, FXM_MANUAL);
+    CHECK_NEAR(C.bridge.telemetry_hz, 20, 1e-12);
+    C.bridge = BRIDGE_DEFAULTS;
 
     /* output reports go out only with a device, then quiet on demand */
-    core_tick(&C, 21.0);
+    core_tick(&C, 31.0);
     CHECK_INT(OUTN, 0);
     core_on_device(&C, true, true);
-    core_tick(&C, 21.1);
+    core_tick(&C, 31.1);
     CHECK(OUTN >= 1);
     out_quiet(&C);
     CHECK_INT(OUTLAST[3], 0x0F);
