@@ -19,6 +19,7 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
         "/app.css": ("app.css", "text/css; charset=utf-8"),
         "/app.js": ("app.js", "text/javascript; charset=utf-8"),
         "/motion-panel.js": ("motion-panel.js", "text/javascript; charset=utf-8"),
+        "/calibration.js": ("calibration.js", "text/javascript; charset=utf-8"),
         // the 3D plane of the motion panel, one job per file (Resources/web/plane3d/)
         "/plane3d/math.js": ("plane3d/math.js", "text/javascript; charset=utf-8"),
         "/plane3d/airframe.js": ("plane3d/airframe.js", "text/javascript; charset=utf-8"),

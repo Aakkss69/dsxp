@@ -45,6 +45,7 @@
 
   /* One line in the panel's title row, most important first. */
   function statusText(m) {
+    if (m.calibrated === 0) return 'Not calibrated';
     if (!m.enabled) return 'Off';
     if (!m.live) return 'On, waiting for the controller';
     if (m.out_of_range) return 'Controller set down: holding the controls neutral';
@@ -58,6 +59,8 @@
     if (!m) return;                                   /* an older core: nothing to show   */
     const editing = recentlyEdited('motion');
     if (!editing && document.activeElement !== sw) sw.checked = !!m.enabled;
+    sw.disabled = m.calibrated === 0;                 /* the calibration comes first      */
+    sw.parentElement.title = m.calibrated === 0 ? 'Calibrate motion control first' : '';
     const sent = m.sent || {};
     m.axes.forEach((a, i) => {
       const axis = AXES[i];

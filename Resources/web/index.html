@@ -66,6 +66,50 @@
 
 <div id="toast" role="status" hidden></div>
 
+<!-- Motion control calibration. Required before motion control can be used: while it has
+     never been done this sheet covers the mapper (the status strip, with Quit, stays above
+     it). Opened again by Calibrate... in the Motion control panel. -->
+<div id="calibration" hidden>
+  <div class="cal-card" role="dialog" aria-modal="true" aria-labelledby="cal-title">
+    <header class="cal-head">
+      <h2 id="cal-title">Calibrate motion control</h2>
+      <ol class="cal-steps" id="cal-steps">
+        <li data-step="flat">Lie flat</li><li data-step="level">Hold level</li><li data-step="roll">Bank</li><li data-step="pitch">Pitch</li><li data-step="yaw">Twist</li>
+      </ol>
+    </header>
+    <div class="cal-body">
+      <div class="cal-view"><canvas id="cal-plane" role="img" aria-label="The controller's attitude now, drawn as an aircraft"></canvas></div>
+      <div class="cal-side">
+        <p class="cal-instruction" id="cal-instruction"></p>
+        <div class="variants" id="cal-meter">
+          <div data-variant="bar" class="cal-bar" role="progressbar" aria-label="Step progress" aria-valuemin="0" aria-valuemax="100"><i id="cal-bar-fill"></i></div>
+          <div data-variant="reach" class="cal-reach">
+            <div class="cal-track" id="cal-track"><i class="cal-span" id="cal-span"></i><i class="cal-need lo" id="cal-need-lo"></i><i class="cal-need hi" id="cal-need-hi"></i><i class="cal-center"></i><i class="cal-needle" id="cal-needle"></i></div>
+            <div class="cal-scale"><span id="cal-scale-lo"></span><output id="cal-angle">0&deg;</output><span id="cal-scale-hi"></span></div>
+          </div>
+          <dl data-variant="result" class="readouts cal-result">
+            <div><dt>Gyro drift</dt><dd id="cal-r-drift">&mdash;</dd></div>
+            <div><dt>Gravity</dt><dd id="cal-r-gravity">&mdash;</dd></div>
+            <div><dt>Level</dt><dd id="cal-r-level">&mdash;</dd></div>
+            <div><dt>Full deflection</dt><dd id="cal-r-full">&mdash;</dd></div>
+          </dl>
+          <div data-variant="none"></div>
+        </div>
+        <p class="cal-note" id="cal-note"></p>
+      </div>
+    </div>
+    <footer class="cal-foot">
+      <p class="note" id="cal-foot-note">About a minute. Your sticks keep working meanwhile; motion control can be switched on once this is done.</p>
+      <div class="popover-buttons">
+        <button class="push" id="cal-cancel" hidden>Cancel</button>
+        <button class="push" id="cal-restart" hidden>Start Over</button>
+        <button class="push" id="cal-done" hidden>Done</button>
+        <button class="push default" id="cal-primary">Start</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
 <main>
   <section id="panel-controller">
     <header class="group-title"><h2>Controller</h2><span class="group-status" id="controller-status">Waiting for input</span></header>
@@ -217,7 +261,10 @@
         <div class="motion-grid">
           <label class="form-label mg-row1" for="motion-on">Motion control:</label>
           <label class="check mg-switch"><input type="checkbox" id="motion-on" switch> On</label>
-          <button class="mg-recenter" id="motion-recenter" title="Make the way you hold the controller now level">Recenter</button>
+          <div class="mg-buttons">
+            <button id="motion-calibrate" title="Measure the controller's drift, your level and your reach again">Calibrate&hellip;</button>
+            <button id="motion-recenter" title="Make the way you hold the controller now level">Recenter</button>
+          </div>
 
           <span class="mg-head mg-angle">Angle</span>
           <span class="mg-head mg-sent">Sent</span>
@@ -444,5 +491,6 @@
 <script src="/plane3d/view.js"></script>
 <script src="/app.js"></script>
 <script src="/motion-panel.js"></script>
+<script src="/calibration.js"></script>
 </body>
 </html>

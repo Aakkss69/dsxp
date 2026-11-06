@@ -296,7 +296,7 @@ mark{background:color-mix(in srgb,var(--orange) 35%,transparent);color:inherit;b
 .motion-grid .form-label{text-align:right;white-space:nowrap}
 .motion-grid output{text-align:right;color:var(--label2);font-size:12px}
 .mg-switch{grid-column:2 / 5}
-.mg-recenter{grid-column:5 / 7;justify-self:end}
+.mg-buttons{grid-column:5 / 7;justify-self:end;display:flex;gap:8px}
 .mg-head{font-size:11px;line-height:14px;color:var(--label2);text-align:right;white-space:nowrap}
 .mg-head.mg-angle{grid-column:3} .mg-head.mg-sent{grid-column:4}
 .mg-head.mg-full{grid-column:5 / 7;text-align:left}
@@ -311,6 +311,46 @@ mark{background:color-mix(in srgb,var(--orange) 35%,transparent);color:inherit;b
   .motion-view{min-height:200px}
   .motion-grid{grid-column:1}
 }
+
+/* ------------------------------------------------- motion calibration sheet */
+/* Covers the mapper, under the status strip (z-index 20), so Quit stays reachable. Every
+ * part has a fixed size: moving from step to step never moves anything. */
+#calibration{position:fixed;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;
+  padding:calc(var(--strip-h,48px) + var(--gap)) var(--gap) var(--gap);
+  background:color-mix(in srgb,var(--win) 82%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.cal-card{width:min(760px,100%);display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:12px;
+  background:var(--ctl);border:1px solid var(--sep);box-shadow:0 18px 48px rgba(0,0,0,.25)}
+.cal-head{display:flex;flex-direction:column;gap:12px}
+.cal-head h2{font-size:15px;line-height:20px}
+.cal-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none;
+  counter-reset:calstep}
+.cal-steps li{counter-increment:calstep;font-size:11px;line-height:14px;color:var(--label2);padding-top:6px;
+  border-top:3px solid var(--track);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-steps li::before{content:counter(calstep) ". "}
+.cal-steps li.done{border-top-color:var(--label3);color:var(--label2)}
+.cal-steps li.now{border-top-color:var(--accent);color:var(--label);font-weight:600}
+.cal-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--gap);height:220px}
+.cal-view{position:relative;border-radius:8px;background:var(--box);border:1px solid var(--boxline)}
+.cal-view canvas{position:absolute;inset:0;width:100%;height:100%;display:block;color:var(--label)}
+.cal-side{display:grid;grid-template-rows:72px 76px minmax(0,1fr);gap:8px;min-width:0}
+.cal-instruction{margin:0;font-size:15px;line-height:20px;font-weight:500}
+.cal-bar{position:relative;height:6px;margin-top:20px;border-radius:3px;background:var(--track);overflow:hidden}
+.cal-bar i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:3px;background:var(--accent)}
+.cal-reach{display:flex;flex-direction:column;gap:6px;padding-top:12px}
+.cal-track{position:relative;height:14px;border-radius:7px;background:var(--track)}
+.cal-track i{position:absolute;top:0;bottom:0}
+.cal-span{background:color-mix(in srgb,var(--accent) 35%,transparent);border-radius:7px}
+.cal-need{width:2px;margin-left:-1px;background:var(--label3)}
+.cal-center{left:50%;width:1px;background:var(--label3)}
+.cal-track .cal-needle{width:4px;margin-left:-2px;top:-3px;bottom:-3px;border-radius:2px;background:var(--accent)}
+.cal-scale{display:flex;justify-content:space-between;font-size:11px;line-height:14px;color:var(--label2)}
+.cal-scale output{color:var(--label);font-size:12px}
+.cal-result{grid-template-columns:minmax(0,1fr);gap:2px}
+.cal-note{margin:0;font-size:12px;line-height:16px;color:var(--label2)}
+.cal-foot{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.cal-foot .note{flex:1 1 auto;min-width:0}
+.cal-foot .popover-buttons{flex:none}
+@media (max-width:640px){ .cal-body{grid-template-columns:minmax(0,1fr);height:auto} .cal-view{height:180px} }
 
 /* ------------------------------------------------- popovers, toast, quit */
 .popover{position:absolute;z-index:30;padding:12px;border-radius:10px;background:var(--ctl);
