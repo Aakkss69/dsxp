@@ -42,6 +42,24 @@
 #define MOTION_GYRO_PER_DPS_NOMINAL (32767.0 / 2048.0)   /* counts per deg/s  */
 #define MOTION_CAL_TOLERANCE        0.30   /* a factory scale this far off nominal is rejected */
 
+/*
+ * What the sensors can report, and what was measured on a real controller over Bluetooth
+ * on this Mac (2026-11-07, read-only probe; Sony publishes no figures beyond "six-axis
+ * motion sensing", and no teardown names the IMU part):
+ *   gyro    16-bit signed; factory scale 16.37-16.39 counts per deg/s, so +-2000 deg/s
+ *           at full scale (Linux declares +-2048, DS_GYRO_RANGE :147); 0.061 deg/s per
+ *           count. Fast wrist flicks peaked at 762 deg/s, a hard shake at 1182 deg/s:
+ *           never saturated.
+ *   accel   16-bit signed; factory scale 8189.5-8197 counts per g, so +-4 g at full
+ *           scale (Linux DS_ACC_RANGE :145); 0.12 mg per count. A hard shake clipped
+ *           at raw 32765 (4.00 g), so fast shaking does saturate it.
+ *   rate    one sample per input report: 64 per second, sensor-clock steps 15.0-15.7 ms,
+ *           1 % of steps over 40 ms (dropped reports), longest 52.5 ms.
+ *   held    in the hand, held level: gyro spread (1 sd) 0.4-0.8 deg/s per axis.
+ * A sample within MOTION_RAW_SATURATED of either end is treated as clipped.
+ */
+#define MOTION_RAW_SATURATED 32700
+
 /* How a calibration attempt ended. */
 typedef enum {
     MCAL_OK = 0,      /* parsed; check factory_axes for axes that fell back to nominal */
@@ -58,6 +76,10 @@ typedef struct {
     double acc_bias[3];      /* counts subtracted from accel x, y, z before scaling   */
     double acc_per_g[3];     /* counts per g, accel x, y, z                           */
     double gyro_per_dps[3];  /* counts per deg/s, gyro x, y, z                        */
+    double gyro_zero_dps[3]; /* the factory's resting gyro offset, deg/s (0 if unread). Linux
+                                ignores it; SDL subtracts it. Measured: -0.61 -0.55 +0.55
+                                from the report vs -1.09 -0.76 +0.56 held in the hand, so
+                                DSXP uses it as the starting bias until calibrated        */
     int    factory_axes;     /* axes (of 6) using the controller's own values; 6 = all */
 } motion_cal_t;
 
@@ -115,12 +137,57 @@ void   motion_init(motion_t *m);
 void   motion_reset(motion_t *m);
 void   motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cfg, bool quiet);
 void   motion_recenter(motion_t *m);
+void   motion_set_level(motion_t *m, double bank_deg, double pitch_deg);
+void   motion_attitude(const double up[3], double *bank_deg, double *pitch_deg);
 void   motion_blend_start(motion_blend_t *b, double from, double now);
 double motion_blend(motion_blend_t *b, double target, double now);
 
-/* True when motion, not the sticks, flies this axis (MOTION_ROLL / PITCH / YAW). */
+/* True when motion, not the sticks, flies this axis (MOTION_ROLL / PITCH / YAW). Never
+ * before the calibration has been completed. */
 static inline bool motion_owns(const motion_cfg_t *cfg, int axis) {
-    return cfg->enabled && axis >= 0 && axis < MOTION_AXES && cfg->use[axis];
+    return cfg->enabled && cfg->calibrated && axis >= 0 && axis < MOTION_AXES && cfg->use[axis];
 }
+
+/* -------------------------------------------------- calibration (motion_calib.c) */
+
+/* The steps, in order. Each completes on its own once the controller shows it. */
+typedef enum {
+    CALIB_IDLE = 0,   /* not running                                                  */
+    CALIB_FLAT,       /* lying face up, untouched: gyro drift, accelerometer check     */
+    CALIB_LEVEL,      /* held the way you fly, steady: the level attitude              */
+    CALIB_ROLL,       /* bank left and right as far as comfortable, back to level      */
+    CALIB_PITCH,      /* top edge up and down as far as comfortable, back to level     */
+    CALIB_YAW,        /* twist left and right as far as comfortable, back to center    */
+    CALIB_DONE,       /* results ready (copied into the settings by the core)          */
+    CALIB_STEPS
+} calib_step_t;
+
+/* The calibration's state and results. Plain data: copied into the mapper's snapshot. */
+typedef struct {
+    int    step;                 /* calib_step_t                                              */
+    double hold_s;               /* how long the step's condition has held so far             */
+    double need_s;               /* how long it must hold (timed steps), else 0               */
+    double angle;                /* reach steps: the live angle from level, degrees          */
+    double lo, hi;               /* reach steps: the furthest each way so far                 */
+    double min_reach;            /* reach steps: each side must get at least this far         */
+    bool   reached;              /* reach steps: both sides far enough, now return to center  */
+    char   note[112];            /* a hint for the user ("Keep your hands off it."), or ""   */
+    /* working values (not shown) */
+    double last_t;               /* fusion time of the previous sample, for time steps       */
+    double sum_g[3], min_g[3], max_g[3], sum_a[3];  /* FLAT: the still streak's gyro, accel */
+    double sum_up[3];            /* LEVEL: the steady streak's "up" vectors                  */
+    long   n;                    /* samples in the streak                                     */
+    double twist;                /* YAW: integrated twist since the step began, degrees      */
+    /* results */
+    double bias[3];              /* resting gyro drift, deg/s                                 */
+    double acc_g;                /* magnitude of gravity as measured lying still, g          */
+    double level_bank, level_pitch;   /* the level attitude, degrees (absolute)              */
+    double full[MOTION_AXES];    /* full-deflection angles from the reach, degrees           */
+} calib_t;
+
+void        calib_start(calib_t *c);
+void        calib_cancel(calib_t *c);
+void        calib_update(calib_t *c, motion_t *m, const motion_sample_t *s, bool saturated);
+const char *calib_step_name(int step);
 
 #endif /* DSXP_MOTION_H */

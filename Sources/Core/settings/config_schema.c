@@ -191,15 +191,15 @@ static const conf_key_t CONTROLS_KEYS[] = {
        "What flies yaw (rudder): motion (twist the controller about its face, like a steering\n"
        "wheel lying flat) or sticks. With motion, the rudder triggers and any stick set to yaw\n"
        "are ignored."),
-    K("motion.roll.full", CT_REAL, s.motion.full_deg[MOTION_ROLL], 10, 90, 0, "deg",
+    K("motion.roll.full", CT_REAL, s.motion.full_deg[MOTION_ROLL], MOTION_ROLL_FULL_MIN, MOTION_ROLL_FULL_MAX, 0, "deg",
       "Controller bank that gives full aileron.\n"
       "Lower: more sensitive - small tilts roll hard; quick, but twitchy on an approach.\n"
       "Higher: gentler and more precise, but a steep turn needs a bigger wrist movement."),
-    K("motion.pitch.full", CT_REAL, s.motion.full_deg[MOTION_PITCH], 10, 60, 0, "deg",
+    K("motion.pitch.full", CT_REAL, s.motion.full_deg[MOTION_PITCH], MOTION_PITCH_FULL_MIN, MOTION_PITCH_FULL_MAX, 0, "deg",
       "Tilt of the top edge, up or down, that gives full elevator.\n"
       "Lower: small tilts pitch hard - quick, but easy to over-control in the flare.\n"
       "Higher: finer control of attitude, but a full pull needs a big tilt."),
-    K("motion.yaw.full", CT_REAL, s.motion.full_deg[MOTION_YAW], 5, 90, 0, "deg",
+    K("motion.yaw.full", CT_REAL, s.motion.full_deg[MOTION_YAW], MOTION_YAW_FULL_MIN, MOTION_YAW_FULL_MAX, 0, "deg",
       "Twist that gives full rudder.\n"
       "Lower: a small twist kicks in full rudder - fine for crosswind corrections on short\n"
       "final, harsh in flight. Higher: gentler rudder, more twist for a full slip."),
@@ -222,6 +222,25 @@ static const conf_key_t CONTROLS_KEYS[] = {
        "yes: raising the top edge pushes the nose down."),
     KX("motion.yaw.invert", CT_BOOL, s.motion.invert[MOTION_YAW],
        "yes: twisting right gives left rudder."),
+    KX("motion.calibrated", CT_BOOL, s.motion.calibrated,
+       "Set to yes by the calibration in the mapper (Motion control > Calibrate). While it is\n"
+       "no, the mapper asks for the calibration and motion control cannot be switched on.\n"
+       "The full-deflection angles above are set by it too; edit them afterwards if you like."),
+    K("motion.level.bank", CT_REAL, s.motion.level_bank_deg, -MOTION_LEVEL_MAX_DEG, MOTION_LEVEL_MAX_DEG, 1, "deg",
+      "How you hold the controller to fly level, measured by the calibration: its bank from\n"
+      "lying flat (right side down is positive). Recenter overrides it until motion control\n"
+      "is switched off or DSXP restarts."),
+    K("motion.level.pitch", CT_REAL, s.motion.level_pitch_deg, -MOTION_LEVEL_MAX_DEG, MOTION_LEVEL_MAX_DEG, 1, "deg",
+      "... and its pitch from lying flat (top edge up is positive). Lying face up on a table\n"
+      "the controller rests on its grips, about 6 deg top edge up."),
+    K("motion.gyro_bias.x", CT_REAL, s.motion.gyro_bias_dps[0], -MOTION_BIAS_MAX_DPS, MOTION_BIAS_MAX_DPS, 3, "deg/s",
+      "The gyro's resting drift on each axis, measured by the calibration with the controller\n"
+      "lying still (typically under 1 deg/s). DSXP keeps refining it whenever the controller\n"
+      "is still, so there is no need to edit it."),
+    K("motion.gyro_bias.y", CT_REAL, s.motion.gyro_bias_dps[1], -MOTION_BIAS_MAX_DPS, MOTION_BIAS_MAX_DPS, 3, "deg/s",
+      "Resting drift of the gyro's y axis (the twist axis)."),
+    K("motion.gyro_bias.z", CT_REAL, s.motion.gyro_bias_dps[2], -MOTION_BIAS_MAX_DPS, MOTION_BIAS_MAX_DPS, 3, "deg/s",
+      "Resting drift of the gyro's z axis (the roll axis)."),
 
     SEC("Buttons",
         "Each control sends one X-Plane command. Write the command path as X-Plane lists it\n"

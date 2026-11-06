@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		05BEB6EDFC6B5E7970FF38E3 /* test_wire.c in Sources */ = {isa = PBXBuildFile; fileRef = D20976879F304F3D4B9EE53E /* test_wire.c */; };
+		09619B6F6B378CED44F692FF /* motion_calib.c in Sources */ = {isa = PBXBuildFile; fileRef = CEB131E1B8A05CB1237282D6 /* motion_calib.c */; };
 		0DD3E8453890E75C1FA34720 /* module.modulemap in CopyFiles */ = {isa = PBXBuildFile; fileRef = D2D61D18E188FDB56CDF5908 /* module.modulemap */; };
 		0E2A4436B2222D3E28B8D2DF /* motion_cal.c in Sources */ = {isa = PBXBuildFile; fileRef = 9BF7FB3D06B2AE725069194F /* motion_cal.c */; };
 		1C9FD23FF51A6902607D0C9A /* light.c in Sources */ = {isa = PBXBuildFile; fileRef = D4DD3BAA21F2DFDFEB5FE4CF /* light.c */; };
@@ -174,6 +175,7 @@
 		BF0B1374C3F89C98C3B40FC2 /* DSXP.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DSXP.entitlements; sourceTree = "<group>"; };
 		CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libDSXPCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		CE2F512C1732C71A3DF350E3 /* conf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = conf.c; sourceTree = "<group>"; };
+		CEB131E1B8A05CB1237282D6 /* motion_calib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion_calib.c; sourceTree = "<group>"; };
 		D20976879F304F3D4B9EE53E /* test_wire.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_wire.c; sourceTree = "<group>"; };
 		D28CCE7F654FF7513602C771 /* bridge.conf */ = {isa = PBXFileReference; path = bridge.conf; sourceTree = "<group>"; };
 		D2D61D18E188FDB56CDF5908 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
@@ -519,6 +521,7 @@
 			children = (
 				A5995EA892A12032C85F196E /* decode.c */,
 				9BF7FB3D06B2AE725069194F /* motion_cal.c */,
+				CEB131E1B8A05CB1237282D6 /* motion_calib.c */,
 				4CC809A1D42A2B91FD1ECB3F /* motion.c */,
 				2AAB056A375C784B8B7CDE6E /* vocab.c */,
 			);
@@ -695,6 +698,7 @@
 				D9002C6F9F9AC5560BF2A085 /* log.c in Sources */,
 				BD44EF1656FAD9FC99C41C01 /* motion.c in Sources */,
 				0E2A4436B2222D3E28B8D2DF /* motion_cal.c in Sources */,
+				09619B6F6B378CED44F692FF /* motion_calib.c in Sources */,
 				8ABDCAC5C82E3C786337F586 /* output.c in Sources */,
 				697E6EC8EBBF50D884B8D508 /* rumble.c in Sources */,
 				565EBD38B3F253B2FE5DA92F /* settings.c in Sources */,

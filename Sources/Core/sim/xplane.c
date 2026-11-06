@@ -192,8 +192,10 @@ void xp_push(core_t *c, double now) {
             default: break;
             }
         }
-        /* motion's outputs for the axes it flies; frozen while dsxp/motion/hold is down */
-        const double *mo = c->motion_hold ? c->motion_frozen : c->motion.out;
+        /* motion's outputs for the axes it flies; frozen while dsxp/motion/hold is down,
+         * and neutral while the calibration runs (the user is tilting on purpose) */
+        static const double NEUTRAL[MOTION_AXES] = { 0, 0, 0 };
+        const double *mo = core_calibrating(c) ? NEUTRAL : c->motion_hold ? c->motion_frozen : c->motion.out;
         if (own_roll)  roll  = mo[MOTION_ROLL];
         if (own_pitch) pitch = mo[MOTION_PITCH];
         if (own_yaw)   yaw   = mo[MOTION_YAW];

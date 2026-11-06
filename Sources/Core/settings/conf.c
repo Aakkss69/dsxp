@@ -529,6 +529,10 @@ void config_validate(config_t *c, conf_warns_t w[CF_COUNT]) {
             m->full_deg[i] = ceil(dz + 1.0);              /* whole degrees, as the file writes it */
         }
     }
+    if (c->s.motion.enabled && !c->s.motion.calibrated) {   /* the calibration comes first */
+        conf_warn(&w[CF_CONTROLS], 0, "motion.enabled", "needs the calibration first (Motion control > Calibrate in the mapper); left off");
+        c->s.motion.enabled = false;
+    }
     if (c->s.rumble.jolt_full_g < c->s.rumble.jolt_start_g + 0.5) {
         conf_warn(&w[CF_FEEDBACK], 0, "rumble.g_jolt_full", "must be at least 0.5 g above g_jolt_start");
         c->s.rumble.jolt_full_g = c->s.rumble.jolt_start_g + 0.5;

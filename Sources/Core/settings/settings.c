@@ -63,6 +63,9 @@ const motion_cfg_t MOTION_DEFAULTS = {
     .deadzone_deg = 2, .yaw_deadzone_deg = 4,
     .yaw_return_s = 4,
     .invert = { false, false, false },
+    .calibrated = false,                       /* the mapper asks for the calibration first */
+    .level_bank_deg = 0, .level_pitch_deg = 0, /* until then: lying flat is level           */
+    .gyro_bias_dps = { 0, 0, 0 },
 };
 
 void config_defaults(config_t *c) {

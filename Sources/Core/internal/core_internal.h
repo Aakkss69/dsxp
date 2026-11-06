@@ -286,6 +286,10 @@ typedef struct core {
     double         motion_frozen[MOTION_AXES];  /* the outputs when the hold began           */
     bool           dsxp_prev_btn[B_COUNT];      /* buttons bound to DSXP commands, last tick */
     double         lamp_blink_until;            /* player lamps all lit until this time      */
+    calib_t        calib;                       /* the calibration routine, when running     */
+    bool           applied_calibrated;          /* the saved calibration last put into the   */
+    double         applied_level[2];            /*   fusion (motion_edges() compares these   */
+    double         applied_bias[3];             /*   with the settings to notice a change)   */
     bool           lamp_blinking;               /* they are lit now (out_send reads this)    */
 
     /* telemetry */
@@ -335,6 +339,7 @@ typedef struct {
     bool   motion_seeded, motion_out_of_range, motion_bias_learned, motion_hold;
     double sent[MOTION_AXES];                  /* roll, pitch, yaw as sent to X-Plane       */
     bool   sent_valid;
+    calib_t calib;                             /* the calibration routine's progress        */
 } dsxp_snap_t;
 
 /* Commands from the UI into the core (applied on the core thread). */
@@ -342,8 +347,10 @@ typedef enum {
     CMD_NONE = 0, CMD_BIND, CMD_AXIS, CMD_TUNE, CMD_LIGHT, CMD_TRIGGER, CMD_TRIGGER_SOURCE,
     CMD_RUMBLE, CMD_RUMBLE_SOURCE, CMD_RUMBLEPATH,
     CMD_MOTION,             /* change motion settings (u.motion)                */
-    CMD_MOTION_RECENTER     /* the controller's attitude now becomes level      */
+    CMD_MOTION_RECENTER,    /* the controller's attitude now becomes level      */
+    CMD_CALIBRATE           /* key: CALIB_ACTION_START or CALIB_ACTION_CLOSE    */
 } cmd_kind_t;
+enum { CALIB_ACTION_START = 1, CALIB_ACTION_CLOSE = 2 };
 
 enum { LF_R = 1, LF_G = 2, LF_B = 4, LF_ON = 8, LF_PATTERN = 16, LF_SPEED = 32,
        LF_PLAYER = 64, LF_BRIGHT = 128, LF_SOURCE = 256 };
@@ -490,6 +497,8 @@ void core_set_trigger_source(core_t *c, int mode, double now);
 void core_set_rumble_source(core_t *c, int mode, double now);
 void core_set_motion_cal(core_t *c, const motion_cal_t *cal, mcal_result_t r);
 void core_motion_recenter(core_t *c, double now);
+void core_calib_finish(core_t *c, double now);
+bool core_calibrating(const core_t *c);
 void out_tick(core_t *c, double now);
 void out_quiet(core_t *c);
 void out_mark(core_t *c);

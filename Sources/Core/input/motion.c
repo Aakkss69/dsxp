@@ -112,6 +112,22 @@ void motion_reset(motion_t *m) {
     m->samples = 0;
 }
 
+/* The calibrated level: the "up" vector of a controller at this bank and pitch (the
+ * inverse of attitude_deg: bank = atan2(-x, y), pitch = atan2(-z, hypot(x, y))). */
+void motion_set_level(motion_t *m, double bank_deg, double pitch_deg) {
+    double b = bank_deg * DEG, p = pitch_deg * DEG;
+    m->neutral[0] = -sin(b) * cos(p);            /* leans toward -x when banked right  */
+    m->neutral[1] =  cos(b) * cos(p);            /* through the face                    */
+    m->neutral[2] = -sin(p);                     /* toward -z when the nose is up       */
+    m->yaw_deg = 0;                              /* a new level starts with no twist    */
+    m->yaw_credit = 0;
+}
+
+/* Bank and pitch of an "up" vector, degrees (for the calibration and the mapper). */
+void motion_attitude(const double up[3], double *bank_deg, double *pitch_deg) {
+    attitude_deg(up, bank_deg, pitch_deg);
+}
+
 /* Recenter: the attitude held now becomes level, and the held twist is dropped. */
 void motion_recenter(motion_t *m) {
     if (m->seeded) memcpy(m->neutral, m->up, sizeof m->neutral);   /* no data: keep the old level */

@@ -137,6 +137,16 @@ void test_api(void) {
     CHECK_INT(call("POST", "/api/motion", "enabled=1&pitch.full=abc"), 400);
     CHECK_INT(call("POST", "/api/motion", "yaw.invert="), 400);
     CHECK(!AC.s.motion.enabled);                                   /* nothing applied   */
+    CHECK_INT(call("POST", "/api/motion", "enabled=1"), 409);       /* not calibrated yet */
+    CHECK(body_has("GET", "/api/state", "", "\"calibrated\":0,\"calibration\":{\"step\":\"idle\"", &valid));
+    CHECK(valid);
+    CHECK_INT(call("POST", "/api/calibrate", "action=close"), 409);  /* required first      */
+    CHECK_INT(call("POST", "/api/calibrate", "action=later"), 400);
+    CHECK_INT(call("POST", "/api/calibrate", "action=start"), 200);
+    CHECK(body_has("GET", "/api/state", "", "\"calibration\":{\"step\":\"flat\"", NULL));
+    AC.s.motion.calibrated = true;                                 /* as if it finished */
+    CHECK_INT(call("POST", "/api/calibrate", "action=close"), 200);
+    CHECK(body_has("GET", "/api/state", "", "\"calibration\":{\"step\":\"idle\"", NULL));
     CHECK_INT(call("POST", "/api/motion", "enabled=1&yaw=motion&roll=sticks&roll.full=55&pitch.invert=1"), 200);
     CHECK(AC.s.motion.enabled);
     CHECK(AC.s.motion.use[MOTION_YAW] && !AC.s.motion.use[MOTION_ROLL] && AC.s.motion.use[MOTION_PITCH]);

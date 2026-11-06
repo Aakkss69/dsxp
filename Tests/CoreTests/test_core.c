@@ -525,6 +525,7 @@ static void motion_fresh(bool yaw_motion, double bank) {
     settings_t s;
     load_defaults(&s);
     s.motion.enabled = true;
+    s.motion.calibrated = true;                           /* as after the calibration */
     s.motion.use[MOTION_YAW] = yaw_motion;
     core_init(&C, &s, &SK);
     reset_cap();
@@ -558,6 +559,9 @@ static void motion_control(void) {
     xp_wanted_overrides(&s, w);
     CHECK(!w[OV_ROLL_I]);
     s.motion.enabled = true;
+    xp_wanted_overrides(&s, w);
+    CHECK(!w[OV_ROLL_I]);                                 /* not calibrated: still not wanted */
+    s.motion.calibrated = true;
     xp_wanted_overrides(&s, w);
     CHECK(w[OV_ROLL_I] && w[OV_PITCH_I]);
     s.motion.use[MOTION_YAW] = true;
@@ -645,6 +649,7 @@ static void motion_control(void) {
     /* switching an axis to motion mid-flight fades from the stick's value */
     settings_t s2;
     load_defaults(&s2);
+    s2.motion.calibrated = true;
     core_init(&C, &s2, &SK);                              /* motion off                      */
     feed_m(&C, 255, 0, 0, 0x08, 0, 0, 1.0);
     tele(&C, 1.0);
@@ -678,18 +683,29 @@ static void motion_control(void) {
     CHECK(C.s.motion.use[MOTION_YAW] && C.s.motion.invert[MOTION_PITCH]);
     CHECK(C.s.motion.use[MOTION_ROLL]);                          /* not in the mask: kept   */
 
-    /* switching on through a config edit captures level, as switching on in the mapper */
+    /* switching on (here through a config edit) restores the calibrated level, dropping
+     * any Recenter: held at 15 deg with level saved at 10 deg reads 5 deg */
     motion_fresh(false, 15);
     C.s.motion.enabled = false;                           /* as if it was off              */
     core_tick(&C, 1.02);
+    core_motion_recenter(&C, 1.02);                       /* a temporary level at 15 deg   */
     static config_t cfg;
     core_get_config(&C, &cfg);
     cfg.s.motion.enabled = true;
+    cfg.s.motion.level_bank_deg = 10;
     core_apply_config(&C, &cfg, CFB_CONTROLS, 1.05);
     feed_m(&C, 128, 0, 0, 0x08, 0, 15, 1.06);
     core_tick(&C, 1.06);
     feed_m(&C, 128, 0, 0, 0x08, 0, 15, 1.08);
-    CHECK_NEAR(C.motion.bank_deg, 0, 1e-6);
+    CHECK_NEAR(C.motion.bank_deg, 5, 0.01);                 /* accel counts are whole numbers */
+    /* and not at all before the calibration */
+    motion_fresh(false, 0);
+    C.s.motion.calibrated = false;
+    C.s.motion.enabled = false;
+    cmd_t on = { .kind = CMD_MOTION };
+    on.u.motion.has_enabled = true; on.u.motion.enabled = true;
+    core_apply_cmd(&C, &on, 1.1);
+    CHECK(!C.s.motion.enabled);
 
     /* the controller going away restarts the filter but keeps level and calibration */
     motion_cal_t cal;
@@ -704,6 +720,47 @@ static void motion_control(void) {
     CHECK_INT(C.motion_cal_src, MOTION_CAL_FACTORY);
     core_set_motion_cal(&C, &cal, MCAL_BAD_CRC);
     CHECK_INT(C.motion_cal_src, MOTION_CAL_NOMINAL);
+
+    /* calibration through the core: while it runs motion flies nothing (faded out), the
+     * DSXP buttons do nothing, and finishing saves the results and lets motion fly again */
+    motion_fresh(false, 20);
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 1.02);
+    core_tick(&C, 1.02);
+    CHECK(C.sent[MOTION_ROLL] > 0.4);
+    cmd_t cal_cmd = { .kind = CMD_CALIBRATE, .key = CALIB_ACTION_START };
+    core_apply_cmd(&C, &cal_cmd, 1.05);
+    CHECK(core_calibrating(&C));
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 1.5);
+    core_tick(&C, 1.5);
+    CHECK_NEAR(C.sent[MOTION_ROLL], 0, 1e-9);
+    C.calib.bias[1] = -0.8; C.calib.level_bank = 20.04; C.calib.level_pitch = 6.36;
+    C.calib.full[MOTION_ROLL] = 33; C.calib.full[MOTION_PITCH] = 21; C.calib.full[MOTION_YAW] = 28;
+    C.calib.step = CALIB_DONE;
+    C.cfg_dirty_mask = 0;
+    core_calib_finish(&C, 1.6);
+    CHECK(!core_calibrating(&C) && C.s.motion.calibrated);
+    CHECK(C.cfg_dirty_mask & CFB_CONTROLS);
+    CHECK_NEAR(C.s.motion.level_bank_deg, 20.0, 1e-12);          /* rounded as the file writes */
+    CHECK_NEAR(C.s.motion.level_pitch_deg, 6.4, 1e-12);
+    CHECK_NEAR(C.s.motion.full_deg[MOTION_PITCH], 21, 1e-12);
+    CHECK_NEAR(C.s.motion.gyro_bias_dps[1], -0.8, 1e-12);
+    CHECK_NEAR(C.motion.bias[1], -0.8, 1e-12);
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 2.0);
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 2.0);
+    core_tick(&C, 2.0);
+    CHECK_NEAR(C.motion.bank_deg, 0, 0.1);                       /* held at the new level */
+    /* close is refused before the first calibration, and abandoning a re-run restores */
+    motion_fresh(false, 0);
+    C.s.motion.calibrated = false;
+    core_apply_cmd(&C, &cal_cmd, 1.1);
+    cmd_t close_cmd = { .kind = CMD_CALIBRATE, .key = CALIB_ACTION_CLOSE };
+    core_apply_cmd(&C, &close_cmd, 1.2);
+    CHECK(core_calibrating(&C));
+    C.s.motion.calibrated = true;
+    C.motion.bias[0] = 3;                                        /* changed by the run    */
+    core_apply_cmd(&C, &close_cmd, 1.3);
+    CHECK(!core_calibrating(&C));
+    CHECK_NEAR(C.motion.bias[0], C.s.motion.gyro_bias_dps[0], 1e-12);
 
     /* the runtime's hand-over: a result is applied only for the connection it was read
      * for; one from an earlier connection is dropped (core_thread.c runtime_cal_drain) */

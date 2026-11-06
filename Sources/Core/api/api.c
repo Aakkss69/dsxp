@@ -17,6 +17,8 @@
  *                           &roll.full=<deg>&pitch.full=..&yaw.full=..&roll.invert=<0|1>..
  *                           (any subset; the words and keys match controls.conf)
  *   POST /api/motionrecenter                      the controller's attitude now is level
+ *   POST /api/calibrate     ?action=<start|close>  run the motion calibration (again), or
+ *                           close it (refused until motion control has been calibrated once)
  * The words match the config files: trigger.source, rumble.source, light.source.
  * /api/quit, /api/pickxp and /api/openaccess are handled by the app itself.
  */
@@ -143,8 +145,19 @@ static void state_motion(jbuf_t *j, const dsxp_snap_t *s) {
                   i ? "," : "", m->use[i] ? "motion" : "sticks", m->full_deg[i], m->invert[i] ? 1 : 0,
                   isfinite(s->motion_angle[i]) ? s->motion_angle[i] : 0.0,
                   isfinite(s->motion_out[i]) ? s->motion_out[i] : 0.0);
-    jb_printf(j, "],\"sent\":{\"valid\":%d,\"roll\":%.4f,\"pitch\":%.4f,\"yaw\":%.4f}}",
+    jb_printf(j, "],\"sent\":{\"valid\":%d,\"roll\":%.4f,\"pitch\":%.4f,\"yaw\":%.4f},",
               s->sent_valid ? 1 : 0, s->sent[MOTION_ROLL], s->sent[MOTION_PITCH], s->sent[MOTION_YAW]);
+    /* the calibration: whether it has been done, and the routine's progress */
+    const calib_t *k = &s->calib;
+    jb_printf(j, "\"calibrated\":%d,\"calibration\":{\"step\":\"%s\",\"hold\":%.2f,\"need\":%.2f,"
+                 "\"angle\":%.1f,\"lo\":%.1f,\"hi\":%.1f,\"min\":%.0f,\"reached\":%d,\"note\":",
+              m->calibrated ? 1 : 0, calib_step_name(k->step), k->hold_s, k->need_s,
+              isfinite(k->angle) ? k->angle : 0.0, k->lo, k->hi, k->min_reach, k->reached ? 1 : 0);
+    jb_str(j, k->note);
+    jb_printf(j, ",\"result\":{\"bias\":[%.3f,%.3f,%.3f],\"gravity\":%.3f,\"level\":[%.1f,%.1f],"
+                 "\"full\":[%.0f,%.0f,%.0f]}}}",
+              k->bias[0], k->bias[1], k->bias[2], k->acc_g, k->level_bank, k->level_pitch,
+              k->full[MOTION_ROLL], k->full[MOTION_PITCH], k->full[MOTION_YAW]);
 }
 
 static void api_state(const api_env_t *env, dsxp_response_t *out) {
@@ -345,7 +358,8 @@ static void api_rumblepath(const api_env_t *env, const char *qs, dsxp_response_t
 /* Motion settings. Every parameter is optional, but one that is present must be valid:
  * a typo must not quietly switch an axis to the sticks mid-flight. The core clamps the
  * angles to the ranges controls.conf documents. */
-static void api_motion(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+static void api_motion(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
+                       dsxp_response_t *out) {
     static const char *const AXIS[MOTION_AXES] = { "roll", "pitch", "yaw" };   /* = config words */
     cmd_t c = { .kind = CMD_MOTION };
     motion_cmd_t *m = &c.u.motion;
@@ -375,6 +389,27 @@ static void api_motion(const api_env_t *env, const char *qs, dsxp_response_t *ou
             m->inv[i] = x != 0;
         }
     }
+    if (m->has_enabled && m->enabled && !snap->motion.calibrated) {   /* the core refuses too */
+        respond(out, 409, CT_TEXT, "Calibrate motion control before switching it on.");
+        return;
+    }
+    submit(env, &c, out);
+}
+
+/* The calibration routine: start it (again), or close it. */
+static void api_calibrate(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
+                          dsxp_response_t *out) {
+    char action[16];
+    qs_get(qs, "action", action, sizeof action);
+    cmd_t c = { .kind = CMD_CALIBRATE };
+    if (!strcmp(action, "start")) c.key = CALIB_ACTION_START;
+    else if (!strcmp(action, "close")) {
+        if (!snap->motion.calibrated && snap->calib.step != CALIB_DONE) {
+            respond(out, 409, CT_TEXT, "Motion control needs this calibration before first use.");
+            return;
+        }
+        c.key = CALIB_ACTION_CLOSE;
+    } else { respond(out, 400, CT_TEXT, "bad action"); return; }
     submit(env, &c, out);
 }
 
@@ -408,6 +443,7 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
         "/api/bind", "/api/axis", "/api/tune", "/api/light", "/api/trigger",
         "/api/triggersource", "/api/rumble", "/api/rumblesource", "/api/rumblepath",
         "/api/motion", "/api/motionrecenter",                 /* 9, 10 */
+        "/api/calibrate",                                     /* 11 */
     };
     int route = -1;
     for (int i = 0; i < (int)(sizeof POST_ROUTES / sizeof POST_ROUTES[0]); i++)
@@ -415,9 +451,9 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     if (route < 0) { respond(out, 404, CT_TEXT, "no route"); return; }
     if (!post) { respond(out, 405, CT_TEXT, "method not allowed"); return; }
 
-    /* the two source-guarded routes need the current sources */
+    /* routes that check the current state (sources, calibration) need a snapshot */
     dsxp_snap_t *snap = NULL;
-    if (route == 4 || route == 6) {
+    if (route == 4 || route == 6 || route == 9 || route == 11) {
         snap = calloc(1, sizeof *snap);
         if (!snap) { respond(out, 500, CT_TEXT, "out of memory"); return; }
         if (env->snapshot) env->snapshot(env->ctx, snap);
@@ -432,8 +468,9 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     case 6: api_rumble(env, snap, query, out); break;
     case 7: api_rumble_source(env, query, out); break;
     case 8: api_rumblepath(env, query, out); break;
-    case 9: api_motion(env, query, out); break;
+    case 9: api_motion(env, snap, query, out); break;
     case 10: api_motion_recenter(env, out); break;
+    case 11: api_calibrate(env, snap, query, out); break;
     default: respond(out, 404, CT_TEXT, "no route"); break;
     }
     free(snap);

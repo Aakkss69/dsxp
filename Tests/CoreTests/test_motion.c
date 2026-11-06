@@ -202,11 +202,125 @@ static void start(motion_t *m, sim_t *s, const motion_cfg_t *cfg) {
     run(m, s, cfg, 0, 0, 0, 0.1);
 }
 
+/* One 64 Hz step with an exact attitude change and an optional gyro offset: run the
+ * fusion, then the calibration (as core.c motion_feed does). */
+static void calib_run(calib_t *k, motion_t *m, sim_t *s, const motion_cfg_t *cfg,
+                      double wx, double wy, double wz, double secs, bool sat) {
+    double w[3] = { wx, wy, wz };
+    motion_sample_t smp;
+    int n = (int)lround(secs * SIM_HZ);
+    for (int i = 0; i < n; i++) {
+        sim_step(s, w, &smp);
+        motion_update(m, &smp, cfg, false);
+        calib_update(k, m, &smp, sat);
+    }
+}
+
+/* The calibration routine, step by step, on a simulated controller with a real drift. */
+void test_motion_calib(void) {
+    static motion_t m;
+    static calib_t k;
+    sim_t s;
+    motion_cfg_t cfg = MOTION_DEFAULTS;
+    motion_init(&m);
+    sim_init(&s, 5000);
+    s.bias[0] = -0.68; s.bias[1] = -0.80; s.bias[2] = 0.54;      /* measured at rest      */
+    calib_start(&k);
+    CHECK_INT(k.step, CALIB_FLAT);
+    CHECK(strcmp(calib_step_name(k.step), "flat") == 0);
+
+    /* FLAT: moving resets the streak; 3 s untouched completes it */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.5, false);
+    CHECK(k.hold_s > 1.3 && k.step == CALIB_FLAT);
+    calib_run(&k, &m, &s, &cfg, 20, 0, 0, 0.1, false);           /* nudged               */
+    CHECK_NEAR(k.hold_s, 0, 1e-12);
+    CHECK(k.note[0] != 0);
+    calib_run(&k, &m, &s, &cfg, -20, 0, 0, 0.1, false);          /* back flat            */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 3.2, false);
+    CHECK_INT(k.step, CALIB_LEVEL);
+    for (int i = 0; i < 3; i++) {
+        CHECK_NEAR(k.bias[i], s.bias[i], 1e-6);                  /* the drift, measured  */
+        CHECK_NEAR(m.bias[i], s.bias[i], 1e-6);                  /* and used at once     */
+    }
+    CHECK_NEAR(k.acc_g, 1.0, 1e-6);
+    CHECK(m.bias_learned);
+
+    /* LEVEL: held tilted toward you by 25 deg, with hand tremor under 8 deg/s */
+    calib_run(&k, &m, &s, &cfg, 50, 0, 0, 0.5, false);           /* top edge up 25 deg   */
+    for (int i = 0; i < 60; i++) {                               /* ~2 s of small wobble */
+        double t = (i % 2) ? 3 : -3;
+        calib_run(&k, &m, &s, &cfg, t, 0, -t, 1.0 / SIM_HZ * 2, false);
+    }
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);
+    CHECK_INT(k.step, CALIB_ROLL);
+    CHECK_NEAR(k.level_pitch, 25, 0.5);
+    CHECK_NEAR(k.level_bank, 0, 0.5);
+    CHECK_NEAR(m.pitch_deg, 0, 0.5);                             /* now relative to it   */
+
+    /* ROLL: not far enough one way, then both ways, then back to level */
+    calib_run(&k, &m, &s, &cfg, 0, 0, -60, 0.5, false);          /* right 30             */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 60, 1.0, false);           /* to left 30           */
+    calib_run(&k, &m, &s, &cfg, 0, 0, -60, 0.5, false);          /* back to level        */
+    CHECK(k.reached);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);
+    CHECK_INT(k.step, CALIB_PITCH);
+    CHECK_NEAR(k.full[MOTION_ROLL], 27, 1);                      /* 90 % of 30           */
+
+    /* a reading at the sensor's limit restarts the step */
+    calib_run(&k, &m, &s, &cfg, 40, 0, 0, 0.5, false);           /* up 20                */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 0.1, true);             /* clipped              */
+    CHECK_INT(k.step, CALIB_PITCH);
+    CHECK_NEAR(k.hi, 0, 1e-12);
+    CHECK(k.note[0] != 0);
+    /* PITCH: 20 up, 20 down (from the 25 deg level), back */
+    calib_run(&k, &m, &s, &cfg, -40, 0, 0, 1.0, false);          /* to 20 down           */
+    calib_run(&k, &m, &s, &cfg, 40, 0, 0, 1.0, false);           /* to 20 up             */
+    calib_run(&k, &m, &s, &cfg, -40, 0, 0, 0.5, false);          /* back                 */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);
+    CHECK_INT(k.step, CALIB_YAW);
+    CHECK_NEAR(k.full[MOTION_PITCH], 18, 1);
+
+    /* YAW: 40 right, 40 left, back; measured without the hold-to-steer return */
+    calib_run(&k, &m, &s, &cfg, 0, -80, 0, 0.5, false);          /* right 40             */
+    calib_run(&k, &m, &s, &cfg, 0, 80, 0, 1.0, false);           /* to left 40           */
+    calib_run(&k, &m, &s, &cfg, 0, -80, 0, 0.5, false);          /* back                 */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);
+    CHECK_INT(k.step, CALIB_DONE);
+    /* held 25 deg nose-up, a 40 deg twist about the face is 40 cos 25 = 36.3 deg about the
+     * vertical, the same twist flight uses (motion.c); 90 % of that is 33 */
+    CHECK_NEAR(k.full[MOTION_YAW], 33, 1e-12);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 30, 1.0, false);           /* done: nothing changes */
+    CHECK_INT(k.step, CALIB_DONE);
+
+    /* a reach is kept inside the axis's range, pitch also inside what can be read */
+    calib_start(&k);
+    k.step = CALIB_PITCH; k.min_reach = 10; k.level_pitch = 30;
+    k.hi = 50; k.lo = -50; k.reached = true; k.angle = 0;
+    motion_init(&m);
+    sim_init(&s, 9000);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);
+    CHECK_INT(k.step, CALIB_YAW);
+    CHECK_NEAR(k.full[MOTION_PITCH], 35, 1e-12);                 /* 65 - 30, not 45       */
+
+    calib_cancel(&k);
+    CHECK_INT(k.step, CALIB_IDLE);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);            /* idle: ignored         */
+    CHECK_INT(k.step, CALIB_IDLE);
+
+    /* the level helpers invert each other */
+    double b, p;
+    motion_set_level(&m, 12.5, -7.25);
+    motion_attitude(m.neutral, &b, &p);
+    CHECK_NEAR(b, 12.5, 1e-9);
+    CHECK_NEAR(p, -7.25, 1e-9);
+}
+
 void test_motion(void) {
     static motion_t m;
     sim_t s;
     motion_cfg_t cfg = MOTION_DEFAULTS;
     cfg.enabled = true;
+    cfg.calibrated = true;                       /* motion flies only once calibrated */
     cfg.use[MOTION_YAW] = true;
 
     /* at rest, flat: level, nothing to fly */
@@ -359,6 +473,8 @@ void test_motion(void) {
     cfg.enabled = false;
     CHECK(!motion_owns(&cfg, MOTION_ROLL));
     CHECK(!motion_owns(&MOTION_DEFAULTS, MOTION_YAW));
+    cfg.enabled = true; cfg.calibrated = false;
+    CHECK(!motion_owns(&cfg, MOTION_ROLL));              /* not before the calibration */
     CHECK(!motion_owns(&cfg, 7));
 
     /* crossfade: smoothstep from the last value sent to the new target over 0.3 s */

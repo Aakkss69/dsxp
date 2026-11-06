@@ -39,6 +39,7 @@ void motion_cal_nominal(motion_cal_t *cal) {
         cal->acc_bias[i] = 0.0;                          /* no offset known              */
         cal->acc_per_g[i] = MOTION_ACC_PER_G_NOMINAL;    /* +-4 g across the 16-bit range */
         cal->gyro_per_dps[i] = MOTION_GYRO_PER_DPS_NOMINAL;  /* +-2048 deg/s             */
+        cal->gyro_zero_dps[i] = 0.0;                     /* no resting offset known     */
     }
     cal->factory_axes = 0;                               /* nothing from the controller  */
 }
@@ -81,6 +82,10 @@ mcal_result_t motion_cal_parse(const unsigned char *buf, long len, motion_cal_t 
             cal->gyro_per_dps[i] = per_dps;                     /* the controller's own   */
             cal->factory_axes++;
         }
+        /* The bias field as a resting offset, the way SDL applies it (SDL_hidapi_ps5.c
+         * release-3.2.10: (raw - bias) * sensitivity, and SDL distrusts a bias over 1024
+         * counts). Only a starting point: DSXP measures the real drift when calibrating. */
+        if (abs(gyro_bias[i]) <= 1024) cal->gyro_zero_dps[i] = gyro_bias[i] / cal->gyro_per_dps[i];
 
         /* Accelerometer: plus and minus are the readings at +1 g and -1 g, so their
          * difference spans 2 g and the midpoint is the offset. Linux computes the offset

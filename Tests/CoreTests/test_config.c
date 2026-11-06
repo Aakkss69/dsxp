@@ -62,7 +62,7 @@ static void schema_sanity(void) {
             }
         }
     }
-    CHECK_INT(nseen, 18 + 9 + 6 + 13 + 33 + 1 + 10 + 13 + 6 + 11);   /* motion: 13 */
+    CHECK_INT(nseen, 18 + 9 + 6 + 19 + 33 + 1 + 10 + 13 + 6 + 11);   /* motion: 13 + 6 calibration */
     CHECK(conf_find(CF_CONTROLS, "STICK.DEADZONE") != NULL);      /* keys are case-insensitive */
     CHECK(conf_find(CF_BRIDGE, "stick.deadzone") == NULL);
 }
@@ -345,6 +345,18 @@ static void merge_and_rules(void) {
     CHECK_INT(parse(CF_CONTROLS, "motion.enabled = yes\nmotion.yaw = MOTION\nmotion.roll = sticks\n",
                     &A, &w[CF_CONTROLS]), 0);
     CHECK(A.s.motion.enabled && A.s.motion.use[MOTION_YAW] && !A.s.motion.use[MOTION_ROLL]);
+    memset(w, 0, sizeof w);
+    config_validate(&A, w);                                          /* not calibrated:    */
+    CHECK(has_warn(&w[CF_CONTROLS], "motion.enabled", 0));           /* switched off, said */
+    CHECK(!A.s.motion.enabled);
+    CHECK_INT(parse(CF_CONTROLS, "motion.enabled = yes\nmotion.calibrated = yes\nmotion.level.pitch = 12.5\n"
+                    "motion.gyro_bias.y = -0.801\n", &A, &w[CF_CONTROLS]), 0);
+    memset(w, 0, sizeof w);
+    config_validate(&A, w);
+    CHECK(A.s.motion.enabled && A.s.motion.calibrated);
+    CHECK_NEAR(A.s.motion.level_pitch_deg, 12.5, 1e-12);
+    CHECK_NEAR(A.s.motion.gyro_bias_dps[1], -0.801, 1e-12);
+    CHECK_INT(parse(CF_CONTROLS, "motion.gyro_bias.x = 25\n", &A, &w[CF_CONTROLS]), 1);   /* out of range */
     CHECK(A.s.motion.use[MOTION_PITCH]);                              /* default kept */
     CHECK_INT(parse(CF_CONTROLS, "motion.roll = tilt\n", &A, &w[CF_CONTROLS]), 1);
     CHECK(A.s.motion.use[MOTION_ROLL]);                               /* bad word: previous value */
