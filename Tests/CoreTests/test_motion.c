@@ -245,8 +245,13 @@ void test_motion_calib(void) {
     CHECK_NEAR(k.acc_g, 1.0, 1e-6);
     CHECK(m.bias_learned);
 
-    /* LEVEL: held tilted toward you by 25 deg, with hand tremor under 8 deg/s */
+    /* LEVEL: left lying on the table it never completes (steady, but not picked up) */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 5.0, false);
+    CHECK_INT(k.step, CALIB_LEVEL);
+    CHECK(!k.picked_up && k.note[0] != 0);
+    /* picked up and held tilted toward you by 25 deg, with hand tremor under 8 deg/s */
     calib_run(&k, &m, &s, &cfg, 50, 0, 0, 0.5, false);           /* top edge up 25 deg   */
+    CHECK(k.picked_up);
     for (int i = 0; i < 60; i++) {                               /* ~2 s of small wobble */
         double t = (i % 2) ? 3 : -3;
         calib_run(&k, &m, &s, &cfg, t, 0, -t, 1.0 / SIM_HZ * 2, false);

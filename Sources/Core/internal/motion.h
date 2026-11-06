@@ -172,6 +172,7 @@ typedef struct {
     double lo, hi;               /* reach steps: the furthest each way so far                 */
     double min_reach;            /* reach steps: each side must get at least this far         */
     bool   reached;              /* reach steps: both sides far enough, now return to center  */
+    bool   picked_up;            /* LEVEL: the controller has been lifted off the table       */
     char   note[112];            /* a hint for the user ("Keep your hands off it."), or ""   */
     /* working values (not shown) */
     double last_t;               /* fusion time of the previous sample, for time steps       */

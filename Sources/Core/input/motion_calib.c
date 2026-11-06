@@ -8,7 +8,7 @@
  * Steps (each completes by itself once the controller shows it; nothing to click):
  *   FLAT   face up on a table, untouched, 3 s: the gyro's resting drift (bias) and a
  *          check that the accelerometer reads 1 g
- *   LEVEL  held the way you fly, steady, 2 s: the level attitude
+ *   LEVEL  picked up, then held the way you fly, steady, 2 s: the level attitude
  *   ROLL   bank left and right as far as comfortable, then back to level
  *   PITCH  top edge up and down as far as comfortable, then back to level
  *   YAW    twist left and right as far as comfortable, then back to center
@@ -35,6 +35,10 @@
  * allows a relaxed grip but not a deliberate movement. */
 #define LEVEL_STEADY_DPS   8.0
 #define LEVEL_SECONDS      2.0
+/* LEVEL waits until the controller has been picked up, or a controller left lying on the
+ * table (steady too) would be taken as the level. Setting it down measured 56-104 deg/s,
+ * the table's noise under 0.3 deg/s: one sample over 20 deg/s means a hand moved it. */
+#define PICKUP_DPS        20.0
 
 /* Reaches. Each side must reach at least this far (smaller would make an axis twitchy
  * against its 2-4 deg deadzone); back within CENTER_DEG of level for CENTER_SECONDS ends
@@ -62,6 +66,7 @@ static void enter(calib_t *c, int step) {
     c->angle = c->lo = c->hi = 0;
     c->twist = 0;
     c->reached = false;
+    c->picked_up = false;
     c->note[0] = 0;
     c->need_s = step == CALIB_FLAT ? FLAT_SECONDS : step == CALIB_LEVEL ? LEVEL_SECONDS : 0;
     c->min_reach = step == CALIB_ROLL ? ROLL_MIN_DEG : step == CALIB_PITCH ? PITCH_MIN_DEG
@@ -134,6 +139,8 @@ static void step_level(calib_t *c, motion_t *m, const motion_sample_t *s, double
     double w = 0;                                              /* rotation rate, bias removed */
     for (int i = 0; i < 3; i++) w += (s->gyro_dps[i] - m->bias[i]) * (s->gyro_dps[i] - m->bias[i]);
     w = sqrt(w);
+    if (w > PICKUP_DPS) c->picked_up = true;                   /* a hand has moved it        */
+    if (!c->picked_up) { say(c, "Pick it up and hold it the way you fly."); return; }
     double bank, pitch;
     motion_attitude(m->up, &bank, &pitch);                     /* absolute attitude now      */
     if (m->out_of_range || fabs(bank) > MOTION_LEVEL_MAX_DEG || fabs(pitch) > MOTION_LEVEL_MAX_DEG) {
