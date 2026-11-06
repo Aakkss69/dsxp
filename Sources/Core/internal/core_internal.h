@@ -19,6 +19,7 @@
  *   include/   public API (dsxp_core.h) - the only header Swift sees
  *   internal/  shared internal headers (this file)
  *   input/     decode.c vocab.c                     pure: report 0x31, shaping, gestures, names
+ *              motion_cal.c motion.c                pure: motion sensor calibration and fusion (motion.h)
  *   output/    output.c wind.c rumble.c light.c     pure: output report and effect models
  *   sim/       xplane.c telemetry.c xp_packets.c commands.c   pure: X-Plane side
  *   settings/  bindings.c                           pure: defaults and settings text
@@ -34,6 +35,7 @@
 #include <stdint.h>
 #include "dsxp_core.h"
 #include "tunables.h"
+#include "motion.h"          /* motion control: calibration and sensor fusion (pure) */
 
 /* ------------------------------------------------------------- constants */
 

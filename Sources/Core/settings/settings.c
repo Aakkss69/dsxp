@@ -51,6 +51,20 @@ const light_sim_cfg_t LIGHT_SIM_DEFAULTS = {
     .stall_alarm = 0.60, .stall_caution = 0.15, .g_caution = 2.5, .turbulence_caution = 1.5,
 };
 
+/* Motion control starts off. When switched on, tilt flies roll and pitch and the yaw
+ * stays on the sticks and rudder triggers, because twisting a controller is the least
+ * natural of the three. Full deflection at 40 deg bank and 30 deg pitch keeps the wrists
+ * inside a comfortable range; 2 deg of deadzone hides hand tremor, and yaw gets 4 deg
+ * because its angle is integrated, so any leftover gyro drift collects there. */
+const motion_cfg_t MOTION_DEFAULTS = {
+    .enabled = false,
+    .use = { [MOTION_ROLL] = true, [MOTION_PITCH] = true, [MOTION_YAW] = false },
+    .full_deg = { [MOTION_ROLL] = 40, [MOTION_PITCH] = 30, [MOTION_YAW] = 30 },
+    .deadzone_deg = 2, .yaw_deadzone_deg = 4,
+    .yaw_return_s = 4,
+    .invert = { false, false, false },
+};
+
 void config_defaults(config_t *c) {
     memset(c, 0, sizeof *c);
     c->bridge = BRIDGE_DEFAULTS;

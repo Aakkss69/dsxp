@@ -67,7 +67,21 @@ typedef struct {
     double turbulence_caution;                 /* turbulence 0-10 */
 } light_sim_cfg_t;
 
+/* controls.conf: motion control - tilt the controller to fly (input/motion.c).
+ * Arrays are indexed by the X-Plane axis: MOTION_ROLL, MOTION_PITCH, MOTION_YAW. */
+enum { MOTION_ROLL = 0, MOTION_PITCH, MOTION_YAW, MOTION_AXES };
+typedef struct {
+    bool   enabled;                 /* motion control on                                      */
+    bool   use[MOTION_AXES];        /* per axis: true = motion flies it, false = the sticks   */
+    double full_deg[MOTION_AXES];   /* controller angle that gives full deflection, degrees  */
+    double deadzone_deg;            /* roll and pitch: angle ignored around level, degrees    */
+    double yaw_deadzone_deg;        /* yaw: twist ignored around center, degrees              */
+    double yaw_return_s;            /* a held twist is ~95 % back to center after this time  */
+    bool   invert[MOTION_AXES];     /* reverse an axis                                        */
+} motion_cfg_t;
+
 extern const bridge_cfg_t   BRIDGE_DEFAULTS;
+extern const motion_cfg_t   MOTION_DEFAULTS;
 extern const gesture_cfg_t  GESTURE_DEFAULTS;
 extern const wind_cfg_t     WIND_DEFAULTS;
 extern const rumble_cfg_t   RUMBLE_DEFAULTS;

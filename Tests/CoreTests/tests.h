@@ -25,6 +25,8 @@ bool json_valid(const char *s, size_t n);
 void test_decode(void);
 void test_shape(void);
 void test_gesture(void);
+void test_motion_cal(void);
+void test_motion(void);
 void test_bindings(void);
 void test_packets(void);
 void test_output(void);

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		05BEB6EDFC6B5E7970FF38E3 /* test_wire.c in Sources */ = {isa = PBXBuildFile; fileRef = D20976879F304F3D4B9EE53E /* test_wire.c */; };
 		0DD3E8453890E75C1FA34720 /* module.modulemap in CopyFiles */ = {isa = PBXBuildFile; fileRef = D2D61D18E188FDB56CDF5908 /* module.modulemap */; };
+		0E2A4436B2222D3E28B8D2DF /* motion_cal.c in Sources */ = {isa = PBXBuildFile; fileRef = 9BF7FB3D06B2AE725069194F /* motion_cal.c */; };
 		1C9FD23FF51A6902607D0C9A /* light.c in Sources */ = {isa = PBXBuildFile; fileRef = D4DD3BAA21F2DFDFEB5FE4CF /* light.c */; };
 		217996041F98E3D156FAB4B3 /* test_config.c in Sources */ = {isa = PBXBuildFile; fileRef = DA0CD0D345451065EC593F54 /* test_config.c */; };
 		25796C2008DD182BCA1B8AA3 /* vocab.c in Sources */ = {isa = PBXBuildFile; fileRef = 2AAB056A375C784B8B7CDE6E /* vocab.c */; };
@@ -16,6 +17,7 @@
 		2E87F17BCF7B47DAF764C739 /* SchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEFF885B880EF0AE9897CDB /* SchemeHandler.swift */; };
 		2EDB4CEECE782B73617B8562 /* wind.c in Sources */ = {isa = PBXBuildFile; fileRef = 6D41C6C6C2D99AD5DE8D4C8B /* wind.c */; };
 		304B27994432875AB52D02E3 /* SingleInstance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27646B66C3C5AE8DA85A05B2 /* SingleInstance.swift */; };
+		34B6724830107E04110A93C3 /* motion.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = A5A595F025229243608BC669 /* motion.h */; };
 		3900A9A4559BEA6172E48FA2 /* decode.c in Sources */ = {isa = PBXBuildFile; fileRef = A5995EA892A12032C85F196E /* decode.c */; };
 		3E5EE31E1AC9EE4659BCC02A /* bindings.c in Sources */ = {isa = PBXBuildFile; fileRef = 662787DC65C3B03CBBEBF99B /* bindings.c */; };
 		45DA0E8B561EB81913AB3290 /* api.c in Sources */ = {isa = PBXBuildFile; fileRef = 54A50BD476384BB513E06473 /* api.c */; };
@@ -54,7 +56,9 @@
 		B79CC97AB982D39A47E13FD2 /* libDSXPCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */; };
 		B9EB06A45C0F4A4DB96B5688 /* dsxp_core.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = F3CF113567E8FB1C80B1651B /* dsxp_core.h */; };
 		B9F7F130AE005F72B1784125 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D924C5A76991D3E003CC942C /* WebKit.framework */; };
+		BD44EF1656FAD9FC99C41C01 /* motion.c in Sources */ = {isa = PBXBuildFile; fileRef = 4CC809A1D42A2B91FD1ECB3F /* motion.c */; };
 		BFA4F9BF43208EBC18A92BDD /* tunables.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = E668BC3CD5E8FE73A0B785CC /* tunables.h */; };
+		C01BA5EAB41E0823F6F6957A /* test_motion.c in Sources */ = {isa = PBXBuildFile; fileRef = D5C270C0E0B14A65066AF316 /* test_motion.c */; };
 		C02BC2B8AC2166D4C9BF4F2D /* XPlaneLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782C9136DD7E6CB247394CA0 /* XPlaneLocator.swift */; };
 		C96BD1802E073C041BCA4E34 /* ServiceManagement.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 115AD210C39BBA5DA4EE2B65 /* ServiceManagement.framework */; };
 		CE57692D3D39A29BF849847B /* xplane.c in Sources */ = {isa = PBXBuildFile; fileRef = 321C073363E50D93AE004347 /* xplane.c */; };
@@ -107,6 +111,7 @@
 				B34359F0202EF122FAD64CE0 /* core_internal.h in CopyFiles */,
 				B9EB06A45C0F4A4DB96B5688 /* dsxp_core.h in CopyFiles */,
 				0DD3E8453890E75C1FA34720 /* module.modulemap in CopyFiles */,
+				34B6724830107E04110A93C3 /* motion.h in CopyFiles */,
 				BFA4F9BF43208EBC18A92BDD /* tunables.h in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -133,6 +138,7 @@
 		418DB24306AB6E921DDC9364 /* fileio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fileio.c; sourceTree = "<group>"; };
 		48FEE6E07BA61A1F05AB620C /* telemetry.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = telemetry.c; sourceTree = "<group>"; };
 		4AF1934402A0453BC90D4EB7 /* StatusMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenuController.swift; sourceTree = "<group>"; };
+		4CC809A1D42A2B91FD1ECB3F /* motion.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion.c; sourceTree = "<group>"; };
 		5410869D92A5612DBF70B2F8 /* core_thread.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core_thread.c; sourceTree = "<group>"; };
 		54A50BD476384BB513E06473 /* api.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = api.c; sourceTree = "<group>"; };
 		56CDD349F8FB8AC4FCE0A07C /* feedback.conf */ = {isa = PBXFileReference; path = feedback.conf; sourceTree = "<group>"; };
@@ -155,9 +161,11 @@
 		90C28191C0E3D3396C80F4DD /* xp_packets.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xp_packets.c; sourceTree = "<group>"; };
 		92084FAD03F7E4E90EF7778B /* core.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core.c; sourceTree = "<group>"; };
 		9980B1C4A031D874BE854C87 /* REFERENCES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = REFERENCES.md; sourceTree = "<group>"; };
+		9BF7FB3D06B2AE725069194F /* motion_cal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion_cal.c; sourceTree = "<group>"; };
 		9C8B147E2C40B8445F7A85AD /* config_schema.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = config_schema.c; sourceTree = "<group>"; };
 		9D24135E2D0614620A84B6AB /* log.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = log.c; sourceTree = "<group>"; };
 		A5995EA892A12032C85F196E /* decode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = decode.c; sourceTree = "<group>"; };
+		A5A595F025229243608BC669 /* motion.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = motion.h; sourceTree = "<group>"; };
 		AC19376167E23340EEADD882 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		B3F1AB6F2D779C2679F6D119 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		B5D0080D474B6360E8A70EE7 /* rumble.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = rumble.c; sourceTree = "<group>"; };
@@ -170,6 +178,7 @@
 		D28CCE7F654FF7513602C771 /* bridge.conf */ = {isa = PBXFileReference; path = bridge.conf; sourceTree = "<group>"; };
 		D2D61D18E188FDB56CDF5908 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		D4DD3BAA21F2DFDFEB5FE4CF /* light.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = light.c; sourceTree = "<group>"; };
+		D5C270C0E0B14A65066AF316 /* test_motion.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_motion.c; sourceTree = "<group>"; };
 		D7E8F2A96331E34142459355 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D924C5A76991D3E003CC942C /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		DA0CD0D345451065EC593F54 /* test_config.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = test_config.c; sourceTree = "<group>"; };
@@ -299,6 +308,7 @@
 				DA0CD0D345451065EC593F54 /* test_config.c */,
 				6C396E705CF6F207B918F8BC /* test_core.c */,
 				BC92844BB3C5698354333F21 /* test_input.c */,
+				D5C270C0E0B14A65066AF316 /* test_motion.c */,
 				D20976879F304F3D4B9EE53E /* test_wire.c */,
 				02A74D720715AD14BD89FC4D /* tests.h */,
 			);
@@ -404,6 +414,7 @@
 			children = (
 				5D38BD40D0DB50B2C60BE855 /* config.h */,
 				237F0DCEA8ECC2130CBD1956 /* core_internal.h */,
+				A5A595F025229243608BC669 /* motion.h */,
 				E668BC3CD5E8FE73A0B785CC /* tunables.h */,
 			);
 			path = internal;
@@ -507,6 +518,8 @@
 			isa = PBXGroup;
 			children = (
 				A5995EA892A12032C85F196E /* decode.c */,
+				9BF7FB3D06B2AE725069194F /* motion_cal.c */,
+				4CC809A1D42A2B91FD1ECB3F /* motion.c */,
 				2AAB056A375C784B8B7CDE6E /* vocab.c */,
 			);
 			path = input;
@@ -680,6 +693,8 @@
 				B35143899A29D54DB430BE7D /* json.c in Sources */,
 				1C9FD23FF51A6902607D0C9A /* light.c in Sources */,
 				D9002C6F9F9AC5560BF2A085 /* log.c in Sources */,
+				BD44EF1656FAD9FC99C41C01 /* motion.c in Sources */,
+				0E2A4436B2222D3E28B8D2DF /* motion_cal.c in Sources */,
 				8ABDCAC5C82E3C786337F586 /* output.c in Sources */,
 				697E6EC8EBBF50D884B8D508 /* rumble.c in Sources */,
 				565EBD38B3F253B2FE5DA92F /* settings.c in Sources */,
@@ -704,6 +719,7 @@
 				54D1ED4D4FE424B3580B76C5 /* test_config_store.c in Sources */,
 				95AEFA60AF578142022B61ED /* test_core.c in Sources */,
 				9D85F7325217B012E7E04E4C /* test_input.c in Sources */,
+				C01BA5EAB41E0823F6F6957A /* test_motion.c in Sources */,
 				05BEB6EDFC6B5E7970FF38E3 /* test_wire.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
