@@ -123,4 +123,33 @@ void test_api(void) {
     CHECK(body_has("GET", "/api/init", "", "Desc with \\\"quotes\\\" and \\\\ backslash\\u0009 tab", &valid));
     CHECK(valid);
     CHECK(body_has("GET", "/api/init", "", "\"n\":\"Swipe down-right\"", NULL));
+
+    /* motion: DSXP's own commands lead the catalog, the X-Plane ones follow */
+    CHECK(body_has("GET", "/api/init", "", "{\"commands\":[{\"c\":\"dsxp/motion/recenter\"", &valid));
+    CHECK(valid);
+    CHECK(body_has("GET", "/api/init", "", "\"c\":\"dsxp/motion/hold\"", NULL));
+    CHECK(body_has("GET", "/api/init", "", "},{\"c\":\"sim/a/b\"", NULL));   /* comma-joined */
+
+    /* motion settings: any subset; a present but bad value is refused whole */
+    CHECK_INT(call("GET", "/api/motion", "enabled=1"), 405);
+    CHECK_INT(call("POST", "/api/motion", "roll=tilt"), 400);
+    CHECK_INT(call("POST", "/api/motion", "enabled=yes"), 400);
+    CHECK_INT(call("POST", "/api/motion", "enabled=1&pitch.full=abc"), 400);
+    CHECK_INT(call("POST", "/api/motion", "yaw.invert="), 400);
+    CHECK(!AC.s.motion.enabled);                                   /* nothing applied   */
+    CHECK_INT(call("POST", "/api/motion", "enabled=1&yaw=motion&roll=sticks&roll.full=55&pitch.invert=1"), 200);
+    CHECK(AC.s.motion.enabled);
+    CHECK(AC.s.motion.use[MOTION_YAW] && !AC.s.motion.use[MOTION_ROLL] && AC.s.motion.use[MOTION_PITCH]);
+    CHECK_NEAR(AC.s.motion.full_deg[MOTION_ROLL], 55, 1e-12);
+    CHECK(AC.s.motion.invert[MOTION_PITCH] && !AC.s.motion.invert[MOTION_ROLL]);
+    CHECK_INT(call("POST", "/api/motion", "yaw.full=1000"), 200);   /* clamped by the core */
+    CHECK_NEAR(AC.s.motion.full_deg[MOTION_YAW], 90, 1e-12);
+    CHECK_INT(call("POST", "/api/motionrecenter", ""), 200);
+    CHECK_INT(call("GET", "/api/motionrecenter", ""), 405);
+
+    /* ... and in /api/state, still valid JSON */
+    CHECK(body_has("GET", "/api/state", "", "\"motion\":{\"enabled\":1,\"cal\":\"none\"", &valid));
+    CHECK(valid);
+    CHECK(body_has("GET", "/api/state", "", "{\"use\":\"sticks\",\"full\":55,\"invert\":0,", NULL));
+    CHECK(body_has("GET", "/api/state", "", "\"sent\":{\"valid\":0,", NULL));
 }

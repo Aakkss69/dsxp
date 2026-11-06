@@ -13,6 +13,10 @@
  *   POST /api/rumble        ?left=&right=                                       (manual source only)
  *   POST /api/rumblesource  ?source=<manual|sim>
  *   POST /api/rumblepath    ?v2=<0|1>
+ *   POST /api/motion        ?enabled=<0|1>&roll=<sticks|motion>&pitch=..&yaw=..
+ *                           &roll.full=<deg>&pitch.full=..&yaw.full=..&roll.invert=<0|1>..
+ *                           (any subset; the words and keys match controls.conf)
+ *   POST /api/motionrecenter                      the controller's attitude now is level
  * The words match the config files: trigger.source, rumble.source, light.source.
  * /api/quit, /api/pickxp and /api/openaccess are handled by the app itself.
  */
@@ -76,16 +80,16 @@ static void submit(const api_env_t *env, const cmd_t *cmd, dsxp_response_t *out)
 
 /* ------------------------------------------------------------- GET routes */
 
-typedef struct { jbuf_t *j; } init_arg_t;
+typedef struct { jbuf_t *j; int n; } init_arg_t;   /* n: commands written so far */
 
 static void init_commands(void *arg, const xcmd_t *cmds, int n) {
-    jbuf_t *j = ((init_arg_t *)arg)->j;
+    init_arg_t *a = arg;
     for (int i = 0; i < n; i++) {
-        jb_printf(j, "%s{\"c\":", i ? "," : "");
-        jb_str(j, cmds[i].path);
-        jb_printf(j, ",\"d\":");
-        jb_str(j, cmds[i].desc);
-        jb_printf(j, "}");
+        jb_printf(a->j, "%s{\"c\":", a->n++ ? "," : "");   /* comma before all but the first */
+        jb_str(a->j, cmds[i].path);
+        jb_printf(a->j, ",\"d\":");
+        jb_str(a->j, cmds[i].desc);
+        jb_printf(a->j, "}");
     }
 }
 
@@ -93,7 +97,8 @@ static void api_init(const api_env_t *env, dsxp_response_t *out) {
     jbuf_t j;
     jb_init(&j, 512 * 1024);
     jb_printf(&j, "{\"commands\":[");
-    init_arg_t arg = { &j };
+    init_arg_t arg = { &j, 0 };
+    init_commands(&arg, DSXP_COMMANDS, DSXP_CMD_COUNT);       /* DSXP's own commands first */
     if (env->catalog) env->catalog(env->ctx, init_commands, &arg);
     jb_printf(&j, "],\"slots\":[");
     for (int i = 0; i < B_COUNT; i++) {
@@ -119,6 +124,27 @@ static void api_init(const api_env_t *env, dsxp_response_t *out) {
     }
     jb_printf(&j, "]}");
     respond_json(out, &j);
+}
+
+/* "motion": the settings, the live angles and outputs, the calibration, and what X-Plane
+ * was sent (the mapper's 3D plane draws only that). Axis order: roll, pitch, yaw. */
+static void state_motion(jbuf_t *j, const dsxp_snap_t *s) {
+    static const char *const CAL[] = { "none", "nominal", "factory" };   /* motion_cal_source_t */
+    int cal = s->motion_cal_src >= 0 && s->motion_cal_src <= 2 ? s->motion_cal_src : 0;
+    const motion_cfg_t *m = &s->motion;
+    jb_printf(j, "\"motion\":{\"enabled\":%d,\"cal\":\"%s\",\"live\":%d,\"out_of_range\":%d,"
+                 "\"bias_learned\":%d,\"hold\":%d,\"deadzone\":%.1f,\"yaw_deadzone\":%.1f,"
+                 "\"yaw_return\":%.1f,\"axes\":[",
+              m->enabled ? 1 : 0, CAL[cal], s->motion_seeded ? 1 : 0, s->motion_out_of_range ? 1 : 0,
+              s->motion_bias_learned ? 1 : 0, s->motion_hold ? 1 : 0,
+              m->deadzone_deg, m->yaw_deadzone_deg, m->yaw_return_s);
+    for (int i = 0; i < MOTION_AXES; i++)
+        jb_printf(j, "%s{\"use\":\"%s\",\"full\":%.0f,\"invert\":%d,\"angle\":%.2f,\"out\":%.4f}",
+                  i ? "," : "", m->use[i] ? "motion" : "sticks", m->full_deg[i], m->invert[i] ? 1 : 0,
+                  isfinite(s->motion_angle[i]) ? s->motion_angle[i] : 0.0,
+                  isfinite(s->motion_out[i]) ? s->motion_out[i] : 0.0);
+    jb_printf(j, "],\"sent\":{\"valid\":%d,\"roll\":%.4f,\"pitch\":%.4f,\"yaw\":%.4f}}",
+              s->sent_valid ? 1 : 0, s->sent[MOTION_ROLL], s->sent[MOTION_PITCH], s->sent[MOTION_YAW]);
 }
 
 static void api_state(const api_env_t *env, dsxp_response_t *out) {
@@ -183,7 +209,9 @@ static void api_state(const api_env_t *env, dsxp_response_t *out) {
     for (int i = 0; i < 2; i++)
         jb_printf(&j, "%s{\"on\":%d,\"x\":%.4f,\"y\":%.4f}", i ? "," : "",
                   s->touch[i].active ? 1 : 0, s->touch[i].x, s->touch[i].y);
-    jb_printf(&j, "],\"app\":");
+    jb_printf(&j, "],");
+    state_motion(&j, s);
+    jb_printf(&j, ",\"app\":");
     if (env->app_info) env->app_info(env->ctx, &j);
     else jb_printf(&j, "{}");
     jb_printf(&j, "}");
@@ -314,6 +342,47 @@ static void api_rumblepath(const api_env_t *env, const char *qs, dsxp_response_t
     submit(env, &c, out);
 }
 
+/* Motion settings. Every parameter is optional, but one that is present must be valid:
+ * a typo must not quietly switch an axis to the sticks mid-flight. The core clamps the
+ * angles to the ranges controls.conf documents. */
+static void api_motion(const api_env_t *env, const char *qs, dsxp_response_t *out) {
+    static const char *const AXIS[MOTION_AXES] = { "roll", "pitch", "yaw" };   /* = config words */
+    cmd_t c = { .kind = CMD_MOTION };
+    motion_cmd_t *m = &c.u.motion;
+    long x;
+    char key[32], word[16];
+    if (qs_get(qs, "enabled", word, sizeof word)) {
+        if (!get_long(qs, "enabled", &x)) { respond(out, 400, CT_TEXT, "bad enabled"); return; }
+        m->has_enabled = true;
+        m->enabled = x != 0;
+    }
+    for (int i = 0; i < MOTION_AXES; i++) {
+        unsigned bit = 1u << i;
+        if (qs_get(qs, AXIS[i], word, sizeof word)) {                 /* roll=motion|sticks */
+            if (strcmp(word, "motion") && strcmp(word, "sticks")) { respond(out, 400, CT_TEXT, "bad source"); return; }
+            m->use_mask |= bit;
+            m->use[i] = !strcmp(word, "motion");
+        }
+        snprintf(key, sizeof key, "%s.full", AXIS[i]);                 /* roll.full=<deg>    */
+        if (qs_get(qs, key, word, sizeof word)) {
+            if (!get_double(qs, key, &m->full[i])) { respond(out, 400, CT_TEXT, "bad angle"); return; }
+            m->full_mask |= bit;
+        }
+        snprintf(key, sizeof key, "%s.invert", AXIS[i]);               /* roll.invert=<0|1>  */
+        if (qs_get(qs, key, word, sizeof word)) {
+            if (!get_long(qs, key, &x)) { respond(out, 400, CT_TEXT, "bad invert"); return; }
+            m->inv_mask |= bit;
+            m->inv[i] = x != 0;
+        }
+    }
+    submit(env, &c, out);
+}
+
+static void api_motion_recenter(const api_env_t *env, dsxp_response_t *out) {
+    cmd_t c = { .kind = CMD_MOTION_RECENTER };
+    submit(env, &c, out);
+}
+
 /* --------------------------------------------------------------- router */
 
 void api_handle(const api_env_t *env, const char *method, const char *path,
@@ -338,6 +407,7 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     static const char *POST_ROUTES[] = {
         "/api/bind", "/api/axis", "/api/tune", "/api/light", "/api/trigger",
         "/api/triggersource", "/api/rumble", "/api/rumblesource", "/api/rumblepath",
+        "/api/motion", "/api/motionrecenter",                 /* 9, 10 */
     };
     int route = -1;
     for (int i = 0; i < (int)(sizeof POST_ROUTES / sizeof POST_ROUTES[0]); i++)
@@ -362,6 +432,8 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     case 6: api_rumble(env, snap, query, out); break;
     case 7: api_rumble_source(env, query, out); break;
     case 8: api_rumblepath(env, query, out); break;
+    case 9: api_motion(env, query, out); break;
+    case 10: api_motion_recenter(env, out); break;
     default: respond(out, 404, CT_TEXT, "no route"); break;
     }
     free(snap);
