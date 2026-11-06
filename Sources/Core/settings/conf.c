@@ -316,6 +316,18 @@ static bool set_value(const conf_key_t *k, config_t *c, char *v, int line, conf_
     }
 }
 
+/* Keys DSXP itself once wrote and no longer uses. A file that still has one is read
+ * without a warning (the user did not add it), and the next save leaves it out. */
+static const char *const RETIRED_KEYS[] = {
+    "motion.yaw_return",     /* the yaw now holds instead of easing back (motion_yaw.c) */
+};
+
+static bool retired_key(const char *key) {
+    for (size_t i = 0; i < sizeof RETIRED_KEYS / sizeof RETIRED_KEYS[0]; i++)
+        if (!strcmp(key, RETIRED_KEYS[i])) return true;
+    return false;
+}
+
 bool conf_parse(conf_file_t f, const char *text, size_t len, config_t *io, conf_warns_t *w) {
     const conf_schema_t *sc = conf_schema(f);
     if (!sc || !text) return false;
@@ -355,6 +367,7 @@ bool conf_parse(conf_file_t f, const char *text, size_t len, config_t *io, conf_
         val = trim(val);
 
         const conf_key_t *k = conf_find(f, key);
+        if (!k && retired_key(key)) continue;               /* no longer used: dropped quietly */
         if (!k) {
             const char *home = NULL;
             for (int g = 0; g < CF_COUNT; g++) if (g != (int)f && conf_find((conf_file_t)g, key)) home = conf_schema((conf_file_t)g)->file;

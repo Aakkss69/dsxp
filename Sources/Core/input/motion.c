@@ -1,7 +1,11 @@
 /*
- * Motion control sensor fusion: calibrated gyro + accelerometer -> bank, pitch and
- * hold-to-steer yaw -> one -1..1 output per X-Plane axis. Pure: the caller passes every
- * sample and every setting in, and time comes only from the controller's own clock.
+ * Motion control sensor fusion: calibrated gyro + accelerometer -> the controller's "up"
+ * and twist rate, handed to one file per movement for the -1..1 each X-Plane axis gets:
+ *   motion_roll.c   bank  -> roll       motion_pitch.c  pitch -> pitch
+ *   motion_yaw.c    twist -> yaw (hold-to-steer)
+ * This file keeps what all three share: time, the "up" filter, the gyro bias, the level,
+ * and whether the controller can be read at all. Pure: the caller passes every sample and
+ * every setting in, and time comes only from the controller's own clock.
  *
  * The method, step by step (motion_update):
  *   1. Time step from the sensor clock, so Bluetooth jitter and dropped reports do not
@@ -13,15 +17,18 @@
  *      R. Mahony, T. Hamel, J.-M. Pflimlin, "Nonlinear Complementary Filters on the
  *      Special Orthogonal Group", IEEE TAC 53(5), 2008), reduced to the one vector this
  *      feature needs. Bank and pitch come from it exactly, whatever the heading.
- *   3. Bank and pitch relative to the level: the calibrated one (motion_set_level), or
- *      the attitude captured by Recenter.
- *   4. Yaw: the twist rate about the vertical, integrated while held, easing back to
- *      center on its own, and not overshooting past center on the way back.
+ *   3. Bank (motion_roll.c) and pitch (motion_pitch.c) relative to the level: the
+ *      calibrated one (motion_set_level), or the attitude captured by Recenter; and
+ *      whether the controller is out of range (face down, or stood on its edge).
+ *   4. Yaw (motion_yaw.c): the twist rate about the vertical, kept as a steering angle
+ *      that holds while the hand is still.
  *   5. Gyro bias learned whenever the controller is still.
  *   6. Each axis through the user's sensitivity (full-deflection angle), deadzone and
- *      invert, using the same shape() as the sticks.
+ *      invert, in its own file, using the same shape() as the sticks.
  */
 #include "core_internal.h"
+#include "motion_pitch.h"
+#include "motion_roll.h"
 #include <math.h>
 #include <string.h>
 
@@ -41,13 +48,6 @@
 #define QUIET_HOLD_S  0.5 /* learning stays paused this long after DSXP's own vibration     */
 #define OOR_UP        0.2 /* "up" this close to horizontal (or below) is out of range       */
 #define OOR_PITCH_DEG 70  /* pitch beyond this is out of range (controller stood on edge)   */
-#define YAW_WINDUP    2.0 /* the held twist is capped at this many times its full angle     */
-/* The yaw credit (what the return took off, absorbed when twisting back) fades with a time
- * constant of this many times yaw_return_s. Twisting back after a hold of up to about
- * yaw_return_s still ends inside the 4 deg default yaw deadzone (a 20 deg twist held
- * 4 s: 15.9 deg absorbed); after holding a twist for a long while that grip has become
- * the new center, so a later twist the other way steers (after 60 s, 0.5 deg absorbed). */
-#define YAW_CREDIT_KEEP 4.0
 
 /* ------------------------------------------------------------- vector helpers */
 
@@ -71,27 +71,6 @@ static bool normalize3(double v[3]) {
     return true;
 }
 
-/*
- * Bank and pitch of an "up" vector, in the aircraft convention: pitch is the elevation of
- * the controller's long axis (the nose), bank the rotation about that axis. These are the
- * standard roll/pitch-from-gravity formulas (as in an aircraft attitude reference with the
- * nose along -z and the right wing along +x): exact for any pitch followed by any bank,
- * independent of heading.
- *   Bank: rolling right lowers the right grip, so "up" leans toward -x (the measured frame:
- *         rolling left makes x positive).
- *   Pitch: raising the top edge leans "up" toward -z (toward the nose).
- */
-static void attitude_deg(const double u[3], double *bank, double *pitch) {
-    *bank  = atan2(-u[0], u[1]) / DEG;
-    *pitch = atan2(-u[2], sqrt(u[0] * u[0] + u[1] * u[1])) / DEG;
-}
-
-/* a - b for angles, folded into -180..180 (a bank past upside down wraps around). */
-static double angle_diff(double a, double b) {
-    double d = fmod(a - b + 540.0, 360.0) - 180.0;   /* shift, wrap, shift back          */
-    return d;
-}
-
 /* ----------------------------------------------------------------- lifecycle */
 
 /* Everything back to start: level is "lying flat, face up", no bias known. */
@@ -108,8 +87,7 @@ void motion_reset(motion_t *m) {
     m->seeded = false;                           /* next sample seeds up[]          */
     m->have_ts = false;                          /* next sample has no time step    */
     m->t = 0;
-    m->yaw_deg = 0;
-    m->yaw_credit = 0;
+    motion_yaw_reset(&m->yaw);                   /* a held twist ends with the stream */
     m->win_start = 0;
     m->win_n = 0;
     m->quiet_until = 0;
@@ -120,26 +98,26 @@ void motion_reset(motion_t *m) {
 }
 
 /* The calibrated level: the "up" vector of a controller at this bank and pitch (the
- * inverse of attitude_deg: bank = atan2(-x, y), pitch = atan2(-z, hypot(x, y))). */
+ * inverse of motion_roll_bank_deg, bank = atan2(-x, y), and motion_pitch_deg,
+ * pitch = atan2(-z, hypot(x, y))). */
 void motion_set_level(motion_t *m, double bank_deg, double pitch_deg) {
     double b = bank_deg * DEG, p = pitch_deg * DEG;
     m->neutral[0] = -sin(b) * cos(p);            /* leans toward -x when banked right  */
     m->neutral[1] =  cos(b) * cos(p);            /* through the face                    */
     m->neutral[2] = -sin(p);                     /* toward -z when the nose is up       */
-    m->yaw_deg = 0;                              /* a new level starts with no twist    */
-    m->yaw_credit = 0;
+    motion_yaw_reset(&m->yaw);                   /* a new level starts with no twist    */
 }
 
 /* Bank and pitch of an "up" vector, degrees (for the calibration and the mapper). */
 void motion_attitude(const double up[3], double *bank_deg, double *pitch_deg) {
-    attitude_deg(up, bank_deg, pitch_deg);
+    *bank_deg = motion_roll_bank_deg(up);
+    *pitch_deg = motion_pitch_deg(up);
 }
 
 /* Recenter: the attitude held now becomes level, and the held twist is dropped. */
 void motion_recenter(motion_t *m) {
     if (m->seeded) memcpy(m->neutral, m->up, sizeof m->neutral);   /* no data: keep the old level */
-    m->yaw_deg = 0;
-    m->yaw_credit = 0;
+    motion_yaw_reset(&m->yaw);
 }
 
 /* ------------------------------------------------------------- the steps */
@@ -182,71 +160,25 @@ static void learn_bias(motion_t *m, const motion_sample_t *s, bool quiet) {
     m->win_n = 0;                                        /* next window                   */
 }
 
-/* Step 4: hold-to-steer yaw. `rate` is deg/s about the vertical, positive = twist right. */
-static void integrate_yaw(motion_t *m, double rate, double dt, const motion_cfg_t *cfg) {
-    double d = rate * dt;                                /* twist during this sample      */
-    /* Twisting back toward center while the return has already brought the angle part of
-     * the way: that part of the twist is absorbed, so putting the controller back where
-     * it started ends at center instead of overshooting into opposite rudder. */
-    if (d * m->yaw_credit < 0) {                         /* opposite signs: heading back  */
-        double a = fmin(fabs(d), fabs(m->yaw_credit));   /* absorb at most the credit     */
-        d += d > 0 ? -a : a;                             /* smaller return twist          */
-        m->yaw_credit += m->yaw_credit > 0 ? -a : a;     /* credit spent                  */
-    }
-    double before = m->yaw_deg;
-    m->yaw_deg += d;
-    if (before * m->yaw_deg < 0) m->yaw_credit = 0;      /* crossed center: credit void   */
-    double cap = YAW_WINDUP * cfg->full_deg[MOTION_YAW]; /* no endless wind-up           */
-    if (m->yaw_deg > cap) m->yaw_deg = cap;
-    if (m->yaw_deg < -cap) m->yaw_deg = -cap;
-    /* The return: exponential decay toward center, with a time constant of a third of
-     * yaw_return_s, so the twist is about 95 % back (e^-3) after yaw_return_s. What it
-     * removes is remembered as credit (same sign as the angle), which itself fades over
-     * YAW_CREDIT_KEEP x yaw_return_s, so it cannot swallow a twist made much later. */
-    double tau = cfg->yaw_return_s / 3.0;
-    double ret = tau > 0 ? fmin(1.0, dt / tau) : 1.0;
-    double leak = m->yaw_deg * ret;
-    m->yaw_deg -= leak;
-    double keep = YAW_CREDIT_KEEP * cfg->yaw_return_s;   /* the credit's time constant    */
-    m->yaw_credit -= m->yaw_credit * (keep > 0 ? fmin(1.0, dt / keep) : 1.0);
-    m->yaw_credit += leak;
-}
-
-/* Step 6: angle -> -1..1 for one axis, with the user's settings. */
-static double axis_output(double angle, double full, double deadzone, bool invert) {
-    if (!(full > 0)) return 0;                           /* misconfigured: fly nothing    */
-    double v = shape(angle / full, deadzone / full, 1.0);   /* deadzone, clamp, NaN -> 0  */
-    return invert ? -v : v;
-}
-
 /* Step 3: bank, pitch and out-of-range from the current "up". */
 static void refresh_attitude(motion_t *m) {
-    /* Relative to the level, by subtracting its bank and pitch. For the usual grip (held
-     * tilted toward you, then rolled about the controller's long axis) this is exact;
-     * rotating the vector instead would mix some roll into pitch. */
-    double bank, pitch, bank0, pitch0;
-    attitude_deg(m->up, &bank, &pitch);                  /* the controller now          */
-    attitude_deg(m->neutral, &bank0, &pitch0);           /* the captured level           */
-    m->bank_deg  = angle_diff(bank, bank0);
-    m->pitch_deg = pitch - pitch0;                       /* both within -90..90          */
+    m->bank_deg  = motion_roll_angle(m->up, m->neutral);    /* motion_roll.c          */
+    m->pitch_deg = motion_pitch_angle(m->up, m->neutral);   /* motion_pitch.c         */
     /* Out of range is judged on the controller itself, not relative to level: face
      * turned down or sideways (little "up" through the face), or the long axis near
      * vertical, where bank has no meaning. */
-    m->out_of_range = m->up[1] < OOR_UP || fabs(pitch) > OOR_PITCH_DEG;
+    m->out_of_range = m->up[1] < OOR_UP || fabs(motion_pitch_deg(m->up)) > OOR_PITCH_DEG;
 }
 
-/* Step 6 for all three axes, from the angles refresh_attitude() and the yaw set. */
+/* Step 6: each axis's -1..1, from its own file; all neutral while out of range. */
 static void refresh_outputs(motion_t *m, const motion_cfg_t *cfg) {
     if (m->out_of_range) {                               /* face down, or stood on edge   */
         m->out[0] = m->out[1] = m->out[2] = 0;           /* hold every axis neutral        */
         return;
     }
-    m->out[MOTION_ROLL]  = axis_output(m->bank_deg,  cfg->full_deg[MOTION_ROLL],
-                                       cfg->deadzone_deg, cfg->invert[MOTION_ROLL]);
-    m->out[MOTION_PITCH] = axis_output(m->pitch_deg, cfg->full_deg[MOTION_PITCH],
-                                       cfg->deadzone_deg, cfg->invert[MOTION_PITCH]);
-    m->out[MOTION_YAW]   = axis_output(m->yaw_deg,   cfg->full_deg[MOTION_YAW],
-                                       cfg->yaw_deadzone_deg, cfg->invert[MOTION_YAW]);
+    m->out[MOTION_ROLL]  = motion_roll_output(m->bank_deg, cfg);
+    m->out[MOTION_PITCH] = motion_pitch_output(m->pitch_deg, cfg);
+    m->out[MOTION_YAW]   = motion_yaw_output(&m->yaw, cfg);
 }
 
 /* ------------------------------------------------------------- the update */
@@ -271,7 +203,7 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
         if (!normalize3(a)) return;                      /* no direction (free fall, junk) */
         memcpy(m->up, a, sizeof m->up);                  /* seed: trust the accelerometer   */
         m->seeded = true;
-        m->yaw_deg = m->yaw_credit = 0;                  /* a held twist is lost in a gap   */
+        motion_yaw_reset(&m->yaw);                       /* a held twist is lost in a gap   */
         m->win_n = 0;
         refresh_attitude(m);
         refresh_outputs(m, cfg);
@@ -286,11 +218,8 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
     /* Step 2a: rotate the estimate with the gyro. A direction fixed in the world, seen
      * from the turning controller, turns the opposite way: du/dt = -(w x u). Checked
      * against the measured frame: rolling left (gyro z > 0) gives du/dt = +x. */
-    double w_dps[3], w[3], wxu[3];
-    for (int i = 0; i < 3; i++) {
-        w_dps[i] = s->gyro_dps[i] - m->bias[i];          /* bias removed                    */
-        w[i] = w_dps[i] * DEG;                           /* rad/s                            */
-    }
+    double w[3], wxu[3];
+    for (int i = 0; i < 3; i++) w[i] = (s->gyro_dps[i] - m->bias[i]) * DEG;   /* bias removed, rad/s */
     cross3(w, m->up, wxu);
     for (int i = 0; i < 3; i++) m->up[i] -= wxu[i] * dt;
 
@@ -306,11 +235,12 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
     }
 
     refresh_attitude(m);                                 /* step 3, and out_of_range        */
-    /* Step 4: the twist rate about the true vertical is the gyro's component along "up";
-     * twisting right (clockwise seen from above) is a negative rotation about +up, hence
-     * the minus. Not integrated while out of range (lying on a table, face down). */
-    if (!m->out_of_range) integrate_yaw(m, -dot3(w_dps, m->up), dt, cfg);
-    else m->yaw_deg = m->yaw_credit = 0;                 /* set down: nothing held          */
+    /* Step 4 (motion_yaw.c): the twist rate about the vertical, added up and held. Not
+     * while out of range (lying on a table, face down): nothing is held then. */
+    if (!m->out_of_range)
+        motion_yaw_update(&m->yaw, motion_yaw_rate(s->gyro_dps, m->bias, m->up), dt, m->t, cfg);
+    else
+        motion_yaw_reset(&m->yaw);
     refresh_outputs(m, cfg);                             /* step 6, once, after the yaw     */
 }
 

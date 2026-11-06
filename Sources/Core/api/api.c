@@ -139,10 +139,10 @@ static void state_motion(jbuf_t *j, const dsxp_snap_t *s) {
     const motion_cfg_t *m = &s->motion;
     jb_printf(j, "\"motion\":{\"enabled\":%d,\"scales\":\"%s\",\"live\":%d,\"out_of_range\":%d,"
                  "\"bias_learned\":%d,\"hold\":%d,\"deadzone\":%.1f,\"yaw_deadzone\":%.1f,"
-                 "\"yaw_return\":%.1f,\"axes\":[",
+                 "\"axes\":[",
               m->enabled ? 1 : 0, SCALES[scales], s->motion_seeded ? 1 : 0, s->motion_out_of_range ? 1 : 0,
               s->motion_bias_learned ? 1 : 0, s->motion_hold ? 1 : 0,
-              m->deadzone_deg, m->yaw_deadzone_deg, m->yaw_return_s);
+              m->deadzone_deg, m->yaw_deadzone_deg);
     for (int i = 0; i < MOTION_AXES; i++)
         jb_printf(j, "%s{\"use\":\"%s\",\"full\":%.0f,\"invert\":%d,\"angle\":%.2f,\"out\":%.4f}",
                   i ? "," : "", m->use[i] ? "motion" : "sticks", m->full_deg[i], m->invert[i] ? 1 : 0,

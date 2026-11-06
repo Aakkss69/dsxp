@@ -28,8 +28,8 @@ for the buttons.
 - **Axes**: any stick or trigger to roll, pitch, yaw, throttle, differential rudder
   or toe brakes, with invert, dead zone and response curve.
 - **Motion control**: fly by tilting the controller - bank it to roll, raise or
-  lower its top edge to pitch, twist it flat to yaw (hold-to-steer: the twist eases
-  back by itself, and twisting back afterwards does not overshoot). Each axis is flown by motion
+  lower its top edge to pitch, twist it flat to yaw (hold-to-steer: the rudder stays
+  where you hold it, steady against hand tremor and gyro drift). Each axis is flown by motion
   or the sticks, never both, with its own sensitivity; switching fades over 0.3 s.
   Uses the controller's own factory calibration. The mapper draws the aircraft at
   the attitude DSXP sent to X-Plane. See [Motion control](#motion-control).
@@ -140,9 +140,16 @@ makes the way you hold the controller now level until you switch motion off or r
 
 - **Roll**: bank the controller. **Pitch**: raise the top edge (the triggers) to pull,
   lower it to push. **Yaw**: twist the controller about its face, like a steering
-  wheel lying flat; the rudder eases back to center over `motion.yaw_return`
-  (4 s by default). Twist back within about that time and it stops at center;
-  hold a twist much longer and that grip becomes the new center.
+  wheel lying flat. The rudder follows your twist and stays where you leave it; twist
+  back (or Recenter) to center it.
+  - Held still (less than 1° of change over 0.5 s), it keeps the average of that half
+    second, so hand tremor doesn't wiggle it. While held, change slower than 0.25°/s is
+    taken as the gyro's drift and ignored, so the rudder can't creep off center.
+  - A slow twist still counts: once it adds up to 1°, the rudder eases over to it.
+  - A quick twist (0.1° or more in each of two 100 ms windows in a row, the same way)
+    lets go at once and the rudder follows your hand.
+  - These values are constants in `Sources/Core/internal/motion_yaw.h`. The old
+    `motion.yaw_return` setting is no longer used; DSXP ignores it in an existing file.
 - Tick **Motion** for each axis it should fly. An axis on motion ignores every stick
   set to it (yaw also ignores the rudder triggers); the others work as set under Axes.
 - **Full deflection at** is the angle that gives full control (40° bank, 30° pitch,

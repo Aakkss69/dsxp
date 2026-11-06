@@ -13,6 +13,7 @@
 		0E2A4436B2222D3E28B8D2DF /* motion_cal.c in Sources */ = {isa = PBXBuildFile; fileRef = 9BF7FB3D06B2AE725069194F /* motion_cal.c */; };
 		1C9FD23FF51A6902607D0C9A /* light.c in Sources */ = {isa = PBXBuildFile; fileRef = D4DD3BAA21F2DFDFEB5FE4CF /* light.c */; };
 		217996041F98E3D156FAB4B3 /* test_config.c in Sources */ = {isa = PBXBuildFile; fileRef = DA0CD0D345451065EC593F54 /* test_config.c */; };
+		23AC6288F1EDFCB9D224079B /* motion_pitch.c in Sources */ = {isa = PBXBuildFile; fileRef = 17B4466C1096BD01498E6992 /* motion_pitch.c */; };
 		25796C2008DD182BCA1B8AA3 /* vocab.c in Sources */ = {isa = PBXBuildFile; fileRef = 2AAB056A375C784B8B7CDE6E /* vocab.c */; };
 		2B3AC51C27DC762BD3D758C8 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72A8EDAE4788923AED068B9E /* CoreFoundation.framework */; };
 		2E87F17BCF7B47DAF764C739 /* SchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEFF885B880EF0AE9897CDB /* SchemeHandler.swift */; };
@@ -31,6 +32,7 @@
 		62124E997B1E0271504595BF /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC19376167E23340EEADD882 /* main.swift */; };
 		643BE965211C61933980BA71 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFF36B5CC890C9E3D521AB3E /* IOKit.framework */; };
 		697E6EC8EBBF50D884B8D508 /* rumble.c in Sources */ = {isa = PBXBuildFile; fileRef = B5D0080D474B6360E8A70EE7 /* rumble.c */; };
+		6BA36E3FE0B6AF817567BB32 /* motion_roll.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 462C6A6C02AD1FA3BB2EC6AC /* motion_roll.h */; };
 		70F124BBA31FFFEE94D0D932 /* ConfigFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 290C411DEEE9F484A0A2CB7A /* ConfigFiles.swift */; };
 		7210E72C7C669D1E78BA5EB1 /* runner.c in Sources */ = {isa = PBXBuildFile; fileRef = 60FE23D149AA8EF847C89233 /* runner.c */; };
 		7A6F62E9F9D5BBB68F0FDE89 /* CoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27DA0FD85535B3669D2EB47A /* CoreBridge.swift */; };
@@ -54,6 +56,7 @@
 		B34359F0202EF122FAD64CE0 /* core_internal.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 237F0DCEA8ECC2130CBD1956 /* core_internal.h */; };
 		B35143899A29D54DB430BE7D /* json.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C78598F8AA8AC3911A6FDDA /* json.c */; };
 		B6E20111CC6AFED619B680E6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69770139073E8E8FD9DB2C11 /* AppDelegate.swift */; };
+		B77F12A571AFDE418A897407 /* motion_pitch.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 515963606003856BE268ED18 /* motion_pitch.h */; };
 		B79CC97AB982D39A47E13FD2 /* libDSXPCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */; };
 		B9EB06A45C0F4A4DB96B5688 /* dsxp_core.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = F3CF113567E8FB1C80B1651B /* dsxp_core.h */; };
 		B9F7F130AE005F72B1784125 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D924C5A76991D3E003CC942C /* WebKit.framework */; };
@@ -66,8 +69,11 @@
 		CEECB10CC2B6C711447AFEAB /* LoginItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8B4670C5772629361ABCBD /* LoginItem.swift */; };
 		D01EFA852628FB77141AE7B9 /* config_store.c in Sources */ = {isa = PBXBuildFile; fileRef = 29B8D41A0362C5ACD1CF73CA /* config_store.c */; };
 		D0F362FB5BBB03C26B931479 /* web in Resources */ = {isa = PBXBuildFile; fileRef = 8C9F603621B4EF571298E7E0 /* web */; };
+		D3E8EA5074A24CBEABB3B715 /* motion_yaw.c in Sources */ = {isa = PBXBuildFile; fileRef = 571B63F833C1F385001F8D8E /* motion_yaw.c */; };
 		D9002C6F9F9AC5560BF2A085 /* log.c in Sources */ = {isa = PBXBuildFile; fileRef = 9D24135E2D0614620A84B6AB /* log.c */; };
+		DD72B4557ECA7FFD8E33984C /* motion_yaw.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 4EC385A39844B9E08FD8D2D9 /* motion_yaw.h */; };
 		E3D74F3C27EA475A1CDD68C5 /* MapperWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590F0B87E64DBA093B8A69C3 /* MapperWindowController.swift */; };
+		E63A750E7422936204E1330B /* motion_roll.c in Sources */ = {isa = PBXBuildFile; fileRef = 1925CF2FB0EB58185A5FA4C1 /* motion_roll.c */; };
 		E9AF0AF9AF042440CA572914 /* libDSXPCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CD8ACC34674AFC7E9EC0E84C /* libDSXPCore.a */; };
 		EA18F4E70424F30DF4300B9C /* core_thread.c in Sources */ = {isa = PBXBuildFile; fileRef = 5410869D92A5612DBF70B2F8 /* core_thread.c */; };
 		EAFA9E42F05B40DFDF575920 /* StatusMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF1934402A0453BC90D4EB7 /* StatusMenuController.swift */; };
@@ -113,6 +119,9 @@
 				B9EB06A45C0F4A4DB96B5688 /* dsxp_core.h in CopyFiles */,
 				0DD3E8453890E75C1FA34720 /* module.modulemap in CopyFiles */,
 				34B6724830107E04110A93C3 /* motion.h in CopyFiles */,
+				B77F12A571AFDE418A897407 /* motion_pitch.h in CopyFiles */,
+				6BA36E3FE0B6AF817567BB32 /* motion_roll.h in CopyFiles */,
+				DD72B4557ECA7FFD8E33984C /* motion_yaw.h in CopyFiles */,
 				BFA4F9BF43208EBC18A92BDD /* tunables.h in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -125,6 +134,8 @@
 		115AD210C39BBA5DA4EE2B65 /* ServiceManagement.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ServiceManagement.framework; path = System/Library/Frameworks/ServiceManagement.framework; sourceTree = SDKROOT; };
 		12952A221DF21A79D2902963 /* output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = output.c; sourceTree = "<group>"; };
 		1316E52EC301AC97F4F0462A /* DSXP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DSXP.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		17B4466C1096BD01498E6992 /* motion_pitch.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion_pitch.c; sourceTree = "<group>"; };
+		1925CF2FB0EB58185A5FA4C1 /* motion_roll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion_roll.c; sourceTree = "<group>"; };
 		1C78598F8AA8AC3911A6FDDA /* json.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = json.c; sourceTree = "<group>"; };
 		1EEFF885B880EF0AE9897CDB /* SchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemeHandler.swift; sourceTree = "<group>"; };
 		237F0DCEA8ECC2130CBD1956 /* core_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = core_internal.h; sourceTree = "<group>"; };
@@ -137,12 +148,16 @@
 		321C073363E50D93AE004347 /* xplane.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = xplane.c; sourceTree = "<group>"; };
 		3B0F49CEF2F3168715A24DE1 /* guard.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = guard.c; sourceTree = "<group>"; };
 		418DB24306AB6E921DDC9364 /* fileio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fileio.c; sourceTree = "<group>"; };
+		462C6A6C02AD1FA3BB2EC6AC /* motion_roll.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = motion_roll.h; sourceTree = "<group>"; };
 		48FEE6E07BA61A1F05AB620C /* telemetry.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = telemetry.c; sourceTree = "<group>"; };
 		4AF1934402A0453BC90D4EB7 /* StatusMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenuController.swift; sourceTree = "<group>"; };
 		4CC809A1D42A2B91FD1ECB3F /* motion.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion.c; sourceTree = "<group>"; };
+		4EC385A39844B9E08FD8D2D9 /* motion_yaw.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = motion_yaw.h; sourceTree = "<group>"; };
+		515963606003856BE268ED18 /* motion_pitch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = motion_pitch.h; sourceTree = "<group>"; };
 		5410869D92A5612DBF70B2F8 /* core_thread.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core_thread.c; sourceTree = "<group>"; };
 		54A50BD476384BB513E06473 /* api.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = api.c; sourceTree = "<group>"; };
 		56CDD349F8FB8AC4FCE0A07C /* feedback.conf */ = {isa = PBXFileReference; path = feedback.conf; sourceTree = "<group>"; };
+		571B63F833C1F385001F8D8E /* motion_yaw.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion_yaw.c; sourceTree = "<group>"; };
 		590F0B87E64DBA093B8A69C3 /* MapperWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapperWindowController.swift; sourceTree = "<group>"; };
 		5B22F289B83270511C71B7B6 /* controls.conf */ = {isa = PBXFileReference; path = controls.conf; sourceTree = "<group>"; };
 		5D38BD40D0DB50B2C60BE855 /* config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = config.h; sourceTree = "<group>"; };
@@ -416,6 +431,9 @@
 			children = (
 				5D38BD40D0DB50B2C60BE855 /* config.h */,
 				237F0DCEA8ECC2130CBD1956 /* core_internal.h */,
+				515963606003856BE268ED18 /* motion_pitch.h */,
+				462C6A6C02AD1FA3BB2EC6AC /* motion_roll.h */,
+				4EC385A39844B9E08FD8D2D9 /* motion_yaw.h */,
 				A5A595F025229243608BC669 /* motion.h */,
 				E668BC3CD5E8FE73A0B785CC /* tunables.h */,
 			);
@@ -522,6 +540,9 @@
 				A5995EA892A12032C85F196E /* decode.c */,
 				9BF7FB3D06B2AE725069194F /* motion_cal.c */,
 				CEB131E1B8A05CB1237282D6 /* motion_calib.c */,
+				17B4466C1096BD01498E6992 /* motion_pitch.c */,
+				1925CF2FB0EB58185A5FA4C1 /* motion_roll.c */,
+				571B63F833C1F385001F8D8E /* motion_yaw.c */,
 				4CC809A1D42A2B91FD1ECB3F /* motion.c */,
 				2AAB056A375C784B8B7CDE6E /* vocab.c */,
 			);
@@ -699,6 +720,9 @@
 				BD44EF1656FAD9FC99C41C01 /* motion.c in Sources */,
 				0E2A4436B2222D3E28B8D2DF /* motion_cal.c in Sources */,
 				09619B6F6B378CED44F692FF /* motion_calib.c in Sources */,
+				23AC6288F1EDFCB9D224079B /* motion_pitch.c in Sources */,
+				E63A750E7422936204E1330B /* motion_roll.c in Sources */,
+				D3E8EA5074A24CBEABB3B715 /* motion_yaw.c in Sources */,
 				8ABDCAC5C82E3C786337F586 /* output.c in Sources */,
 				697E6EC8EBBF50D884B8D508 /* rumble.c in Sources */,
 				565EBD38B3F253B2FE5DA92F /* settings.c in Sources */,

@@ -787,11 +787,11 @@ static void motion_control(void) {
     config_defaults(&disk);
     CHECK(conf_parse(CF_CONTROLS, text, len, &disk, &warns));
     CHECK(disk.s.motion.gyro_bias_dps[0] == C.s.motion.gyro_bias_dps[0]);
-    C.motion.yaw_deg = 7;                                        /* a held twist          */
+    C.motion.yaw.deg = 7;                                        /* a held twist          */
     C.motion.bias[2] = 0.25;                                     /* refined since         */
     core_apply_config(&C, &disk, CFB_CONTROLS, 2.05);
     core_tick(&C, 2.05);
-    CHECK_NEAR(C.motion.yaw_deg, 7, 1e-12);
+    CHECK_NEAR(C.motion.yaw.deg, 7, 1e-12);
     CHECK_NEAR(C.motion.bias[2], 0.25, 1e-12);
     /* ... while an edited level is applied, faded in rather than jumping */
     double before = C.sent[MOTION_ROLL];

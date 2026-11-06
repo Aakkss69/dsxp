@@ -690,7 +690,7 @@ void core_snapshot(const core_t *c, double now, dsxp_snap_t *o) {
     o->motion = c->s.motion;
     o->motion_angle[MOTION_ROLL]  = c->motion.bank_deg;
     o->motion_angle[MOTION_PITCH] = c->motion.pitch_deg;
-    o->motion_angle[MOTION_YAW]   = c->motion.yaw_deg;
+    o->motion_angle[MOTION_YAW]   = c->motion.yaw.deg;
     memcpy(o->motion_out, c->motion_hold ? c->motion_frozen : c->motion.out, sizeof o->motion_out);
     o->motion_cal_src = c->motion_cal_src;
     o->motion_seeded = c->motion.seeded && core_input_live(c, now);   /* data is flowing  */

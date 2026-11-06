@@ -3,8 +3,12 @@
  * hold-to-steer yaw that can fly X-Plane's roll, pitch and yaw. Pure: no I/O, no threads,
  * no globals, so the tests drive it with synthetic sensor data.
  *
- *   input/motion_cal.c  feature report 0x05 -> calibration; raw counts -> deg/s and g
- *   input/motion.c      sensor fusion -> angles -> per-axis outputs; the crossfade helper
+ *   input/motion_cal.c    feature report 0x05 -> calibration; raw counts -> deg/s and g
+ *   input/motion.c        sensor fusion ("up", time, gyro bias, out of range), which hands
+ *                         each axis to its own file; the crossfade helper
+ *   input/motion_roll.c   bank -> roll        (motion_roll.h)
+ *   input/motion_pitch.c  pitch -> pitch      (motion_pitch.h)
+ *   input/motion_yaw.c    twist -> yaw, held  (motion_yaw.h)
  *
  * Sources: Linux drivers/hid/hid-playstation.c at tag v6.12 (anchors per item below and
  * in docs/REFERENCES.md); the maths references are named where they are used in motion.c.
@@ -29,6 +33,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "tunables.h"                 /* motion_cfg_t, MOTION_ROLL / PITCH / YAW */
+#include "motion_yaw.h"               /* motion_yaw_t: the yaw's own state        */
 
 /* ------------------------------------------------------- calibration (motion_cal.c) */
 
@@ -113,11 +118,8 @@ typedef struct {
     /* level reference */
     double   neutral[3];      /* the attitude that reads as level: the calibration's
                                  (motion_set_level) or the one Recenter captured        */
-    /* hold-to-steer yaw */
-    double   yaw_deg;         /* integrated twist about the vertical, deg               */
-    double   yaw_credit;      /* what the return removed since the last zero crossing,
-                                 signed like yaw_deg; spent when twisting back, and
-                                 fading by itself (motion.c YAW_CREDIT_KEEP)            */
+    /* hold-to-steer yaw (motion_yaw.c) */
+    motion_yaw_t yaw;         /* the twist, held as a steering angle: yaw.deg            */
     /* gyro bias, learned while the controller is still */
     double   bias[3];         /* deg/s subtracted from the gyro                         */
     bool     bias_learned;    /* at least one still window has been folded in            */
