@@ -202,6 +202,7 @@ typedef struct {
     int          rumble_source;         /* rumble_source_t  */
     bool         rumble_v2;
     gesture_cfg_t  gesture;     /* controls.conf: gesture thresholds  */
+    motion_cfg_t   motion;      /* controls.conf: motion control       */
     wind_cfg_t     wind;        /* feedback.conf: wind trigger model  */
     rumble_cfg_t   rumble;      /* feedback.conf: sim rumble model    */
     light_sim_cfg_t light_sim;        /* feedback.conf: light bar sim cues  */

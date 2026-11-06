@@ -23,6 +23,7 @@ static const char *const LSRC[]    = { "manual", "sim" };
 static const char *const RPATH[]   = { "classic", "v2" };
 static const char *const TMODE[]   = { "off", "resist", "weapon", "vibrate" };
 static const char *const PATTERN[] = { "solid", "breathe", "pulse", "strobe", "rainbow", "alert" };
+static const char *const MSRC[]    = { "sticks", "motion" };   /* motion_cfg_t.use[]: false, true */
 
 /* ------------------------------------------------------------- bridge.conf */
 
@@ -168,6 +169,59 @@ static const conf_key_t CONTROLS_KEYS[] = {
         "pedals. An axis set to none is left entirely to X-Plane."),
     AXK(S_LX, "left_x"), AXK(S_LY, "left_y"), AXK(S_RX, "right_x"), AXK(S_RY, "right_y"),
     AXK(S_L2, "l2"), AXK(S_R2, "r2"),
+
+    SEC("Motion control",
+        "Fly by tilting the controller: bank it to roll, raise or lower its top edge to pitch,\n"
+        "twist it flat to yaw. Hold it the way \"level\" should feel and press Recenter in the\n"
+        "mapper (or a button bound to dsxp/motion/recenter). Each axis is flown by motion or by\n"
+        "the sticks, never both; an axis left on sticks works exactly as set under Axes.\n"
+        "Yaw is hold-to-steer: twist to apply rudder and the twist eases back to center by\n"
+        "itself; turning the controller back never overshoots into opposite rudder.\n"
+        "Face down or stood on its edge, the controller holds every motion axis neutral."),
+    KX("motion.enabled", CT_BOOL, s.motion.enabled,
+       "yes: the axes set to motion below follow the controller's tilt.\n"
+       "no: the sticks and triggers fly everything, as set under Axes."),
+    KE("motion.roll", CT_ENUMB, s.motion.use[MOTION_ROLL], MSRC,
+       "What flies roll (ailerons): motion (bank the controller) or sticks.\n"
+       "With motion, any stick set to roll is ignored."),
+    KE("motion.pitch", CT_ENUMB, s.motion.use[MOTION_PITCH], MSRC,
+       "What flies pitch (elevator): motion (raise the top edge to pull, lower it to push) or\n"
+       "sticks. With motion, any stick set to pitch is ignored."),
+    KE("motion.yaw", CT_ENUMB, s.motion.use[MOTION_YAW], MSRC,
+       "What flies yaw (rudder): motion (twist the controller about its face, like a steering\n"
+       "wheel lying flat) or sticks. With motion, the rudder triggers and any stick set to yaw\n"
+       "are ignored."),
+    K("motion.roll.full", CT_REAL, s.motion.full_deg[MOTION_ROLL], 10, 90, 0, "deg",
+      "Controller bank that gives full aileron.\n"
+      "Lower: more sensitive - small tilts roll hard; quick, but twitchy on an approach.\n"
+      "Higher: gentler and more precise, but a steep turn needs a bigger wrist movement."),
+    K("motion.pitch.full", CT_REAL, s.motion.full_deg[MOTION_PITCH], 10, 60, 0, "deg",
+      "Tilt of the top edge, up or down, that gives full elevator.\n"
+      "Lower: small tilts pitch hard - quick, but easy to over-control in the flare.\n"
+      "Higher: finer control of attitude, but a full pull needs a big tilt."),
+    K("motion.yaw.full", CT_REAL, s.motion.full_deg[MOTION_YAW], 5, 90, 0, "deg",
+      "Twist that gives full rudder.\n"
+      "Lower: a small twist kicks in full rudder - fine for crosswind corrections on short\n"
+      "final, harsh in flight. Higher: gentler rudder, more twist for a full slip."),
+    K("motion.deadzone", CT_REAL, s.motion.deadzone_deg, 0, 10, 1, "deg",
+      "Roll and pitch: tilt from level that does nothing, so hand tremor and resting your\n"
+      "arms do not move the controls. Higher: steadier hands-off flight, but small\n"
+      "corrections need a deliberate tilt. Lower: finer corrections, more wander."),
+    K("motion.yaw.deadzone", CT_REAL, s.motion.yaw_deadzone_deg, 0, 20, 1, "deg",
+      "Yaw: twist that does nothing. Yaw is added up over time, so any leftover gyro drift\n"
+      "collects here; keep it above a few degrees. Higher: the rudder stays centered unless\n"
+      "you mean it. Lower: smaller twists already move the rudder."),
+    K("motion.yaw_return", CT_TIME, s.motion.yaw_return_s, 0.5, 30, 1, "s",
+      "How long a held twist takes to ease back to center by itself (about 95 % of the way).\n"
+      "Lower: the rudder lets go quickly, like a pedal with a strong spring - you keep\n"
+      "twisting to hold a slip. Higher: a twist holds its rudder longer, but you must twist\n"
+      "back to take it out."),
+    KX("motion.roll.invert", CT_BOOL, s.motion.invert[MOTION_ROLL],
+       "yes: banking the controller right rolls left."),
+    KX("motion.pitch.invert", CT_BOOL, s.motion.invert[MOTION_PITCH],
+       "yes: raising the top edge pushes the nose down."),
+    KX("motion.yaw.invert", CT_BOOL, s.motion.invert[MOTION_YAW],
+       "yes: twisting right gives left rudder."),
 
     SEC("Buttons",
         "Each control sends one X-Plane command. Write the command path as X-Plane lists it\n"

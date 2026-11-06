@@ -66,6 +66,7 @@ void load_defaults(settings_t *s) {
     /* v2 produced no rumble at all on the author's controller; classic works */
     s->rumble_v2 = false;
     s->gesture = GESTURE_DEFAULTS;
+    s->motion = MOTION_DEFAULTS;          /* off until the user switches it on */
     s->wind = WIND_DEFAULTS;
     s->rumble = RUMBLE_DEFAULTS;
     s->light_sim = LIGHT_SIM_DEFAULTS;
