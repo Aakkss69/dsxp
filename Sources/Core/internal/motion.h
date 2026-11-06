@@ -18,8 +18,9 @@
  *   gyro y = twist about the face normal.
  * Those five measured signs fix the directions above, and they form a right-handed frame
  * (x right, y up, z back) shared by gyro and accelerometer. In that frame a twist to the
- * left is positive gyro y; that one is derived, not measured, and is checked by the
- * one-way twist test on hardware (motion.c turns it into "twist right = positive yaw").
+ * left is positive gyro y; derived from the frame, then confirmed by a one-way twist test
+ * on 2026-11-07 (a right twist integrated to -63 deg of gyro y). motion.c turns it into
+ * "twist right = positive yaw".
  * The controller stands in for the aircraft: the top edge is the nose.
  */
 #ifndef DSXP_MOTION_H

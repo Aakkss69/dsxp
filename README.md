@@ -116,9 +116,23 @@ Everything DSXP can be tuned with lives in three text files in
 
 ## Motion control
 
-Switch it on in the mapper's **Motion control** panel (or `motion.enabled = yes` in
-`controls.conf`). Hold the controller the way level should feel and press
-**Recenter**; switching on does that too.
+The first time the mapper opens it asks you to **calibrate**, and motion control can't
+be switched on until that's done (your sticks keep working meanwhile). It takes about a
+minute and finishes each step by itself:
+
+1. **Lie flat**: face up on a table, hands off, for 3 seconds. DSXP measures each
+   gyro axis's resting drift and checks that gravity reads 1 g.
+2. **Hold level**: the way you fly, steady, for 2 seconds. That attitude is level from
+   now on.
+3. **Bank**, 4. **Pitch**, 5. **Twist**: as far as is comfortable each way, then back.
+   Each axis's full deflection becomes 90 % of your smaller side, so full control is
+   reachable without straining.
+
+The results are saved in `controls.conf` (`motion.calibrated`, `motion.level.*`,
+`motion.gyro_bias.*` and the full-deflection angles). Run it again any time with
+**Calibrate…** in the Motion control panel; Cancel keeps the previous calibration.
+Then switch motion control on in the panel (or `motion.enabled = yes`). **Recenter**
+makes the way you hold the controller now level until you switch motion off or restart.
 
 - **Roll**: bank the controller. **Pitch**: raise the top edge (the triggers) to pull,
   lower it to push. **Yaw**: twist the controller about its face, like a steering
@@ -136,7 +150,12 @@ Switch it on in the mapper's **Motion control** panel (or `motion.enabled = yes`
   lamps flash to confirm.
 - Face down or stood on its edge, the controller holds every motion axis neutral.
 - DSXP reads the controller's factory calibration (feature report 0x05) when it
-  connects and learns the gyro's drift whenever the controller is still.
+  connects and keeps refining the gyro's drift whenever the controller is still.
+- What the sensors can read (measured; Sony publishes no figures): turn rates up to
+  2000°/s, accelerations up to 4 g (a hard shake reaches that and is clipped), 64
+  samples a second over Bluetooth. Bank and pitch come from gravity, so they never
+  drift; the twist has no compass to anchor it, which is why yaw is hold-to-steer.
+  Details in [`docs/REFERENCES.md`](docs/REFERENCES.md).
   `dsxp-cli --verify` shows bank, pitch, the held twist and what each would send.
 
 ## Files
