@@ -18,6 +18,15 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
         "/index.html": ("index.html", "text/html; charset=utf-8"),
         "/app.css": ("app.css", "text/css; charset=utf-8"),
         "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+        "/motion-panel.js": ("motion-panel.js", "text/javascript; charset=utf-8"),
+        "/calibration.js": ("calibration.js", "text/javascript; charset=utf-8"),
+        // the 3D plane of the motion panel, one job per file (Resources/web/plane3d/)
+        "/plane3d/math.js": ("plane3d/math.js", "text/javascript; charset=utf-8"),
+        "/plane3d/airframe.js": ("plane3d/airframe.js", "text/javascript; charset=utf-8"),
+        "/plane3d/contour.js": ("plane3d/contour.js", "text/javascript; charset=utf-8"),
+        "/plane3d/zbuffer.js": ("plane3d/zbuffer.js", "text/javascript; charset=utf-8"),
+        "/plane3d/lines.js": ("plane3d/lines.js", "text/javascript; charset=utf-8"),
+        "/plane3d/view.js": ("plane3d/view.js", "text/javascript; charset=utf-8"),
     ]
 
     private static let csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "

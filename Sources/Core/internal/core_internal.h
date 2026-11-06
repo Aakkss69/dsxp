@@ -19,6 +19,7 @@
  *   include/   public API (dsxp_core.h) - the only header Swift sees
  *   internal/  shared internal headers (this file)
  *   input/     decode.c vocab.c                     pure: report 0x31, shaping, gestures, names
+ *              motion_cal.c motion.c                pure: motion sensor calibration and fusion (motion.h)
  *   output/    output.c wind.c rumble.c light.c     pure: output report and effect models
  *   sim/       xplane.c telemetry.c xp_packets.c commands.c   pure: X-Plane side
  *   settings/  bindings.c                           pure: defaults and settings text
@@ -34,6 +35,7 @@
 #include <stdint.h>
 #include "dsxp_core.h"
 #include "tunables.h"
+#include "motion.h"          /* motion control: calibration and sensor fusion (pure) */
 
 /* ------------------------------------------------------------- constants */
 
@@ -77,6 +79,14 @@
 #define OFF_BTN0 9   /* dpad nibble (bits 0-3) + square/cross/circle/triangle */
 #define OFF_BTN1 10  /* L1 R1 L2 R2 Create Options L3 R3                      */
 #define OFF_BTN2 11  /* PS Touchpad Mute                                      */
+/* Motion sensors. Linux hid-playstation.c v6.12 struct dualsense_input_report
+ * (:216-218) puts gyro[3] at payload byte 15, accel[3] at 21 and sensor_timestamp
+ * at 27; +2 here for the report ID and the Bluetooth framing byte, as above.
+ * Each gyro/accel value is a signed little-endian 16-bit count; the timestamp is
+ * an unsigned little-endian 32-bit count of 0.33 us ticks (:1416). */
+#define OFF_GYRO      17  /* bytes 17-22: gyro x, y, z (counts)          */
+#define OFF_ACCEL     23  /* bytes 23-28: accelerometer x, y, z (counts) */
+#define OFF_SENSOR_TS 29  /* bytes 29-32: sensor clock (0.33 us ticks)   */
 /* Two touch points, 4 bytes each. Each point: [0] bit7 set = NOT touching,
  * bits0-6 = touch id; [1] x_lo; [2] low nibble x_hi, high nibble y_lo; [3] y_hi.
  * Pad resolution 1920 x 1080. */
@@ -105,6 +115,15 @@ enum {
 
 /* Analog sources */
 enum { S_LX = 0, S_LY, S_RX, S_RY, S_L2, S_R2, S_COUNT };
+
+/* DSXP's own commands. A button bound to one of these is handled by DSXP itself and
+ * never sent to X-Plane; they work whether or not DSXP is flying (engaged). */
+#define DSXP_CMD_PREFIX   "dsxp/"
+#define DSXP_CMD_RECENTER "dsxp/motion/recenter"   /* the attitude held now is level      */
+#define DSXP_CMD_TOGGLE   "dsxp/motion/toggle"     /* motion control on / off (saved)     */
+#define DSXP_CMD_HOLD     "dsxp/motion/hold"       /* clutch: freeze while held, recenter on release */
+#define DSXP_CMD_COUNT    3
+#define LAMP_BLINK_SEC    0.35  /* all five player lamps flash this long to confirm one */
 
 /* The X-Plane control an analog source moves */
 enum {
@@ -168,6 +187,9 @@ typedef struct {
     double val[S_COUNT];     /* shaped: -1..1, or 0..1 for triggers */
     bool   btn[B_COUNT];
     touch_t touch[2];        /* normalized 0..1 across the pad */
+    int16_t  gyro_raw[3];    /* gyro x, y, z as delivered (counts; see motion_cal_apply)  */
+    int16_t  acc_raw[3];     /* accelerometer x, y, z as delivered (counts)              */
+    uint32_t sensor_ts;      /* sensor clock in 0.33 us ticks; wraps every ~23.9 minutes */
 } ds_state_t;
 
 /* Gesture recognizer state (was function statics in the prototype). */
@@ -189,6 +211,7 @@ typedef struct {
     int          rumble_source;         /* rumble_source_t  */
     bool         rumble_v2;
     gesture_cfg_t  gesture;     /* controls.conf: gesture thresholds  */
+    motion_cfg_t   motion;      /* controls.conf: motion control       */
     wind_cfg_t     wind;        /* feedback.conf: wind trigger model  */
     rumble_cfg_t   rumble;      /* feedback.conf: sim rumble model    */
     light_sim_cfg_t light_sim;        /* feedback.conf: light bar sim cues  */
@@ -249,6 +272,25 @@ typedef struct core {
     double ov_release_at[OV_COUNT];
     double last_thr, last_thr_at;
     bool   thr_sent;
+    double sent[MOTION_AXES];   /* roll, pitch, yaw ratio last sent to X-Plane (0 = not sent) */
+    bool   sent_valid;          /* sent[] is current: engaged and pushing                     */
+
+    /* motion control (input/motion.c, motion_cal.c) */
+    motion_t       motion;                      /* sensor fusion state                      */
+    motion_cal_t   motion_cal;                  /* scales in use; nominal until 0x05 arrives */
+    int            motion_cal_src;              /* motion_cal_source_t, shown in the mapper  */
+    motion_blend_t mblend[MOTION_AXES];         /* crossfade per axis after a change         */
+    bool           motion_was_owned[MOTION_AXES];  /* motion_owns() last tick (edges)        */
+    bool           motion_was_enabled;          /* motion.enabled last tick (edges)          */
+    bool           motion_hold;                 /* dsxp/motion/hold is down: outputs frozen  */
+    double         motion_frozen[MOTION_AXES];  /* the outputs when the hold began           */
+    bool           dsxp_prev_btn[B_COUNT];      /* buttons bound to DSXP commands, last tick */
+    double         lamp_blink_until;            /* player lamps all lit until this time      */
+    calib_t        calib;                       /* the calibration routine, when running     */
+    bool           applied_calibrated;          /* the saved calibration last put into the   */
+    double         applied_level[2];            /*   fusion (motion_edges() compares these   */
+    double         applied_bias[3];             /*   with the settings to notice a change)   */
+    bool           lamp_blinking;               /* they are lit now (out_send reads this)    */
 
     /* telemetry */
     wx_t   wx;
@@ -289,17 +331,39 @@ typedef struct {
     axis_map_t axis[S_COUNT];
     touch_t touch[2];
     char xp_exe[1024];
+    /* motion control */
+    motion_cfg_t motion;                       /* the settings                              */
+    double motion_angle[MOTION_AXES];          /* bank, pitch, held yaw (deg) from level    */
+    double motion_out[MOTION_AXES];            /* what motion flies, -1..1                  */
+    int    motion_cal_src;                     /* motion_cal_source_t                       */
+    bool   motion_seeded, motion_out_of_range, motion_bias_learned, motion_hold;
+    double sent[MOTION_AXES];                  /* roll, pitch, yaw as sent to X-Plane       */
+    bool   sent_valid;
+    calib_t calib;                             /* the calibration routine's progress        */
 } dsxp_snap_t;
 
 /* Commands from the UI into the core (applied on the core thread). */
 typedef enum {
     CMD_NONE = 0, CMD_BIND, CMD_AXIS, CMD_TUNE, CMD_LIGHT, CMD_TRIGGER, CMD_TRIGGER_SOURCE,
-    CMD_RUMBLE, CMD_RUMBLE_SOURCE, CMD_RUMBLEPATH
+    CMD_RUMBLE, CMD_RUMBLE_SOURCE, CMD_RUMBLEPATH,
+    CMD_MOTION,             /* change motion settings (u.motion)                */
+    CMD_MOTION_RECENTER,    /* the controller's attitude now becomes level      */
+    CMD_CALIBRATE           /* key: CALIB_ACTION_START or CALIB_ACTION_CLOSE    */
 } cmd_kind_t;
+enum { CALIB_ACTION_START = 1, CALIB_ACTION_CLOSE = 2 };
 
 enum { LF_R = 1, LF_G = 2, LF_B = 4, LF_ON = 8, LF_PATTERN = 16, LF_SPEED = 32,
        LF_PLAYER = 64, LF_BRIGHT = 128, LF_SOURCE = 256 };
 enum { TF_MODE = 1, TF_START = 2, TF_END = 4, TF_STRENGTH = 8, TF_FREQ = 16 };
+
+/* CMD_MOTION: only the fields whose flag or mask bit is set are applied. */
+typedef struct {
+    bool     has_enabled, enabled;
+    unsigned use_mask, full_mask, inv_mask;    /* bit i = MOTION_ROLL / PITCH / YAW */
+    bool     use[MOTION_AXES];                 /* true = motion, false = sticks     */
+    double   full[MOTION_AXES];                /* degrees for full deflection       */
+    bool     inv[MOTION_AXES];                 /* reverse the axis                  */
+} motion_cmd_t;
 
 typedef struct {
     cmd_kind_t kind;
@@ -312,6 +376,7 @@ typedef struct {
         struct { trig_manual_t v; unsigned mask; } trig;
         int source;              /* CMD_TRIGGER_SOURCE, CMD_RUMBLE_SOURCE */
         struct { bool has_l, has_r; unsigned char l, r; } rumble;
+        motion_cmd_t motion;
         bool flag;
     } u;
 } cmd_t;
@@ -323,8 +388,35 @@ extern const char *SRC_KEY[S_COUNT];
 extern const char *SRC_LABEL[S_COUNT];
 extern const char *AX_KEY[AX_TARGET_COUNT];
 extern const char *AX_LABEL[AX_TARGET_COUNT];
+extern const xcmd_t DSXP_COMMANDS[DSXP_CMD_COUNT];   /* path + description, for the mapper */
+bool cmd_is_dsxp(const char *cmd);                   /* starts with DSXP_CMD_PREFIX         */
 
 /* ------------------------------------------------------- pure modules */
+
+/* Little-endian fields, the byte order of every DualSense report: input 0x31 (decode.c),
+ * feature 0x05 (motion_cal.c) and the CRC at the end of output 0x31 (output.c). */
+
+/* Signed 16-bit value at p (portable: no cast of an out-of-range unsigned value to a
+ * signed type, which C leaves implementation-defined). */
+static inline int16_t le16s(const unsigned char *p) {
+    int v = p[0] | (p[1] << 8);              /* 0..65535: low byte first, then high byte   */
+    if (v >= 32768) v -= 65536;              /* upper half of the range is negative        */
+    return (int16_t)v;                       /* now in -32768..32767, so the cast is exact */
+}
+
+/* Unsigned 32-bit value at p. */
+static inline uint32_t le32u(const unsigned char *p) {
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 |       /* bytes 0 and 1: the low half  */
+           (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;  /* bytes 2 and 3: the high half */
+}
+
+/* Store v at p as an unsigned 32-bit value, low byte first. */
+static inline void put_le32(unsigned char *p, uint32_t v) {
+    p[0] = (unsigned char)(v & 0xFF);                     /* low byte first               */
+    p[1] = (unsigned char)((v >> 8) & 0xFF);
+    p[2] = (unsigned char)((v >> 16) & 0xFF);
+    p[3] = (unsigned char)((v >> 24) & 0xFF);             /* high byte last               */
+}
 
 /* decode.c */
 double shape(double v, double deadzone, double curve);
@@ -343,6 +435,8 @@ typedef struct {
     unsigned char rumble_l, rumble_r;
     bool          rumble_v2;
     bool          light_on;
+    bool          player_force;   /* show the player lamps even with light_on false (the
+                                     confirmation flash of a DSXP command, core.c)       */
     unsigned char player, r, g, b;
     trigger_fx_t  fx[2];          /* [0] = L2, [1] = R2 */
 } out_frame_t;
@@ -381,6 +475,11 @@ bool   cmd_valid(const char *cmd);
 double clampd(double v, double lo, double hi, double dflt);
 int    clampi(long v, int lo, int hi);
 bool   bindings_parse(settings_t *s, const char *text, size_t len);
+
+/* settings.c - the one rule for a motion axis's full-deflection angle, shared by every
+ * writer of motion.full_deg (config_validate, the mapper's CMD_MOTION, the calibration) */
+void   motion_full_range(int axis, double *lo, double *hi);   /* MOTION_*_FULL_MIN / MAX  */
+bool   motion_full_fix(motion_cfg_t *m, int axis);            /* true if it had to change */
 
 /* commands.c */
 int    commands_parse(const char *text, size_t len, xcmd_t **out);
@@ -423,11 +522,15 @@ bool core_gate_due(const core_t *c, double now, double last_gate);
 void core_apply_cmd(core_t *c, const cmd_t *cmd, double now);
 void core_set_suspended(core_t *c, bool suspended, double now);
 void core_tick(core_t *c, double now);
-void core_snapshot(const core_t *c, dsxp_snap_t *out);
+void core_snapshot(const core_t *c, double now, dsxp_snap_t *out);
 void core_mark_dirty(core_t *c, double now, unsigned files);
 unsigned core_save_due(core_t *c, double now);      /* CFB_* mask due for saving, cleared */
 void core_set_trigger_source(core_t *c, int mode, double now);
 void core_set_rumble_source(core_t *c, int mode, double now);
+void core_set_motion_cal(core_t *c, const motion_cal_t *cal, mcal_result_t r);
+void core_motion_recenter(core_t *c, double now);
+void core_calib_finish(core_t *c, double now);
+bool core_calibrating(const core_t *c);
 void out_tick(core_t *c, double now);
 void out_quiet(core_t *c);
 void out_mark(core_t *c);
@@ -451,6 +554,9 @@ double now_sec(void);                       /* monotonic seconds */
 extern bool runtime_test_disable_hid;       /* tests: run without IOKit HID */
 int  runtime_udp_socket(void);              /* the core's socket, -1 if not running */
 int  runtime_xp_port(void);
+void runtime_cal_post(unsigned gen, const motion_cal_t *cal, mcal_result_t res, int ior);
+bool runtime_cal_drain(core_t *c);          /* core thread: apply a current result      */
+unsigned runtime_dev_gen(void);             /* the current Bluetooth connection's number */
 
 /* guard.c */
 void guard_build_release(void (*send)(void *ctx, const unsigned char *buf, size_t len), void *ctx);

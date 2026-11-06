@@ -105,6 +105,9 @@ void test_output(void) {
     f.light_on = false; f.r = 200; f.player = 4;
     out_build_report(&f, 0, rep);
     CHECK_INT(rep[46], 0); CHECK_INT(rep[47], 0);        /* light off sends zeros */
+    f.player_force = true;                               /* a DSXP command's flash */
+    out_build_report(&f, 0, rep);
+    CHECK_INT(rep[46], 4); CHECK_INT(rep[47], 0);        /* lamps on, the bar still dark */
 }
 
 /* Commands.txt: path ends at the first space or tab (F10) */

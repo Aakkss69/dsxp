@@ -66,6 +66,50 @@
 
 <div id="toast" role="status" hidden></div>
 
+<!-- Motion control calibration. Required before motion control can be used: while it has
+     never been done this sheet covers the mapper (the status strip, with Quit, stays above
+     it). Opened again by Calibrate... in the Motion control panel. -->
+<div id="calibration" hidden>
+  <div class="cal-card" role="dialog" aria-modal="true" aria-labelledby="cal-title">
+    <header class="cal-head">
+      <h2 id="cal-title">Calibrate motion control</h2>
+      <ol class="cal-steps" id="cal-steps">
+        <li data-step="flat">Lie flat</li><li data-step="level">Hold level</li><li data-step="roll">Bank</li><li data-step="pitch">Pitch</li><li data-step="yaw">Twist</li>
+      </ol>
+    </header>
+    <div class="cal-body">
+      <div class="cal-view"><canvas id="cal-plane" role="img" aria-label="The controller's attitude now, drawn as an aircraft"></canvas></div>
+      <div class="cal-side">
+        <p class="cal-instruction" id="cal-instruction"></p>
+        <div class="variants" id="cal-meter">
+          <div data-variant="bar" class="cal-bar" role="progressbar" aria-label="Step progress" aria-valuemin="0" aria-valuemax="100"><i id="cal-bar-fill"></i></div>
+          <div data-variant="reach" class="cal-reach">
+            <div class="cal-track" id="cal-track"><i class="cal-span" id="cal-span"></i><i class="cal-need lo" id="cal-need-lo"></i><i class="cal-need hi" id="cal-need-hi"></i><i class="cal-center"></i><i class="cal-needle" id="cal-needle"></i></div>
+            <div class="cal-scale"><span id="cal-scale-lo"></span><output id="cal-angle">0&deg;</output><span id="cal-scale-hi"></span></div>
+          </div>
+          <dl data-variant="result" class="readouts cal-result">
+            <div><dt>Gyro drift</dt><dd id="cal-r-drift">&mdash;</dd></div>
+            <div><dt>Gravity</dt><dd id="cal-r-gravity">&mdash;</dd></div>
+            <div><dt>Level</dt><dd id="cal-r-level">&mdash;</dd></div>
+            <div><dt>Full deflection</dt><dd id="cal-r-full">&mdash;</dd></div>
+          </dl>
+          <div data-variant="none"></div>
+        </div>
+        <p class="cal-note" id="cal-note"></p>
+      </div>
+    </div>
+    <footer class="cal-foot">
+      <p class="note" id="cal-foot-note">About a minute. Your sticks keep working meanwhile; motion control can be switched on once this is done.</p>
+      <div class="popover-buttons">
+        <button class="push" id="cal-cancel" hidden>Cancel</button>
+        <button class="push" id="cal-restart" hidden>Start Over</button>
+        <button class="push" id="cal-done" hidden>Done</button>
+        <button class="push default" id="cal-primary">Start</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
 <main>
   <section id="panel-controller">
     <header class="group-title"><h2>Controller</h2><span class="group-status" id="controller-status">Waiting for input</span></header>
@@ -204,6 +248,52 @@
       </svg>
     </div>
     <footer class="group-foot"><p class="note">The dashed outline marks a fully pressed trigger. Click a trigger to choose the command for its click; its analog axis is set under Axes.</p></footer>
+  </section>
+
+  <section class="wide" id="panel-motion">
+    <header class="group-title"><h2>Motion control</h2><span class="group-status" id="motion-status">Off</span></header>
+    <div class="box">
+      <div class="motion-layout">
+        <div class="motion-view">
+          <canvas id="motion-plane" role="img" aria-label="The roll, pitch and yaw DSXP sent to X-Plane, drawn as an aircraft seen from behind"></canvas>
+          <p class="motion-standby" id="motion-standby">Standing by. Nothing sent to X-Plane yet.</p>
+        </div>
+        <div class="motion-grid">
+          <label class="form-label mg-row1" for="motion-on">Motion control:</label>
+          <label class="check mg-switch"><input type="checkbox" id="motion-on" switch> On</label>
+          <div class="mg-buttons">
+            <button id="motion-calibrate" title="Measure the controller's drift, your level and your reach again">Calibrate&hellip;</button>
+            <button id="motion-recenter" title="Make the way you hold the controller now level">Recenter</button>
+          </div>
+
+          <span class="mg-head mg-angle">Angle</span>
+          <span class="mg-head mg-sent">Sent</span>
+          <span class="mg-head mg-full">Full deflection at</span>
+
+          <span class="form-label">Roll:</span>
+          <label class="check" title="Tick: banking the controller flies roll. Untick: the sticks do."><input type="checkbox" data-motion-use="roll"> Motion</label>
+          <output class="mg-angle" data-motion-angle="roll">&mdash;</output>
+          <output class="mg-sent" data-motion-sent="roll">&mdash;</output>
+          <div class="mg-slider"><input type="range" min="10" max="90" step="1" data-motion-full="roll" aria-label="Roll: full deflection at"><i data-motion-marker="roll"></i></div>
+          <output data-motion-full-value="roll">40&deg;</output>
+
+          <span class="form-label">Pitch:</span>
+          <label class="check" title="Tick: raising or lowering the top edge flies pitch. Untick: the sticks do."><input type="checkbox" data-motion-use="pitch"> Motion</label>
+          <output class="mg-angle" data-motion-angle="pitch">&mdash;</output>
+          <output class="mg-sent" data-motion-sent="pitch">&mdash;</output>
+          <div class="mg-slider"><input type="range" min="10" max="60" step="1" data-motion-full="pitch" aria-label="Pitch: full deflection at"><i data-motion-marker="pitch"></i></div>
+          <output data-motion-full-value="pitch">30&deg;</output>
+
+          <span class="form-label">Yaw:</span>
+          <label class="check" title="Tick: twisting the controller flat flies the rudder. Untick: the sticks and rudder triggers do."><input type="checkbox" data-motion-use="yaw"> Motion</label>
+          <output class="mg-angle" data-motion-angle="yaw">&mdash;</output>
+          <output class="mg-sent" data-motion-sent="yaw">&mdash;</output>
+          <div class="mg-slider"><input type="range" min="5" max="90" step="1" data-motion-full="yaw" aria-label="Yaw: full deflection at"><i data-motion-marker="yaw"></i></div>
+          <output data-motion-full-value="yaw">30&deg;</output>
+        </div>
+      </div>
+    </div>
+    <footer class="group-foot"><p class="note">Bank the controller to roll, raise or lower its top edge to pitch, twist it flat to yaw. Tick <b>Motion</b> for each axis it should fly; the others stay on the sticks. <b>Recenter</b> makes the way you hold it now level. Lower <b>Full deflection at</b> for a more sensitive axis; the tick under each slider is the angle now. Bind dsxp/motion/recenter, toggle or hold to a button to do this from the controller; the player lamps flash to confirm. The aircraft shows what DSXP sent to X-Plane.</p></footer>
   </section>
 
   <section id="panel-command">
@@ -393,6 +483,14 @@
   </section>
 </main>
 
+<script src="/plane3d/math.js"></script>
+<script src="/plane3d/airframe.js"></script>
+<script src="/plane3d/contour.js"></script>
+<script src="/plane3d/zbuffer.js"></script>
+<script src="/plane3d/lines.js"></script>
+<script src="/plane3d/view.js"></script>
 <script src="/app.js"></script>
+<script src="/motion-panel.js"></script>
+<script src="/calibration.js"></script>
 </body>
 </html>

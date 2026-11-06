@@ -42,12 +42,14 @@ bool xp_axis_in_use(const settings_t *s, int target) {
 }
 
 /* Only the overrides an axis actually needs, so anything unmapped stays under
- * X-Plane's own control instead of being frozen. */
+ * X-Plane's own control instead of being frozen. An axis motion control flies needs
+ * its override even with no stick mapped to it. */
 void xp_wanted_overrides(const settings_t *s, bool want[OV_COUNT]) {
-    want[OV_PITCH_I]   = xp_axis_in_use(s, AX_PITCH);
-    want[OV_ROLL_I]    = xp_axis_in_use(s, AX_ROLL);
+    const motion_cfg_t *m = &s->motion;
+    want[OV_PITCH_I]   = xp_axis_in_use(s, AX_PITCH) || motion_owns(m, MOTION_PITCH);
+    want[OV_ROLL_I]    = xp_axis_in_use(s, AX_ROLL) || motion_owns(m, MOTION_ROLL);
     want[OV_HEADING_I] = xp_axis_in_use(s, AX_YAW) || xp_axis_in_use(s, AX_RUDD_L) ||
-                         xp_axis_in_use(s, AX_RUDD_R);
+                         xp_axis_in_use(s, AX_RUDD_R) || motion_owns(m, MOTION_YAW);
     want[OV_BRAKES_I]  = xp_axis_in_use(s, AX_BRAKE_L) || xp_axis_in_use(s, AX_BRAKE_R);
 }
 
@@ -100,6 +102,8 @@ void xp_disengage(core_t *c, double now) {
     c->engaged = false;
     c->thr_sent = false;
     memset(c->prev_btn, 0, sizeof c->prev_btn);
+    memset(c->sent, 0, sizeof c->sent);         /* nothing is being sent any more        */
+    c->sent_valid = false;                      /* the mapper's plane shows "standing by" */
     dsxp_log("DISENGAGED - X-Plane has controls back");
 }
 
@@ -162,6 +166,16 @@ void xp_push(core_t *c, double now) {
      * axis neutral and release every button rather than replaying stale values. */
     bool live = c->have_report && (now - c->last_report_at) <= c->bridge.input_stale_s;
 
+    /* Each of roll, pitch and yaw is flown either by motion or by the sticks/triggers,
+     * never a sum of both (motion_owns: motion control on and that axis set to motion).
+     * While the calibration runs the user tilts the controller on purpose, so the sticks
+     * fly motion's axes too: recalibrating in the air never leaves an axis unflown. The
+     * override stays asserted either way (xp_wanted_overrides), and the switch fades. */
+    bool calibrating = core_calibrating(c);
+    bool own_roll  = motion_owns(&s->motion, MOTION_ROLL)  && !calibrating;
+    bool own_pitch = motion_owns(&s->motion, MOTION_PITCH) && !calibrating;
+    bool own_yaw   = motion_owns(&s->motion, MOTION_YAW)   && !calibrating;
+
     double roll = 0, pitch = 0, yaw = 0, thr = -1, lb = -1, rb = -1;
     if (live) {
         for (int i = 0; i < S_COUNT; i++) {
@@ -171,17 +185,22 @@ void xp_push(core_t *c, double now) {
             /* a stick used as a unipolar control needs its centered value remapped */
             double uni = (i >= S_L2) ? u : (v + 1.0) / 2.0;
             switch (s->axis[i].target) {
-            case AX_ROLL:     roll  += v;   break;
-            case AX_PITCH:    pitch += v;   break;
-            case AX_YAW:      yaw   += v;   break;
+            case AX_ROLL:     if (!own_roll)  roll  += v;   break;   /* motion has it: ignored */
+            case AX_PITCH:    if (!own_pitch) pitch += v;   break;
+            case AX_YAW:      if (!own_yaw)   yaw   += v;   break;
             case AX_THROTTLE: thr = (i >= S_L2) ? u : (1.0 - u); break;
-            case AX_RUDD_L:   yaw -= uni;   break;
-            case AX_RUDD_R:   yaw += uni;   break;
+            case AX_RUDD_L:   if (!own_yaw)   yaw -= uni;   break;   /* rudder triggers too   */
+            case AX_RUDD_R:   if (!own_yaw)   yaw += uni;   break;
             case AX_BRAKE_L:  lb   = uni;   break;
             case AX_BRAKE_R:  rb   = uni;   break;
             default: break;
             }
         }
+        /* motion's outputs for the axes it flies; frozen while dsxp/motion/hold is down */
+        const double *mo = c->motion_hold ? c->motion_frozen : c->motion.out;
+        if (own_roll)  roll  = mo[MOTION_ROLL];
+        if (own_pitch) pitch = mo[MOTION_PITCH];
+        if (own_yaw)   yaw   = mo[MOTION_YAW];
     } else {
         /* throttle is left where it is (thr stays -1); X-Plane holds the value */
         if (xp_axis_in_use(s, AX_BRAKE_L)) lb = 0;
@@ -194,11 +213,23 @@ void xp_push(core_t *c, double now) {
     if (yaw   >  1) yaw   =  1;
     if (yaw   < -1) yaw   = -1;
 
+    /* An axis that just changed hands (or a Recenter) fades from what was last sent to
+     * the new value over 0.3 s, so switching mid-bank never snaps the ailerons. */
+    roll  = motion_blend(&c->mblend[MOTION_ROLL],  roll,  now);
+    pitch = motion_blend(&c->mblend[MOTION_PITCH], pitch, now);
+    yaw   = motion_blend(&c->mblend[MOTION_YAW],   yaw,   now);
+
     bool want[OV_COUNT];
     xp_wanted_overrides(s, want);
     if (want[OV_ROLL_I])    xp_send_dref(c, DR_ROLL,    (float)roll);
     if (want[OV_PITCH_I])   xp_send_dref(c, DR_PITCH,   (float)pitch);
     if (want[OV_HEADING_I]) xp_send_dref(c, DR_HEADING, (float)yaw);
+    /* What X-Plane now has, for the mapper's 3D plane and the next crossfade. An axis
+     * without its override is X-Plane's own, so DSXP sent it nothing (0). */
+    c->sent[MOTION_ROLL]  = want[OV_ROLL_I]    ? (float)roll  : 0;
+    c->sent[MOTION_PITCH] = want[OV_PITCH_I]   ? (float)pitch : 0;
+    c->sent[MOTION_YAW]   = want[OV_HEADING_I] ? (float)yaw   : 0;
+    c->sent_valid = true;
     /* Throttle has no override, so writing it every tick would fight the mouse,
      * keyboard and autothrottle. Send it on change, plus a slow keepalive. */
     if (thr >= 0 && (!c->thr_sent || fabs(thr - c->last_thr) >= 0.002 ||
@@ -213,7 +244,9 @@ void xp_push(core_t *c, double now) {
 
     for (int i = 0; i < B_COUNT; i++) {
         bool down = live && c->state.btn[i];
-        if (!s->bind[i].cmd[0]) { c->prev_btn[i] = down; continue; }
+        /* unbound, or bound to one of DSXP's own commands (core.c dsxp_buttons acts on
+         * those): nothing goes to X-Plane */
+        if (!s->bind[i].cmd[0] || cmd_is_dsxp(s->bind[i].cmd)) { c->prev_btn[i] = down; continue; }
         bool was = c->prev_btn[i];
         if (down && !was) {
             xp_send_cmnd(c, s->bind[i].cmd);

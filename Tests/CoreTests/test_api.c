@@ -6,7 +6,7 @@
 static core_t AC;
 static double AT = 100.0;
 
-static void a_snap(void *ctx, dsxp_snap_t *o) { (void)ctx; core_snapshot(&AC, o); }
+static void a_snap(void *ctx, dsxp_snap_t *o) { (void)ctx; core_snapshot(&AC, AT, o); }
 static bool a_submit(void *ctx, const cmd_t *c) { (void)ctx; core_apply_cmd(&AC, c, AT); return true; }
 static void a_cat(void *ctx, void (*fn)(void *, const xcmd_t *, int), void *arg) {
     (void)ctx;
@@ -123,4 +123,43 @@ void test_api(void) {
     CHECK(body_has("GET", "/api/init", "", "Desc with \\\"quotes\\\" and \\\\ backslash\\u0009 tab", &valid));
     CHECK(valid);
     CHECK(body_has("GET", "/api/init", "", "\"n\":\"Swipe down-right\"", NULL));
+
+    /* motion: DSXP's own commands lead the catalog, the X-Plane ones follow */
+    CHECK(body_has("GET", "/api/init", "", "{\"commands\":[{\"c\":\"dsxp/motion/recenter\"", &valid));
+    CHECK(valid);
+    CHECK(body_has("GET", "/api/init", "", "\"c\":\"dsxp/motion/hold\"", NULL));
+    CHECK(body_has("GET", "/api/init", "", "},{\"c\":\"sim/a/b\"", NULL));   /* comma-joined */
+
+    /* motion settings: any subset; a present but bad value is refused whole */
+    CHECK_INT(call("GET", "/api/motion", "enabled=1"), 405);
+    CHECK_INT(call("POST", "/api/motion", "roll=tilt"), 400);
+    CHECK_INT(call("POST", "/api/motion", "enabled=yes"), 400);
+    CHECK_INT(call("POST", "/api/motion", "enabled=1&pitch.full=abc"), 400);
+    CHECK_INT(call("POST", "/api/motion", "yaw.invert="), 400);
+    CHECK(!AC.s.motion.enabled);                                   /* nothing applied   */
+    CHECK_INT(call("POST", "/api/motion", "enabled=1"), 409);       /* not calibrated yet */
+    CHECK(body_has("GET", "/api/state", "", "\"calibrated\":0,\"calibration\":{\"step\":\"idle\"", &valid));
+    CHECK(valid);
+    CHECK_INT(call("POST", "/api/calibrate", "action=close"), 409);  /* required first      */
+    CHECK_INT(call("POST", "/api/calibrate", "action=later"), 400);
+    CHECK_INT(call("POST", "/api/calibrate", "action=start"), 200);
+    CHECK(body_has("GET", "/api/state", "", "\"calibration\":{\"step\":\"flat\"", NULL));
+    AC.s.motion.calibrated = true;                                 /* as if it finished */
+    CHECK_INT(call("POST", "/api/calibrate", "action=close"), 200);
+    CHECK(body_has("GET", "/api/state", "", "\"calibration\":{\"step\":\"idle\"", NULL));
+    CHECK_INT(call("POST", "/api/motion", "enabled=1&yaw=motion&roll=sticks&roll.full=55&pitch.invert=1"), 200);
+    CHECK(AC.s.motion.enabled);
+    CHECK(AC.s.motion.use[MOTION_YAW] && !AC.s.motion.use[MOTION_ROLL] && AC.s.motion.use[MOTION_PITCH]);
+    CHECK_NEAR(AC.s.motion.full_deg[MOTION_ROLL], 55, 1e-12);
+    CHECK(AC.s.motion.invert[MOTION_PITCH] && !AC.s.motion.invert[MOTION_ROLL]);
+    CHECK_INT(call("POST", "/api/motion", "yaw.full=1000"), 200);   /* clamped by the core */
+    CHECK_NEAR(AC.s.motion.full_deg[MOTION_YAW], 90, 1e-12);
+    CHECK_INT(call("POST", "/api/motionrecenter", ""), 200);
+    CHECK_INT(call("GET", "/api/motionrecenter", ""), 405);
+
+    /* ... and in /api/state, still valid JSON */
+    CHECK(body_has("GET", "/api/state", "", "\"motion\":{\"enabled\":1,\"scales\":\"none\"", &valid));
+    CHECK(valid);
+    CHECK(body_has("GET", "/api/state", "", "{\"use\":\"sticks\",\"full\":55,\"invert\":0,", NULL));
+    CHECK(body_has("GET", "/api/state", "", "\"sent\":{\"valid\":0,", NULL));
 }

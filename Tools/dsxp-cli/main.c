@@ -51,6 +51,48 @@ static void raw_cb(void *ctx, const unsigned char *r, long len) {
     }
 }
 
+/* The number after "key": at or after `from` (in the JSON of /api/state); NULL if absent.
+ * Returns where the number ends, so successive fields can be read in order. */
+static const char *json_num(const char *from, const char *key, double *out) {
+    char pat[40];
+    snprintf(pat, sizeof pat, "\"%s\":", key);
+    const char *p = from ? strstr(from, pat) : NULL;
+    if (!p) return NULL;
+    char *end;
+    *out = strtod(p + strlen(pat), &end);
+    return end;
+}
+
+/* Motion control as the core sees it (calibrated, bias removed, relative to level), read
+ * from the same /api/state JSON the mapper reads, so this shows exactly what DSXP uses. */
+static void print_motion(void) {
+    dsxp_response_t r;
+    dsxp_api("GET", "/api/state", "", &r);
+    const char *m = r.body ? strstr(r.body, "\"motion\":{") : NULL;
+    if (!m) { printf("  Motion: no data\n"); dsxp_response_free(&r); return; }
+    char scales[16] = "?";                       /* factory calibration, or nominal */
+    const char *c = strstr(m, "\"scales\":\"");
+    if (c) sscanf(c + 10, "%15[^\"]", scales);
+    double calibrated = 0;                       /* the user's calibration routine  */
+    json_num(m, "calibrated", &calibrated);
+    double live = 0, oor = 0, bias = 0;
+    json_num(m, "live", &live);
+    json_num(m, "out_of_range", &oor);
+    json_num(m, "bias_learned", &bias);
+    printf("  Motion   sensor scales %s, %s, gyro bias %s%s%s\n", scales,
+           calibrated ? "calibrated" : "NOT CALIBRATED (Motion control > Calibrate in the mapper)",
+           bias ? "learned" : "learning", live ? "" : ", no data", oor ? ", OUT OF RANGE (held neutral)" : "");
+    static const char *const NAME[3] = { "Bank (roll)", "Pitch", "Held twist (yaw)" };
+    const char *p = strstr(m, "\"axes\":[");
+    for (int i = 0; i < 3 && p; i++) {
+        double angle = 0, out = 0;
+        p = json_num(p, "angle", &angle);
+        if (p) p = json_num(p, "out", &out);
+        printf("  %-18s %+7.1f deg  -> %+.3f\n", NAME[i], angle, out);
+    }
+    dsxp_response_free(&r);
+}
+
 static void usage(const char *p) {
     fprintf(stderr, "usage: %s [--verify | --capture N] [--data DIR] [--logs DIR] "
                     "[--commands FILE] [--run-for SEC] [-v]\n"
@@ -148,7 +190,9 @@ int main(int argc, char **argv) {
             printf("\n  Pressed:");
             bool any = false;
             for (int i = 0; i < B_COUNT; i++) if (v.btn[i]) { printf(" [%s]", BTN_NAME[i]); any = true; }
-            printf("%s\n\n  Ctrl-C to quit.\n", any ? "" : " (none)");
+            printf("%s\n\n", any ? "" : " (none)");
+            print_motion();
+            printf("\n  Ctrl-C to quit.\n");
         } else {
             printf("\rlink=%-9s input=%d %5.1f Hz  xplane=%s  engaged=%d  commands=%d   ",
                    link_name(st.link), st.input_live, st.report_hz,

@@ -67,7 +67,37 @@ typedef struct {
     double turbulence_caution;                 /* turbulence 0-10 */
 } light_sim_cfg_t;
 
+/* controls.conf: motion control - tilt the controller to fly (input/motion.c).
+ * Arrays are indexed by the X-Plane axis: MOTION_ROLL, MOTION_PITCH, MOTION_YAW. */
+enum { MOTION_ROLL = 0, MOTION_PITCH, MOTION_YAW, MOTION_AXES };
+/* Allowed full-deflection angles per axis, degrees (controls.conf ranges, the mapper's
+ * sliders and the calibration all use these). Pitch stops at 60: past 70 deg the
+ * controller is near vertical and bank can no longer be measured (motion.c). */
+#define MOTION_ROLL_FULL_MIN   10
+#define MOTION_ROLL_FULL_MAX   90
+#define MOTION_PITCH_FULL_MIN  10
+#define MOTION_PITCH_FULL_MAX  60
+#define MOTION_YAW_FULL_MIN     5
+#define MOTION_YAW_FULL_MAX    90
+#define MOTION_LEVEL_MAX_DEG   60   /* a calibrated level held further over than this is refused */
+#define MOTION_BIAS_MAX_DPS    10   /* a resting gyro drift above this means a faulty sensor      */
+typedef struct {
+    bool   enabled;                 /* motion control on                                      */
+    bool   use[MOTION_AXES];        /* per axis: true = motion flies it, false = the sticks   */
+    double full_deg[MOTION_AXES];   /* controller angle that gives full deflection, degrees  */
+    double deadzone_deg;            /* roll and pitch: angle ignored around level, degrees    */
+    double yaw_deadzone_deg;        /* yaw: twist ignored around center, degrees              */
+    double yaw_return_s;            /* a held twist is ~95 % back to center after this time  */
+    bool   invert[MOTION_AXES];     /* reverse an axis                                        */
+    /* written by the calibration (input/motion_calib.c); motion control stays off until it ran */
+    bool   calibrated;              /* the calibration has been completed                     */
+    double level_bank_deg;          /* how the user holds the controller to fly level: bank  */
+    double level_pitch_deg;         /*   ... and pitch, both absolute (from lying flat)       */
+    double gyro_bias_dps[3];        /* resting drift of gyro x, y, z measured lying still     */
+} motion_cfg_t;
+
 extern const bridge_cfg_t   BRIDGE_DEFAULTS;
+extern const motion_cfg_t   MOTION_DEFAULTS;
 extern const gesture_cfg_t  GESTURE_DEFAULTS;
 extern const wind_cfg_t     WIND_DEFAULTS;
 extern const rumble_cfg_t   RUMBLE_DEFAULTS;

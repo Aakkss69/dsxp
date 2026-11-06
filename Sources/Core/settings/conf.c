@@ -516,6 +516,19 @@ void config_validate(config_t *c, conf_warns_t w[CF_COUNT]) {
         conf_warn(&w[CF_CONTROLS], 0, "gesture.swipe_length_at_100", "must be longer than tap_wander_at_100");
         c->s.gesture.swipe_length_at100 = c->s.gesture.tap_wander_at100 + 0.01;
     }
+    /* Motion: the full-deflection angle must lie at least 1 deg past the deadzone, or the
+     * whole usable range would collapse onto a step (the rule: settings.c motion_full_fix;
+     * the parser has already held each angle inside its range). */
+    static const char *const FULL_KEY[MOTION_AXES] = {
+        "motion.roll.full", "motion.pitch.full", "motion.yaw.full" };
+    for (int i = 0; i < MOTION_AXES; i++)
+        if (motion_full_fix(&c->s.motion, i))
+            conf_warn(&w[CF_CONTROLS], 0, FULL_KEY[i], "must be at least 1 deg above its deadzone; using %.0f deg",
+                      c->s.motion.full_deg[i]);
+    if (c->s.motion.enabled && !c->s.motion.calibrated) {   /* the calibration comes first */
+        conf_warn(&w[CF_CONTROLS], 0, "motion.enabled", "needs the calibration first (Motion control > Calibrate in the mapper); left off");
+        c->s.motion.enabled = false;
+    }
     if (c->s.rumble.jolt_full_g < c->s.rumble.jolt_start_g + 0.5) {
         conf_warn(&w[CF_FEEDBACK], 0, "rumble.g_jolt_full", "must be at least 0.5 g above g_jolt_start");
         c->s.rumble.jolt_full_g = c->s.rumble.jolt_start_g + 0.5;

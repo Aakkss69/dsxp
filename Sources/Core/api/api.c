@@ -13,6 +13,12 @@
  *   POST /api/rumble        ?left=&right=                                       (manual source only)
  *   POST /api/rumblesource  ?source=<manual|sim>
  *   POST /api/rumblepath    ?v2=<0|1>
+ *   POST /api/motion        ?enabled=<0|1>&roll=<sticks|motion>&pitch=..&yaw=..
+ *                           &roll.full=<deg>&pitch.full=..&yaw.full=..&roll.invert=<0|1>..
+ *                           (any subset; the words and keys match controls.conf)
+ *   POST /api/motionrecenter                      the controller's attitude now is level
+ *   POST /api/calibrate     ?action=<start|close>  run the motion calibration (again), or
+ *                           close it (refused until motion control has been calibrated once)
  * The words match the config files: trigger.source, rumble.source, light.source.
  * /api/quit, /api/pickxp and /api/openaccess are handled by the app itself.
  */
@@ -76,16 +82,16 @@ static void submit(const api_env_t *env, const cmd_t *cmd, dsxp_response_t *out)
 
 /* ------------------------------------------------------------- GET routes */
 
-typedef struct { jbuf_t *j; } init_arg_t;
+typedef struct { jbuf_t *j; int n; } init_arg_t;   /* n: commands written so far */
 
 static void init_commands(void *arg, const xcmd_t *cmds, int n) {
-    jbuf_t *j = ((init_arg_t *)arg)->j;
+    init_arg_t *a = arg;
     for (int i = 0; i < n; i++) {
-        jb_printf(j, "%s{\"c\":", i ? "," : "");
-        jb_str(j, cmds[i].path);
-        jb_printf(j, ",\"d\":");
-        jb_str(j, cmds[i].desc);
-        jb_printf(j, "}");
+        jb_printf(a->j, "%s{\"c\":", a->n++ ? "," : "");   /* comma before all but the first */
+        jb_str(a->j, cmds[i].path);
+        jb_printf(a->j, ",\"d\":");
+        jb_str(a->j, cmds[i].desc);
+        jb_printf(a->j, "}");
     }
 }
 
@@ -93,7 +99,8 @@ static void api_init(const api_env_t *env, dsxp_response_t *out) {
     jbuf_t j;
     jb_init(&j, 512 * 1024);
     jb_printf(&j, "{\"commands\":[");
-    init_arg_t arg = { &j };
+    init_arg_t arg = { &j, 0 };
+    init_commands(&arg, DSXP_COMMANDS, DSXP_CMD_COUNT);       /* DSXP's own commands first */
     if (env->catalog) env->catalog(env->ctx, init_commands, &arg);
     jb_printf(&j, "],\"slots\":[");
     for (int i = 0; i < B_COUNT; i++) {
@@ -119,6 +126,43 @@ static void api_init(const api_env_t *env, dsxp_response_t *out) {
     }
     jb_printf(&j, "]}");
     respond_json(out, &j);
+}
+
+/* "motion": the settings, the live angles and outputs, the calibration, and what X-Plane
+ * was sent (the mapper's 3D plane draws only that). Axis order: roll, pitch, yaw.
+ * Two different calibrations appear, named apart: "scales" says where the sensor scales
+ * come from (the controller's factory calibration, report 0x05, or nominal values), while
+ * "calibrated" and "calibration" are the user's routine (motion_calib.c). */
+static void state_motion(jbuf_t *j, const dsxp_snap_t *s) {
+    static const char *const SCALES[] = { "none", "nominal", "factory" };   /* motion_cal_source_t */
+    int scales = s->motion_cal_src >= 0 && s->motion_cal_src <= 2 ? s->motion_cal_src : 0;
+    const motion_cfg_t *m = &s->motion;
+    jb_printf(j, "\"motion\":{\"enabled\":%d,\"scales\":\"%s\",\"live\":%d,\"out_of_range\":%d,"
+                 "\"bias_learned\":%d,\"hold\":%d,\"deadzone\":%.1f,\"yaw_deadzone\":%.1f,"
+                 "\"yaw_return\":%.1f,\"axes\":[",
+              m->enabled ? 1 : 0, SCALES[scales], s->motion_seeded ? 1 : 0, s->motion_out_of_range ? 1 : 0,
+              s->motion_bias_learned ? 1 : 0, s->motion_hold ? 1 : 0,
+              m->deadzone_deg, m->yaw_deadzone_deg, m->yaw_return_s);
+    for (int i = 0; i < MOTION_AXES; i++)
+        jb_printf(j, "%s{\"use\":\"%s\",\"full\":%.0f,\"invert\":%d,\"angle\":%.2f,\"out\":%.4f}",
+                  i ? "," : "", m->use[i] ? "motion" : "sticks", m->full_deg[i], m->invert[i] ? 1 : 0,
+                  isfinite(s->motion_angle[i]) ? s->motion_angle[i] : 0.0,
+                  isfinite(s->motion_out[i]) ? s->motion_out[i] : 0.0);
+    jb_printf(j, "],\"sent\":{\"valid\":%d,\"roll\":%.4f,\"pitch\":%.4f,\"yaw\":%.4f},",
+              s->sent_valid ? 1 : 0, s->sent[MOTION_ROLL], s->sent[MOTION_PITCH], s->sent[MOTION_YAW]);
+    /* the calibration: whether it has been done, and the routine's progress */
+    const calib_t *k = &s->calib;
+    jb_printf(j, "\"calibrated\":%d,\"calibration\":{\"step\":\"%s\",\"hold\":%.2f,\"need\":%.2f,"
+                 "\"angle\":%.1f,\"lo\":%.1f,\"hi\":%.1f,\"min\":%.0f,\"reached\":%d,\"note\":",
+              m->calibrated ? 1 : 0, calib_step_name(k->step), k->hold_s, k->need_s,
+              isfinite(k->angle) ? k->angle : 0.0, k->lo, k->hi, k->min_reach, k->reached ? 1 : 0);
+    jb_str(j, k->note);
+    jb_printf(j, ",\"warning\":");
+    jb_str(j, k->warning);
+    jb_printf(j, ",\"result\":{\"bias\":[%.3f,%.3f,%.3f],\"gravity\":%.3f,\"level\":[%.1f,%.1f],"
+                 "\"full\":[%.0f,%.0f,%.0f]}}}",
+              k->bias[0], k->bias[1], k->bias[2], k->acc_g, k->level_bank, k->level_pitch,
+              k->full[MOTION_ROLL], k->full[MOTION_PITCH], k->full[MOTION_YAW]);
 }
 
 static void api_state(const api_env_t *env, dsxp_response_t *out) {
@@ -183,7 +227,9 @@ static void api_state(const api_env_t *env, dsxp_response_t *out) {
     for (int i = 0; i < 2; i++)
         jb_printf(&j, "%s{\"on\":%d,\"x\":%.4f,\"y\":%.4f}", i ? "," : "",
                   s->touch[i].active ? 1 : 0, s->touch[i].x, s->touch[i].y);
-    jb_printf(&j, "],\"app\":");
+    jb_printf(&j, "],");
+    state_motion(&j, s);
+    jb_printf(&j, ",\"app\":");
     if (env->app_info) env->app_info(env->ctx, &j);
     else jb_printf(&j, "{}");
     jb_printf(&j, "}");
@@ -314,6 +360,69 @@ static void api_rumblepath(const api_env_t *env, const char *qs, dsxp_response_t
     submit(env, &c, out);
 }
 
+/* Motion settings. Every parameter is optional, but one that is present must be valid:
+ * a typo must not quietly switch an axis to the sticks mid-flight. The core clamps the
+ * angles to the ranges controls.conf documents. */
+static void api_motion(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
+                       dsxp_response_t *out) {
+    static const char *const AXIS[MOTION_AXES] = { "roll", "pitch", "yaw" };   /* = config words */
+    cmd_t c = { .kind = CMD_MOTION };
+    motion_cmd_t *m = &c.u.motion;
+    long x;
+    char key[32], word[16];
+    if (qs_get(qs, "enabled", word, sizeof word)) {
+        if (!get_long(qs, "enabled", &x)) { respond(out, 400, CT_TEXT, "bad enabled"); return; }
+        m->has_enabled = true;
+        m->enabled = x != 0;
+    }
+    for (int i = 0; i < MOTION_AXES; i++) {
+        unsigned bit = 1u << i;
+        if (qs_get(qs, AXIS[i], word, sizeof word)) {                 /* roll=motion|sticks */
+            if (strcmp(word, "motion") && strcmp(word, "sticks")) { respond(out, 400, CT_TEXT, "bad source"); return; }
+            m->use_mask |= bit;
+            m->use[i] = !strcmp(word, "motion");
+        }
+        snprintf(key, sizeof key, "%s.full", AXIS[i]);                 /* roll.full=<deg>    */
+        if (qs_get(qs, key, word, sizeof word)) {
+            if (!get_double(qs, key, &m->full[i])) { respond(out, 400, CT_TEXT, "bad angle"); return; }
+            m->full_mask |= bit;
+        }
+        snprintf(key, sizeof key, "%s.invert", AXIS[i]);               /* roll.invert=<0|1>  */
+        if (qs_get(qs, key, word, sizeof word)) {
+            if (!get_long(qs, key, &x)) { respond(out, 400, CT_TEXT, "bad invert"); return; }
+            m->inv_mask |= bit;
+            m->inv[i] = x != 0;
+        }
+    }
+    if (m->has_enabled && m->enabled && !snap->motion.calibrated) {   /* the core refuses too */
+        respond(out, 409, CT_TEXT, "Calibrate motion control before switching it on.");
+        return;
+    }
+    submit(env, &c, out);
+}
+
+/* The calibration routine: start it (again), or close it. */
+static void api_calibrate(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
+                          dsxp_response_t *out) {
+    char action[16];
+    qs_get(qs, "action", action, sizeof action);
+    cmd_t c = { .kind = CMD_CALIBRATE };
+    if (!strcmp(action, "start")) c.key = CALIB_ACTION_START;
+    else if (!strcmp(action, "close")) {
+        if (!snap->motion.calibrated && snap->calib.step != CALIB_DONE) {
+            respond(out, 409, CT_TEXT, "Motion control needs this calibration before first use.");
+            return;
+        }
+        c.key = CALIB_ACTION_CLOSE;
+    } else { respond(out, 400, CT_TEXT, "bad action"); return; }
+    submit(env, &c, out);
+}
+
+static void api_motion_recenter(const api_env_t *env, dsxp_response_t *out) {
+    cmd_t c = { .kind = CMD_MOTION_RECENTER };
+    submit(env, &c, out);
+}
+
 /* --------------------------------------------------------------- router */
 
 void api_handle(const api_env_t *env, const char *method, const char *path,
@@ -338,6 +447,8 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     static const char *POST_ROUTES[] = {
         "/api/bind", "/api/axis", "/api/tune", "/api/light", "/api/trigger",
         "/api/triggersource", "/api/rumble", "/api/rumblesource", "/api/rumblepath",
+        "/api/motion", "/api/motionrecenter",                 /* 9, 10 */
+        "/api/calibrate",                                     /* 11 */
     };
     int route = -1;
     for (int i = 0; i < (int)(sizeof POST_ROUTES / sizeof POST_ROUTES[0]); i++)
@@ -345,9 +456,9 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     if (route < 0) { respond(out, 404, CT_TEXT, "no route"); return; }
     if (!post) { respond(out, 405, CT_TEXT, "method not allowed"); return; }
 
-    /* the two source-guarded routes need the current sources */
+    /* routes that check the current state (sources, calibration) need a snapshot */
     dsxp_snap_t *snap = NULL;
-    if (route == 4 || route == 6) {
+    if (route == 4 || route == 6 || route == 9 || route == 11) {
         snap = calloc(1, sizeof *snap);
         if (!snap) { respond(out, 500, CT_TEXT, "out of memory"); return; }
         if (env->snapshot) env->snapshot(env->ctx, snap);
@@ -362,6 +473,9 @@ void api_handle(const api_env_t *env, const char *method, const char *path,
     case 6: api_rumble(env, snap, query, out); break;
     case 7: api_rumble_source(env, query, out); break;
     case 8: api_rumblepath(env, query, out); break;
+    case 9: api_motion(env, snap, query, out); break;
+    case 10: api_motion_recenter(env, out); break;
+    case 11: api_calibrate(env, snap, query, out); break;
     default: respond(out, 404, CT_TEXT, "no route"); break;
     }
     free(snap);

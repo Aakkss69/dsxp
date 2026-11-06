@@ -1,5 +1,6 @@
 /* Default values for everything in the config files. Pure. */
 #include "core_internal.h"
+#include <math.h>            /* ceil */
 #include <string.h>
 
 const bridge_cfg_t BRIDGE_DEFAULTS = {
@@ -50,6 +51,54 @@ const rumble_cfg_t RUMBLE_DEFAULTS = {
 const light_sim_cfg_t LIGHT_SIM_DEFAULTS = {
     .stall_alarm = 0.60, .stall_caution = 0.15, .g_caution = 2.5, .turbulence_caution = 1.5,
 };
+
+/* Motion control starts off. When switched on, tilt flies roll and pitch and the yaw
+ * stays on the sticks and rudder triggers, because twisting a controller is the least
+ * natural of the three. Full deflection at 40 deg bank and 30 deg pitch keeps the wrists
+ * inside a comfortable range; 2 deg of deadzone hides hand tremor, and yaw gets 4 deg
+ * because its angle is integrated, so any leftover gyro drift collects there. */
+const motion_cfg_t MOTION_DEFAULTS = {
+    .enabled = false,
+    .use = { [MOTION_ROLL] = true, [MOTION_PITCH] = true, [MOTION_YAW] = false },
+    .full_deg = { [MOTION_ROLL] = 40, [MOTION_PITCH] = 30, [MOTION_YAW] = 30 },
+    .deadzone_deg = 2, .yaw_deadzone_deg = 4,
+    .yaw_return_s = 4,
+    .invert = { false, false, false },
+    .calibrated = false,                       /* the mapper asks for the calibration first */
+    .level_bank_deg = 0, .level_pitch_deg = 0, /* until then: lying flat is level           */
+    .gyro_bias_dps = { 0, 0, 0 },
+};
+
+/* The documented range of an axis's full-deflection angle, degrees (controls.conf, the
+ * mapper's sliders and the calibration all use it). `axis`: MOTION_ROLL, PITCH or YAW. */
+void motion_full_range(int axis, double *lo, double *hi) {
+    *lo = axis == MOTION_ROLL ? MOTION_ROLL_FULL_MIN : axis == MOTION_PITCH ? MOTION_PITCH_FULL_MIN
+        : MOTION_YAW_FULL_MIN;
+    *hi = axis == MOTION_ROLL ? MOTION_ROLL_FULL_MAX : axis == MOTION_PITCH ? MOTION_PITCH_FULL_MAX
+        : MOTION_YAW_FULL_MAX;
+}
+
+/*
+ * Make `axis`'s full-deflection angle valid: inside its range, and at least 1 deg past the
+ * axis's deadzone (roll and pitch: motion.deadzone, yaw: motion.yaw.deadzone). Below that
+ * the usable range collapses onto a step, and once the deadzone reaches the full angle
+ * shape() ignores the deadzone altogether. Raised to whole degrees, as controls.conf
+ * writes it. Every writer of motion.full_deg calls this (config_validate, CMD_MOTION, the
+ * end of the calibration), so they cannot disagree. Returns true if it had to change.
+ * The deadzones' own ranges (10 and 20 deg) keep the result inside the angle's range.
+ */
+bool motion_full_fix(motion_cfg_t *m, int axis) {
+    double lo, hi;
+    motion_full_range(axis, &lo, &hi);
+    double v = m->full_deg[axis];
+    if (!(v >= lo)) v = lo;                                  /* below the range, or NaN    */
+    if (v > hi) v = hi;                                      /* above the range            */
+    double dz = axis == MOTION_YAW ? m->yaw_deadzone_deg : m->deadzone_deg;   /* its deadzone */
+    if (v < dz + 1.0) v = ceil(dz + 1.0);                    /* 1 deg past it, whole degrees */
+    bool changed = v != m->full_deg[axis];
+    m->full_deg[axis] = v;
+    return changed;
+}
 
 void config_defaults(config_t *c) {
     memset(c, 0, sizeof *c);

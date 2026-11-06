@@ -62,7 +62,7 @@ static void schema_sanity(void) {
             }
         }
     }
-    CHECK_INT(nseen, 18 + 9 + 6 + 33 + 1 + 10 + 13 + 6 + 11);
+    CHECK_INT(nseen, 18 + 9 + 6 + 19 + 33 + 1 + 10 + 13 + 6 + 11);   /* motion: 13 + 6 calibration */
     CHECK(conf_find(CF_CONTROLS, "STICK.DEADZONE") != NULL);      /* keys are case-insensitive */
     CHECK(conf_find(CF_BRIDGE, "stick.deadzone") == NULL);
 }
@@ -327,6 +327,39 @@ static void merge_and_rules(void) {
     CHECK_NEAR(A.s.wind.buffet_freq_max_hz, 30, 1e-12);
     CHECK(A.s.light_sim.stall_caution < A.s.light_sim.stall_alarm);
     CHECK(has_warn(&w[CF_FEEDBACK], "rumble.g_jolt_full", 0));
+
+    /* motion: a full-deflection angle at or inside its deadzone is pushed out to
+     * deadzone + 1 deg (yaw against its own deadzone), in whole degrees */
+    const char *mtext = "motion.deadzone = 10\nmotion.roll.full = 10\n"
+                        "motion.yaw.deadzone = 12.5\nmotion.yaw.full = 5\n";
+    CHECK_INT(parse(CF_CONTROLS, mtext, &A, &w[CF_CONTROLS]), 0);   /* each value in range */
+    memset(w, 0, sizeof w);
+    config_validate(&A, w);
+    CHECK_INT(w[CF_CONTROLS].n, 2);
+    CHECK(has_warn(&w[CF_CONTROLS], "motion.roll.full", 0));
+    CHECK(has_warn(&w[CF_CONTROLS], "motion.yaw.full", 0));
+    CHECK_NEAR(A.s.motion.full_deg[MOTION_ROLL], 11, 1e-12);
+    CHECK_NEAR(A.s.motion.full_deg[MOTION_YAW], 14, 1e-12);
+    CHECK_NEAR(A.s.motion.full_deg[MOTION_PITCH], 30, 1e-12);       /* untouched */
+    /* the source words read back into the flags, either case */
+    CHECK_INT(parse(CF_CONTROLS, "motion.enabled = yes\nmotion.yaw = MOTION\nmotion.roll = sticks\n",
+                    &A, &w[CF_CONTROLS]), 0);
+    CHECK(A.s.motion.enabled && A.s.motion.use[MOTION_YAW] && !A.s.motion.use[MOTION_ROLL]);
+    memset(w, 0, sizeof w);
+    config_validate(&A, w);                                          /* not calibrated:    */
+    CHECK(has_warn(&w[CF_CONTROLS], "motion.enabled", 0));           /* switched off, said */
+    CHECK(!A.s.motion.enabled);
+    CHECK_INT(parse(CF_CONTROLS, "motion.enabled = yes\nmotion.calibrated = yes\nmotion.level.pitch = 12.5\n"
+                    "motion.gyro_bias.y = -0.801\n", &A, &w[CF_CONTROLS]), 0);
+    memset(w, 0, sizeof w);
+    config_validate(&A, w);
+    CHECK(A.s.motion.enabled && A.s.motion.calibrated);
+    CHECK_NEAR(A.s.motion.level_pitch_deg, 12.5, 1e-12);
+    CHECK_NEAR(A.s.motion.gyro_bias_dps[1], -0.801, 1e-12);
+    CHECK_INT(parse(CF_CONTROLS, "motion.gyro_bias.x = 25\n", &A, &w[CF_CONTROLS]), 1);   /* out of range */
+    CHECK(A.s.motion.use[MOTION_PITCH]);                              /* default kept */
+    CHECK_INT(parse(CF_CONTROLS, "motion.roll = tilt\n", &A, &w[CF_CONTROLS]), 1);
+    CHECK(A.s.motion.use[MOTION_ROLL]);                               /* bad word: previous value */
 }
 
 /* A German locale writes 6,0 with printf: the files must not change with it. */
