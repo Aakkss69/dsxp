@@ -6,6 +6,7 @@
  * clock and capture every packet.
  */
 #include "core_internal.h"
+#include <math.h>            /* round, ceil */
 #include <stdio.h>
 #include <string.h>
 
@@ -24,6 +25,13 @@ void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     }
     c->out_dirty = true;
     c->force_gate = true;
+    motion_init(&c->motion);                     /* level = flat, face up, until Recenter */
+    motion_cal_nominal(&c->motion_cal);          /* usable before report 0x05 is read      */
+    c->motion_cal_src = MOTION_CAL_NONE;         /* not read yet                           */
+    /* Start from the saved state, so starting with motion already on is not taken as
+     * "just switched on" (which would recenter before any data arrived). */
+    c->motion_was_enabled = c->s.motion.enabled;
+    for (int i = 0; i < MOTION_AXES; i++) c->motion_was_owned[i] = motion_owns(&c->s.motion, i);
 }
 
 void out_mark(core_t *c) { c->out_dirty = true; }
@@ -36,7 +44,8 @@ static void out_send(core_t *c) {
     f.rumble_r = c->rumble.right;
     f.rumble_v2 = c->s.rumble_v2;
     f.light_on = c->s.light.on;
-    f.player = c->s.light.player;
+    /* a DSXP command just acted: all five lamps for a moment (dark if the light is off) */
+    f.player = c->lamp_blinking ? 0x1F : c->s.light.player;
     f.r = c->eff_r; f.g = c->eff_g; f.b = c->eff_b;
     f.fx[0] = c->fx_out[0];
     f.fx[1] = c->fx_out[1];
@@ -79,11 +88,25 @@ void out_quiet(core_t *c) {
     c->sinks.out_report(c->sinks.ctx, rep);
 }
 
+/* Feed the motion sensors of the report just decoded into the fusion. Runs for every
+ * report, motion control on or off, so the mapper shows live angles and switching on
+ * starts from a settled filter. */
+static void motion_feed(core_t *c) {
+    motion_sample_t smp;
+    motion_cal_apply(&c->motion_cal, c->state.gyro_raw, c->state.acc_raw,
+                     c->state.sensor_ts, &smp);             /* counts -> deg/s and g      */
+    /* DSXP's own vibration shakes the gyro: pause bias learning while it runs */
+    bool quiet = c->rumble.left || c->rumble.right ||
+                 c->fx_out[0].mode == TFX_VIBRATE || c->fx_out[1].mode == TFX_VIBRATE;
+    motion_update(&c->motion, &smp, &c->s.motion, quiet);
+}
+
 void core_on_report(core_t *c, const unsigned char *buf, long len, double now) {
     if (ds_decode_report_cfg(&c->state, &c->gest, &c->s.tune, &c->s.gesture, buf, len, now)) {
         c->have_report = true;
         c->last_report_at = now;
         c->reports_window++;
+        motion_feed(c);
     }
 }
 
@@ -92,7 +115,42 @@ void core_on_device(core_t *c, bool bluetooth, bool added) {
     if (!bluetooth) return;
     c->have_output_device = added;
     if (added) c->out_dirty = true;          /* push our light state straight away */
-    else c->have_report = false;
+    else {
+        c->have_report = false;
+        /* the filter and any held yaw belong to the stream that just ended; the captured
+         * level, the learned bias and the calibration stay (same hands, same controller) */
+        motion_reset(&c->motion);
+    }
+}
+
+/* The runtime read feature report 0x05 for the controller now connected (core thread).
+ * Every result is usable: on failure `cal` holds the nominal scales. */
+void core_set_motion_cal(core_t *c, const motion_cal_t *cal, mcal_result_t r) {
+    c->motion_cal = *cal;
+    c->motion_cal_src = (r == MCAL_OK && cal->factory_axes == 6) ? MOTION_CAL_FACTORY
+                                                                  : MOTION_CAL_NOMINAL;
+    dsxp_log("motion calibration: %s (%d of 6 axes from the controller)",
+             motion_cal_result_name(r), r == MCAL_OK ? cal->factory_axes : 0);
+}
+
+/* Light all five player lamps for LAMP_BLINK_SEC: the user is looking at X-Plane, not
+ * at the Mac, when a bound DSXP command acts. */
+static void lamp_blink(core_t *c, double now) {
+    c->lamp_blink_until = now + LAMP_BLINK_SEC;
+}
+
+/* Start a crossfade on every axis motion flies, from what X-Plane was last sent. */
+static void blend_owned(core_t *c, double now) {
+    for (int i = 0; i < MOTION_AXES; i++)
+        if (motion_owns(&c->s.motion, i)) motion_blend_start(&c->mblend[i], c->sent[i], now);
+}
+
+/* Recenter: the attitude held now becomes level, faded in so the controls do not jump. */
+void core_motion_recenter(core_t *c, double now) {
+    motion_recenter(&c->motion);
+    blend_owned(c, now);
+    lamp_blink(c, now);
+    dsxp_log("motion: recentered");
 }
 
 bool core_input_live(const core_t *c, double now) {
@@ -214,6 +272,33 @@ static void apply_light(light_t *L, const light_t *v, unsigned m) {
     if (m & LF_SOURCE) L->source = v->source == LIGHT_SRC_SIM ? LIGHT_SRC_SIM : LIGHT_SRC_MANUAL;
 }
 
+/* CMD_MOTION: copy the fields the mapper sent, clamped to the ranges controls.conf
+ * documents (read from the schema, so the two can never disagree), then keep each
+ * full-deflection angle past its deadzone the way config_validate does. Saved. */
+static void apply_motion(core_t *c, const motion_cmd_t *v, double now) {
+    static const char *const FULL_KEY[MOTION_AXES] = {
+        "motion.roll.full", "motion.pitch.full", "motion.yaw.full" };
+    motion_cfg_t *m = &c->s.motion;
+    if (v->has_enabled) m->enabled = v->enabled;
+    for (int i = 0; i < MOTION_AXES; i++) {
+        unsigned bit = 1u << i;                                   /* this axis' bit       */
+        if (v->use_mask & bit) m->use[i] = v->use[i];
+        if (v->inv_mask & bit) m->invert[i] = v->inv[i];
+        if (v->full_mask & bit) {
+            const conf_key_t *k = conf_find(CF_CONTROLS, FULL_KEY[i]);   /* the documented range */
+            m->full_deg[i] = clampd(round(v->full[i]), k ? k->lo : 1, k ? k->hi : 90, m->full_deg[i]);
+        }
+        double dz = i == MOTION_YAW ? m->yaw_deadzone_deg : m->deadzone_deg;
+        if (m->full_deg[i] < dz + 1.0) m->full_deg[i] = ceil(dz + 1.0);  /* as config_validate */
+    }
+    core_mark_dirty(c, now, CFB_CONTROLS);
+    dsxp_log("motion: %s; roll %s %.0f deg, pitch %s %.0f deg, yaw %s %.0f deg",
+             m->enabled ? "on" : "off",
+             m->use[MOTION_ROLL] ? "motion" : "sticks", m->full_deg[MOTION_ROLL],
+             m->use[MOTION_PITCH] ? "motion" : "sticks", m->full_deg[MOTION_PITCH],
+             m->use[MOTION_YAW] ? "motion" : "sticks", m->full_deg[MOTION_YAW]);
+}
+
 /* System sleep: hand X-Plane its controls back and quiet the controller. */
 void core_set_suspended(core_t *c, bool suspended, double now) {
     if (suspended && !c->suspended) {
@@ -313,6 +398,12 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         out_mark(c);
         dsxp_log("rumble path -> %s", s->rumble_v2 ? "v2" : "classic");
         break;
+    case CMD_MOTION:
+        apply_motion(c, &cmd->u.motion, now);
+        break;
+    case CMD_MOTION_RECENTER:            /* not a setting: nothing is saved */
+        core_motion_recenter(c, now);
+        break;
     default:
         break;
     }
@@ -345,9 +436,72 @@ static void reports_tick(core_t *c, double now) {
     }
 }
 
+/*
+ * Buttons bound to DSXP's own commands (DSXP_CMD_*). They have their own previous-button
+ * state, separate from xp_push's, so they also work while DSXP is standing by; xp_push
+ * never sends them to X-Plane. Recenter and toggle act on the press; hold acts for as
+ * long as any button bound to it is down.
+ */
+static void dsxp_buttons(core_t *c, double now) {
+    /* the same freshness rule as xp_push: stale input releases every button */
+    bool fresh = c->have_report && now - c->last_report_at <= c->bridge.input_stale_s;
+    bool hold = false;                                  /* any hold button down now      */
+    for (int i = 0; i < B_COUNT; i++) {
+        bool down = fresh && c->state.btn[i];
+        bool was = c->dsxp_prev_btn[i];
+        c->dsxp_prev_btn[i] = down;                     /* remember for the next tick    */
+        const char *cmd = c->s.bind[i].cmd;
+        if (!cmd_is_dsxp(cmd)) continue;                /* an X-Plane command: not ours  */
+        if (!strcmp(cmd, DSXP_CMD_HOLD)) { hold = hold || down; continue; }
+        if (!down || was) continue;                     /* only the press itself acts    */
+        if (!strcmp(cmd, DSXP_CMD_RECENTER)) {
+            core_motion_recenter(c, now);
+        } else if (!strcmp(cmd, DSXP_CMD_TOGGLE)) {
+            c->s.motion.enabled = !c->s.motion.enabled; /* motion_edges() fades it in/out */
+            core_mark_dirty(c, now, CFB_CONTROLS);      /* saved like a change in the mapper */
+            dsxp_log("motion: %s (button)", c->s.motion.enabled ? "on" : "off");
+        }
+    }
+    /* The clutch: while held, the controls stay where they were; on release the
+     * attitude held then becomes level, faded in from the frozen values. */
+    if (hold && !c->motion_hold) {
+        c->motion_hold = true;
+        memcpy(c->motion_frozen, c->motion.out, sizeof c->motion_frozen);
+    } else if (!hold && c->motion_hold) {
+        c->motion_hold = false;
+        core_motion_recenter(c, now);
+    }
+}
+
+/*
+ * React to motion settings changing, however they changed (mapper, bound button, or an
+ * edit of controls.conf, which replaces the settings wholesale - hence edges against
+ * last tick's copy rather than hooks in each setter):
+ *   switched on   -> the attitude held now becomes level, and the lamps blink
+ *   switched off  -> the lamps blink
+ *   an axis changes hands (motion <-> sticks) -> 0.3 s crossfade from the value sent
+ */
+static void motion_edges(core_t *c, double now) {
+    const motion_cfg_t *m = &c->s.motion;
+    if (m->enabled != c->motion_was_enabled) {
+        if (m->enabled) motion_recenter(&c->motion);    /* level = how it is held now    */
+        lamp_blink(c, now);
+        c->motion_was_enabled = m->enabled;
+    }
+    for (int i = 0; i < MOTION_AXES; i++) {
+        bool own = motion_owns(m, i);
+        if (own != c->motion_was_owned[i]) motion_blend_start(&c->mblend[i], c->sent[i], now);
+        c->motion_was_owned[i] = own;
+    }
+}
+
 void core_tick(core_t *c, double now) {
     reports_tick(c, now);
     telemetry_tick(c, now);
+    dsxp_buttons(c, now);
+    motion_edges(c, now);
+    bool blink = now < c->lamp_blink_until;             /* the confirmation flash        */
+    if (blink != c->lamp_blinking) { c->lamp_blinking = blink; out_mark(c); }
 
     /* manual mode: what goes out is exactly what the user set */
     trigger_fx_t want0 = trig_effect(&c->s.fx_manual[0]), want1 = trig_effect(&c->s.fx_manual[1]);
@@ -400,4 +554,16 @@ void core_snapshot(const core_t *c, dsxp_snap_t *o) {
     memcpy(o->axis, c->s.axis, sizeof o->axis);
     memcpy(o->touch, c->state.touch, sizeof o->touch);
     memcpy(o->xp_exe, c->xp_exe, sizeof o->xp_exe);
+    o->motion = c->s.motion;
+    o->motion_angle[MOTION_ROLL]  = c->motion.bank_deg;
+    o->motion_angle[MOTION_PITCH] = c->motion.pitch_deg;
+    o->motion_angle[MOTION_YAW]   = c->motion.yaw_deg;
+    memcpy(o->motion_out, c->motion_hold ? c->motion_frozen : c->motion.out, sizeof o->motion_out);
+    o->motion_cal_src = c->motion_cal_src;
+    o->motion_seeded = c->motion.seeded && c->have_report;   /* data is flowing          */
+    o->motion_out_of_range = c->motion.out_of_range;
+    o->motion_bias_learned = c->motion.bias_learned;
+    o->motion_hold = c->motion_hold;
+    memcpy(o->sent, c->sent, sizeof o->sent);
+    o->sent_valid = c->sent_valid;
 }

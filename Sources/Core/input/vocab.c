@@ -2,6 +2,7 @@
  * (sentence-style); axis targets are pop-up menu items (title-style), following
  * Apple's capitalization guidance. */
 #include "core_internal.h"
+#include <string.h>          /* strncmp */
 
 const char *BTN_NAME[B_COUNT] = {
     "D-pad up","D-pad up-right","D-pad right","D-pad down-right",
@@ -36,3 +37,15 @@ const char *AX_LABEL[AX_TARGET_COUNT] = {
     "Left Toe Brake",
     "Right Toe Brake"
 };
+
+/* DSXP's own commands, offered first in the mapper's command list. Bound to a button
+ * they act inside DSXP (core.c dsxp_buttons) and are never sent to X-Plane. */
+const xcmd_t DSXP_COMMANDS[DSXP_CMD_COUNT] = {
+    { DSXP_CMD_RECENTER, "DSXP: motion control - make the way you hold the controller now level" },
+    { DSXP_CMD_TOGGLE,   "DSXP: motion control - switch on or off" },
+    { DSXP_CMD_HOLD,     "DSXP: motion control - hold to freeze the controls, release to recenter" },
+};
+
+bool cmd_is_dsxp(const char *cmd) {
+    return strncmp(cmd, DSXP_CMD_PREFIX, sizeof DSXP_CMD_PREFIX - 1) == 0;   /* prefix match */
+}

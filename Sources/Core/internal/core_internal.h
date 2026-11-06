@@ -116,6 +116,15 @@ enum {
 /* Analog sources */
 enum { S_LX = 0, S_LY, S_RX, S_RY, S_L2, S_R2, S_COUNT };
 
+/* DSXP's own commands. A button bound to one of these is handled by DSXP itself and
+ * never sent to X-Plane; they work whether or not DSXP is flying (engaged). */
+#define DSXP_CMD_PREFIX   "dsxp/"
+#define DSXP_CMD_RECENTER "dsxp/motion/recenter"   /* the attitude held now is level      */
+#define DSXP_CMD_TOGGLE   "dsxp/motion/toggle"     /* motion control on / off (saved)     */
+#define DSXP_CMD_HOLD     "dsxp/motion/hold"       /* clutch: freeze while held, recenter on release */
+#define DSXP_CMD_COUNT    3
+#define LAMP_BLINK_SEC    0.35  /* all five player lamps flash this long to confirm one */
+
 /* The X-Plane control an analog source moves */
 enum {
     AX_NONE = 0, AX_ROLL, AX_PITCH, AX_YAW, AX_THROTTLE,
@@ -263,6 +272,21 @@ typedef struct core {
     double ov_release_at[OV_COUNT];
     double last_thr, last_thr_at;
     bool   thr_sent;
+    double sent[MOTION_AXES];   /* roll, pitch, yaw ratio last sent to X-Plane (0 = not sent) */
+    bool   sent_valid;          /* sent[] is current: engaged and pushing                     */
+
+    /* motion control (input/motion.c, motion_cal.c) */
+    motion_t       motion;                      /* sensor fusion state                      */
+    motion_cal_t   motion_cal;                  /* scales in use; nominal until 0x05 arrives */
+    int            motion_cal_src;              /* motion_cal_source_t, shown in the mapper  */
+    motion_blend_t mblend[MOTION_AXES];         /* crossfade per axis after a change         */
+    bool           motion_was_owned[MOTION_AXES];  /* motion_owns() last tick (edges)        */
+    bool           motion_was_enabled;          /* motion.enabled last tick (edges)          */
+    bool           motion_hold;                 /* dsxp/motion/hold is down: outputs frozen  */
+    double         motion_frozen[MOTION_AXES];  /* the outputs when the hold began           */
+    bool           dsxp_prev_btn[B_COUNT];      /* buttons bound to DSXP commands, last tick */
+    double         lamp_blink_until;            /* player lamps all lit until this time      */
+    bool           lamp_blinking;               /* they are lit now (out_send reads this)    */
 
     /* telemetry */
     wx_t   wx;
@@ -303,17 +327,36 @@ typedef struct {
     axis_map_t axis[S_COUNT];
     touch_t touch[2];
     char xp_exe[1024];
+    /* motion control */
+    motion_cfg_t motion;                       /* the settings                              */
+    double motion_angle[MOTION_AXES];          /* bank, pitch, held yaw (deg) from level    */
+    double motion_out[MOTION_AXES];            /* what motion flies, -1..1                  */
+    int    motion_cal_src;                     /* motion_cal_source_t                       */
+    bool   motion_seeded, motion_out_of_range, motion_bias_learned, motion_hold;
+    double sent[MOTION_AXES];                  /* roll, pitch, yaw as sent to X-Plane       */
+    bool   sent_valid;
 } dsxp_snap_t;
 
 /* Commands from the UI into the core (applied on the core thread). */
 typedef enum {
     CMD_NONE = 0, CMD_BIND, CMD_AXIS, CMD_TUNE, CMD_LIGHT, CMD_TRIGGER, CMD_TRIGGER_SOURCE,
-    CMD_RUMBLE, CMD_RUMBLE_SOURCE, CMD_RUMBLEPATH
+    CMD_RUMBLE, CMD_RUMBLE_SOURCE, CMD_RUMBLEPATH,
+    CMD_MOTION,             /* change motion settings (u.motion)                */
+    CMD_MOTION_RECENTER     /* the controller's attitude now becomes level      */
 } cmd_kind_t;
 
 enum { LF_R = 1, LF_G = 2, LF_B = 4, LF_ON = 8, LF_PATTERN = 16, LF_SPEED = 32,
        LF_PLAYER = 64, LF_BRIGHT = 128, LF_SOURCE = 256 };
 enum { TF_MODE = 1, TF_START = 2, TF_END = 4, TF_STRENGTH = 8, TF_FREQ = 16 };
+
+/* CMD_MOTION: only the fields whose flag or mask bit is set are applied. */
+typedef struct {
+    bool     has_enabled, enabled;
+    unsigned use_mask, full_mask, inv_mask;    /* bit i = MOTION_ROLL / PITCH / YAW */
+    bool     use[MOTION_AXES];                 /* true = motion, false = sticks     */
+    double   full[MOTION_AXES];                /* degrees for full deflection       */
+    bool     inv[MOTION_AXES];                 /* reverse the axis                  */
+} motion_cmd_t;
 
 typedef struct {
     cmd_kind_t kind;
@@ -326,6 +369,7 @@ typedef struct {
         struct { trig_manual_t v; unsigned mask; } trig;
         int source;              /* CMD_TRIGGER_SOURCE, CMD_RUMBLE_SOURCE */
         struct { bool has_l, has_r; unsigned char l, r; } rumble;
+        motion_cmd_t motion;
         bool flag;
     } u;
 } cmd_t;
@@ -337,6 +381,8 @@ extern const char *SRC_KEY[S_COUNT];
 extern const char *SRC_LABEL[S_COUNT];
 extern const char *AX_KEY[AX_TARGET_COUNT];
 extern const char *AX_LABEL[AX_TARGET_COUNT];
+extern const xcmd_t DSXP_COMMANDS[DSXP_CMD_COUNT];   /* path + description, for the mapper */
+bool cmd_is_dsxp(const char *cmd);                   /* starts with DSXP_CMD_PREFIX         */
 
 /* ------------------------------------------------------- pure modules */
 
@@ -442,6 +488,8 @@ void core_mark_dirty(core_t *c, double now, unsigned files);
 unsigned core_save_due(core_t *c, double now);      /* CFB_* mask due for saving, cleared */
 void core_set_trigger_source(core_t *c, int mode, double now);
 void core_set_rumble_source(core_t *c, int mode, double now);
+void core_set_motion_cal(core_t *c, const motion_cal_t *cal, mcal_result_t r);
+void core_motion_recenter(core_t *c, double now);
 void out_tick(core_t *c, double now);
 void out_quiet(core_t *c);
 void out_mark(core_t *c);
