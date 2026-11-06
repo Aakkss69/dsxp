@@ -62,7 +62,7 @@ static void schema_sanity(void) {
             }
         }
     }
-    CHECK_INT(nseen, 18 + 9 + 6 + 19 + 33 + 1 + 10 + 13 + 6 + 11);   /* motion: 13 + 6 calibration */
+    CHECK_INT(nseen, 18 + 9 + 6 + 18 + 33 + 1 + 10 + 13 + 6 + 11);   /* motion: 12 + 6 calibration */
     CHECK(conf_find(CF_CONTROLS, "STICK.DEADZONE") != NULL);      /* keys are case-insensitive */
     CHECK(conf_find(CF_BRIDGE, "stick.deadzone") == NULL);
 }
@@ -216,6 +216,10 @@ static void odd_input(void) {
     CHECK(strstr(w.w[2].msg, "feedback.conf") != NULL);
     CHECK(has_warn(&w, "", 5));
     CHECK(A.s.light.on);                             /* not applied from the wrong file */
+    /* a key DSXP once wrote and no longer uses: read without a warning */
+    CHECK_INT(parse(CF_CONTROLS, "motion.yaw_return = 4.0 s\nmotion.yaw.full = 25 deg\n", &A, &w), 0);
+    CHECK_NEAR(A.s.motion.full_deg[MOTION_YAW], 25, 1e-12);
+    CHECK_INT(parse(CF_CONTROLS, "Motion.Yaw_Return = 4.0 s\n", &A, &w), 0);   /* any case, as all keys */
 
     /* enums, booleans, colors, lamps */
     parse(CF_FEEDBACK, "trigger.source = WIND\nlight.on = Off\nlight.color = #12ab9F   # teal\n"

@@ -9,6 +9,7 @@ int dsxp_core_tests_run(void) {
     test_gesture();
     test_motion_cal();
     test_motion();
+    test_motion_yaw();
     test_motion_calib();
     test_bindings();
     test_config();

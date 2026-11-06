@@ -3,8 +3,12 @@
  * hold-to-steer yaw that can fly X-Plane's roll, pitch and yaw. Pure: no I/O, no threads,
  * no globals, so the tests drive it with synthetic sensor data.
  *
- *   input/motion_cal.c  feature report 0x05 -> calibration; raw counts -> deg/s and g
- *   input/motion.c      sensor fusion -> angles -> per-axis outputs; the crossfade helper
+ *   input/motion_cal.c    feature report 0x05 -> calibration; raw counts -> deg/s and g
+ *   input/motion.c        sensor fusion ("up", time, gyro bias, out of range), which hands
+ *                         each axis to its own file; the crossfade helper
+ *   input/motion_roll.c   bank -> roll        (motion_roll.h)
+ *   input/motion_pitch.c  pitch -> pitch      (motion_pitch.h)
+ *   input/motion_yaw.c    twist -> yaw, held  (motion_yaw.h)
  *
  * Sources: Linux drivers/hid/hid-playstation.c at tag v6.12 (anchors per item below and
  * in docs/REFERENCES.md); the maths references are named where they are used in motion.c.
@@ -19,8 +23,8 @@
  * Those five measured signs fix the directions above, and they form a right-handed frame
  * (x right, y up, z back) shared by gyro and accelerometer. In that frame a twist to the
  * left is positive gyro y; derived from the frame, then confirmed by a one-way twist test
- * on 2026-11-07 (a right twist integrated to -63 deg of gyro y). motion.c turns it into
- * "twist right = positive yaw".
+ * on 2026-11-07 (a right twist integrated to -63 deg of gyro y). motion_yaw.c turns it
+ * into "twist right = positive yaw".
  * The controller stands in for the aircraft: the top edge is the nose.
  */
 #ifndef DSXP_MOTION_H
@@ -29,6 +33,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "tunables.h"                 /* motion_cfg_t, MOTION_ROLL / PITCH / YAW */
+#include "motion_yaw.h"               /* motion_yaw_t: the yaw's own state        */
 
 /* ------------------------------------------------------- calibration (motion_cal.c) */
 
@@ -113,11 +118,8 @@ typedef struct {
     /* level reference */
     double   neutral[3];      /* the attitude that reads as level: the calibration's
                                  (motion_set_level) or the one Recenter captured        */
-    /* hold-to-steer yaw */
-    double   yaw_deg;         /* integrated twist about the vertical, deg               */
-    double   yaw_credit;      /* what the return removed since the last zero crossing,
-                                 signed like yaw_deg; spent when twisting back, and
-                                 fading by itself (motion.c YAW_CREDIT_KEEP)            */
+    /* hold-to-steer yaw (motion_yaw.c) */
+    motion_yaw_t yaw;         /* the twist, held as a steering angle: yaw.deg            */
     /* gyro bias, learned while the controller is still */
     double   bias[3];         /* deg/s subtracted from the gyro                         */
     bool     bias_learned;    /* at least one still window has been folded in            */
@@ -125,6 +127,11 @@ typedef struct {
     double   win_min[3], win_max[3], win_sum[3];   /* raw gyro extremes and sum in it     */
     int      win_n;           /* samples in the window                                    */
     double   quiet_until;     /* learning paused until this sensor time (own vibration)  */
+    /* set down: lying as still as on a table (centers the yaw) */
+    double   rest_start;      /* sensor time the current still stretch began             */
+    double   rest_min[3], rest_max[3];   /* raw gyro extremes in it                       */
+    int      rest_n;          /* samples in it (0: none yet)                              */
+    bool     resting;         /* the stretch has lasted long enough: lying down           */
     /* results, refreshed by every motion_update() */
     double   bank_deg;        /* relative to neutral; right wing down is positive        */
     double   pitch_deg;       /* relative to neutral; nose (top edge) up is positive     */

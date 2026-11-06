@@ -27,6 +27,7 @@ void test_shape(void);
 void test_gesture(void);
 void test_motion_cal(void);
 void test_motion(void);
+void test_motion_yaw(void);
 void test_motion_calib(void);
 void test_bindings(void);
 void test_packets(void);

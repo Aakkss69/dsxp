@@ -208,14 +208,10 @@ static const conf_key_t CONTROLS_KEYS[] = {
       "arms do not move the controls. Higher: steadier hands-off flight, but small\n"
       "corrections need a deliberate tilt. Lower: finer corrections, more wander."),
     K("motion.yaw.deadzone", CT_REAL, s.motion.yaw_deadzone_deg, 0, 20, 1, "deg",
-      "Yaw: twist that does nothing. Yaw is added up over time, so any leftover gyro drift\n"
-      "collects here; keep it above a few degrees. Higher: the rudder stays centered unless\n"
-      "you mean it. Lower: smaller twists already move the rudder."),
-    K("motion.yaw_return", CT_TIME, s.motion.yaw_return_s, 0.5, 30, 1, "s",
-      "How long a held twist takes to ease back to center by itself (about 95 % of the way).\n"
-      "Lower: the rudder lets go quickly, like a pedal with a strong spring - you keep\n"
-      "twisting to hold a slip. Higher: a twist holds its rudder longer, but you must twist\n"
-      "back to take it out."),
+      "Yaw: twist from center that does nothing. The rudder stays where you leave it (twist\n"
+      "back, or Recenter, to center it), and the gyro's slow drift is measured and taken\n"
+      "out, so a few degrees is plenty. Higher: the rudder stays centered unless you mean\n"
+      "it. Lower: smaller twists already move the rudder."),
     KX("motion.roll.invert", CT_BOOL, s.motion.invert[MOTION_ROLL],
        "yes: banking the controller right rolls left."),
     KX("motion.pitch.invert", CT_BOOL, s.motion.invert[MOTION_PITCH],

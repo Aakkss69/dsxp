@@ -87,7 +87,6 @@ typedef struct {
     double full_deg[MOTION_AXES];   /* controller angle that gives full deflection, degrees  */
     double deadzone_deg;            /* roll and pitch: angle ignored around level, degrees    */
     double yaw_deadzone_deg;        /* yaw: twist ignored around center, degrees              */
-    double yaw_return_s;            /* a held twist is ~95 % back to center after this time  */
     bool   invert[MOTION_AXES];     /* reverse an axis                                        */
     /* written by the calibration (input/motion_calib.c); motion control stays off until it ran */
     bool   calibrated;              /* the calibration has been completed                     */
