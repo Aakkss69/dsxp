@@ -144,7 +144,7 @@ void out_build_report(const out_frame_t *f, unsigned char seq, unsigned char *re
     rep[OFF_VALID1] = F1_LIGHTBAR | F1_PLAYER_LEDS;
     /* deliberately NOT touching lightbar_setup: value 0x02 is LIGHT_OUT, which
      * kills the bar even while an RGB value is supplied */
-    rep[OFF_PLAYER] = f->light_on ? f->player : 0;
+    rep[OFF_PLAYER] = f->light_on || f->player_force ? f->player : 0;
     rep[OFF_RED]    = f->light_on ? f->r : 0;
     rep[OFF_GREEN]  = f->light_on ? f->g : 0;
     rep[OFF_BLUE]   = f->light_on ? f->b : 0;
@@ -154,8 +154,5 @@ void out_build_report(const out_frame_t *f, unsigned char seq, unsigned char *re
     unsigned char seed = 0xA2;
     uint32_t crc = crc32_le(&seed, 1, 0xFFFFFFFFu);
     crc = crc32_le(rep, 74, crc) ^ 0xFFFFFFFFu;
-    rep[74] = (unsigned char)(crc & 0xFF);
-    rep[75] = (unsigned char)((crc >> 8) & 0xFF);
-    rep[76] = (unsigned char)((crc >> 16) & 0xFF);
-    rep[77] = (unsigned char)((crc >> 24) & 0xFF);
+    put_le32(rep + 74, crc);                  /* the last four bytes, low byte first */
 }

@@ -167,10 +167,14 @@ void xp_push(core_t *c, double now) {
     bool live = c->have_report && (now - c->last_report_at) <= c->bridge.input_stale_s;
 
     /* Each of roll, pitch and yaw is flown either by motion or by the sticks/triggers,
-     * never a sum of both (motion_owns: motion control on and that axis set to motion). */
-    bool own_roll  = motion_owns(&s->motion, MOTION_ROLL);
-    bool own_pitch = motion_owns(&s->motion, MOTION_PITCH);
-    bool own_yaw   = motion_owns(&s->motion, MOTION_YAW);
+     * never a sum of both (motion_owns: motion control on and that axis set to motion).
+     * While the calibration runs the user tilts the controller on purpose, so the sticks
+     * fly motion's axes too: recalibrating in the air never leaves an axis unflown. The
+     * override stays asserted either way (xp_wanted_overrides), and the switch fades. */
+    bool calibrating = core_calibrating(c);
+    bool own_roll  = motion_owns(&s->motion, MOTION_ROLL)  && !calibrating;
+    bool own_pitch = motion_owns(&s->motion, MOTION_PITCH) && !calibrating;
+    bool own_yaw   = motion_owns(&s->motion, MOTION_YAW)   && !calibrating;
 
     double roll = 0, pitch = 0, yaw = 0, thr = -1, lb = -1, rb = -1;
     if (live) {
@@ -192,10 +196,8 @@ void xp_push(core_t *c, double now) {
             default: break;
             }
         }
-        /* motion's outputs for the axes it flies; frozen while dsxp/motion/hold is down,
-         * and neutral while the calibration runs (the user is tilting on purpose) */
-        static const double NEUTRAL[MOTION_AXES] = { 0, 0, 0 };
-        const double *mo = core_calibrating(c) ? NEUTRAL : c->motion_hold ? c->motion_frozen : c->motion.out;
+        /* motion's outputs for the axes it flies; frozen while dsxp/motion/hold is down */
+        const double *mo = c->motion_hold ? c->motion_frozen : c->motion.out;
         if (own_roll)  roll  = mo[MOTION_ROLL];
         if (own_pitch) pitch = mo[MOTION_PITCH];
         if (own_yaw)   yaw   = mo[MOTION_YAW];

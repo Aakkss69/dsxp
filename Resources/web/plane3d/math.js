@@ -99,8 +99,17 @@
                              m[0][1] * b[0] + m[1][1] * b[1] + m[2][1] * b[2],
                              m[0][2] * b[0] + m[1][2] * b[1] + m[2][2] * b[2]];
 
+  /* body -> world into `out` (the same sums as toWorld; for per-frame loops that should
+   * not allocate). Returns out. */
+  const toWorldTo = (m, b, out) => {
+    out[0] = m[0][0] * b[0] + m[1][0] * b[1] + m[2][0] * b[2];
+    out[1] = m[0][1] * b[0] + m[1][1] * b[1] + m[2][1] * b[2];
+    out[2] = m[0][2] * b[0] + m[1][2] * b[1] + m[2][2] * b[2];
+    return out;
+  };
+
   /* world -> body (the inverse of a rotation is its transpose) */
   const toBody = (m, w) => [dot(w, m[0]), dot(w, m[1]), dot(w, m[2])];
 
-  P3.math = { sub, dot, cross, norm, mid, pchip, rotate, basis, toWorld, toBody };
+  P3.math = { sub, dot, cross, norm, mid, pchip, rotate, basis, toWorld, toWorldTo, toBody };
 })(window.Plane3D = window.Plane3D || {});

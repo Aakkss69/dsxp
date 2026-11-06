@@ -10,9 +10,12 @@
  *              mailbox (latest report wins), so a congested Bluetooth link never
  *              stalls input decoding.
  *   dsxp.io    serial queue: settings writes and command-catalog loads.
- *   dsxp.cal   serial queue: reads the controller's motion calibration (feature
+ *   dsxp.cal   serial queue: reads the controller's factory calibration (feature
  *              report 0x05) once per connection. Its own queue, because a Bluetooth
  *              read can block for seconds and must delay neither saves nor quit.
+ *              The read and dsxp-out's writes take turns (w_busy / cal_reading under
+ *              w_lock): IOKit documents no thread safety for two transfers to one
+ *              device at once, so they are never in flight together.
  * Other threads talk to the core only through the command queue (in) and the
  * published snapshot (out). No lock is ever held across I/O.
  */
@@ -88,6 +91,8 @@ typedef struct {
     pthread_cond_t  w_cv;
     unsigned char w_rep[OUT_REPORT_LEN];
     bool w_pending, w_stop, w_done, sync_out;
+    bool w_busy;                /* dsxp-out is inside IOHIDDeviceSetReport              */
+    bool cal_reading;           /* dsxp.cal is inside IOHIDDeviceGetReport: writes wait  */
     IOHIDDeviceRef w_dev;
 
     dispatch_queue_t io;
@@ -97,7 +102,7 @@ typedef struct {
     atomic_int want_suspend;    /* -1 none, 0 resume, 1 suspend (F21) */
     atomic_uint cmds_gen;       /* bumped on every catalog load (F17) */
 
-    /* motion calibration: read on dsxp.cal, handed to the core thread */
+    /* factory calibration (report 0x05): read on dsxp.cal, handed to the core thread */
     dispatch_queue_t cal_q;
     atomic_uint dev_gen;        /* +1 per Bluetooth connect and disconnect; never reset,
                                    so a read still running from an earlier connection (or
@@ -195,7 +200,9 @@ static void *writer_main(void *arg) {
     pthread_setname_np("dsxp-out");
     for (;;) {
         pthread_mutex_lock(&R.w_lock);
-        while (!R.w_pending && !R.w_stop) pthread_cond_wait(&R.w_cv, &R.w_lock);
+        /* wait for a report, and while the calibration read runs (at quit the last
+         * report, the quiet one, goes out regardless: stopping the motors matters more) */
+        while ((!R.w_pending || R.cal_reading) && !R.w_stop) pthread_cond_wait(&R.w_cv, &R.w_lock);
         if (!R.w_pending) {                 /* stop requested, nothing left to send */
             R.w_done = true;
             pthread_cond_broadcast(&R.w_cv);
@@ -207,10 +214,15 @@ static void *writer_main(void *arg) {
         R.w_pending = false;
         IOHIDDeviceRef d = R.w_dev;
         if (d) CFRetain(d);
+        R.w_busy = d != NULL;                   /* a calibration read waits for this one */
         pthread_mutex_unlock(&R.w_lock);
         if (d) {
             IOHIDDeviceSetReport(d, kIOHIDReportTypeOutput, BT_REPORT_ID, rep, sizeof rep);
             CFRelease(d);
+            pthread_mutex_lock(&R.w_lock);
+            R.w_busy = false;
+            pthread_cond_broadcast(&R.w_cv);    /* wake a waiting calibration read       */
+            pthread_mutex_unlock(&R.w_lock);
         }
     }
     return NULL;
@@ -241,7 +253,7 @@ static void set_writer_device(IOHIDDeviceRef dev) {
     pthread_mutex_unlock(&R.w_lock);
 }
 
-/* ------------------------------------------------------- motion calibration */
+/* ------------------------------------------------ factory calibration (0x05) */
 
 /* Hand a calibration result to the core thread (any thread). The latest result wins;
  * its generation says which connection it belongs to. */
@@ -267,11 +279,11 @@ bool runtime_cal_drain(core_t *c) {
     int ior = R.cal_slot.ior;
     pthread_mutex_unlock(&R.cal_lock);
     if (gen != atomic_load(&R.dev_gen)) {
-        dsxp_log("motion calibration: result for an earlier connection dropped");
+        dsxp_log("factory calibration: result for an earlier connection dropped");
         return false;
     }
     if (ior != kIOReturnSuccess)
-        dsxp_log("motion calibration: report 0x%02X not read (IOReturn 0x%08x)",
+        dsxp_log("factory calibration: report 0x%02X not read (IOReturn 0x%08x)",
                  MOTION_CAL_REPORT_ID, (unsigned)ior);
     core_set_motion_cal(c, &cal, res);           /* logs the outcome                       */
     return true;
@@ -293,8 +305,16 @@ static void cal_job_run(void *arg) {
         if (attempt) usleep(200 * 1000);         /* a short pause before trying again      */
         unsigned char buf[64] = { MOTION_CAL_REPORT_ID };   /* report ID in byte 0       */
         CFIndex len = sizeof buf;
+        pthread_mutex_lock(&R.w_lock);           /* take turns with dsxp-out's writes:     */
+        R.cal_reading = true;                    /*   no new write starts from here on,   */
+        while (R.w_busy) pthread_cond_wait(&R.w_cv, &R.w_lock);   /* one in flight ends  */
+        pthread_mutex_unlock(&R.w_lock);
         ior = IOHIDDeviceGetReport(j->dev, kIOHIDReportTypeFeature, MOTION_CAL_REPORT_ID,
                                    buf, &len);   /* blocking: why this runs off the core   */
+        pthread_mutex_lock(&R.w_lock);
+        R.cal_reading = false;                   /* writes may go again: the latest report */
+        pthread_cond_broadcast(&R.w_cv);         /*   waiting in the mailbox goes out now  */
+        pthread_mutex_unlock(&R.w_lock);
         if (ior != kIOReturnSuccess) continue;
         res = motion_cal_parse(buf, (long)len, &cal);   /* nominal scales on failure       */
         if (res == MCAL_OK) break;
@@ -432,7 +452,7 @@ static dsxp_access_t check_access(void) {
 
 static void publish(core_t *c, double now) {
     static dsxp_snap_t snap;              /* core thread only; too big for the stack */
-    core_snapshot(c, &snap);
+    core_snapshot(c, now, &snap);
 
     dsxp_status_t st;
     memset(&st, 0, sizeof st);
@@ -763,6 +783,8 @@ int dsxp_start(const dsxp_config_t *cfg) {
     R.status_sig[0] = 0;
     R.bt_dev = NULL;
     R.w_pending = R.w_stop = R.w_done = R.sync_out = false;
+    R.w_busy = false;               /* cal_reading is not reset: a read from an earlier
+                                       start may still run, and clears it itself         */
     atomic_store(&R.want_suspend, -1);
     R.w_dev = NULL;
     R.imported = false;

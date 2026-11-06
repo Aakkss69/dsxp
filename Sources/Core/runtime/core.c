@@ -6,7 +6,7 @@
  * clock and capture every packet.
  */
 #include "core_internal.h"
-#include <math.h>            /* round, ceil */
+#include <math.h>            /* round */
 #include <stdio.h>
 #include <stdlib.h>          /* abs */
 #include <string.h>
@@ -40,9 +40,19 @@ void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
 
 void out_mark(core_t *c) { c->out_dirty = true; }
 
-/* True while the calibration routine runs: motion flies nothing then (xplane.c). */
+/* True while the calibration routine runs. Meanwhile the sticks fly every axis, motion's
+ * included (xplane.c xp_push), and DSXP's own vibration is silenced (out_send), because
+ * the routine measures the gyro at rest. */
 bool core_calibrating(const core_t *c) {
     return c->calib.step != CALIB_IDLE && c->calib.step != CALIB_DONE;
+}
+
+/* True while DSXP makes the controller vibrate: rumble motors, or a trigger in Vibrate.
+ * Never during the calibration, which silences both. */
+static bool vibrating(const core_t *c) {
+    return !core_calibrating(c) &&
+           (c->rumble.left || c->rumble.right ||
+            c->fx_out[0].mode == TFX_VIBRATE || c->fx_out[1].mode == TFX_VIBRATE);
 }
 
 /* Put the calibrated level and gyro drift from the settings into the fusion, and
@@ -66,15 +76,19 @@ static void out_send(core_t *c) {
     if (!c->sinks.out_report) return;
     out_frame_t f;
     memset(&f, 0, sizeof f);
-    f.rumble_l = c->rumble.left;
-    f.rumble_r = c->rumble.right;
+    bool hush = core_calibrating(c);             /* the calibration measures the gyro at rest */
+    f.rumble_l = hush ? 0 : c->rumble.left;
+    f.rumble_r = hush ? 0 : c->rumble.right;
     f.rumble_v2 = c->s.rumble_v2;
     f.light_on = c->s.light.on;
-    /* a DSXP command just acted: all five lamps for a moment (dark if the light is off) */
+    /* a DSXP command just acted: all five lamps for a moment, even with the light off
+     * (the only confirmation the user gets while looking at X-Plane) */
     f.player = c->lamp_blinking ? 0x1F : c->s.light.player;
+    f.player_force = c->lamp_blinking;
     f.r = c->eff_r; f.g = c->eff_g; f.b = c->eff_b;
-    f.fx[0] = c->fx_out[0];
-    f.fx[1] = c->fx_out[1];
+    for (int i = 0; i < 2; i++)                  /* resistance stays; only Vibrate is held off */
+        f.fx[i] = hush && c->fx_out[i].mode == TFX_VIBRATE ? (trigger_fx_t){ TFX_OFF, 0, 0, 0 }
+                                                          : c->fx_out[i];
     unsigned char rep[OUT_REPORT_LEN];
     out_build_report(&f, c->out_seq++, rep);
     c->sinks.out_report(c->sinks.ctx, rep);
@@ -121,10 +135,9 @@ static void motion_feed(core_t *c, double now) {
     motion_sample_t smp;
     motion_cal_apply(&c->motion_cal, c->state.gyro_raw, c->state.acc_raw,
                      c->state.sensor_ts, &smp);             /* counts -> deg/s and g      */
-    /* DSXP's own vibration shakes the gyro: pause bias learning while it runs */
-    bool quiet = c->rumble.left || c->rumble.right ||
-                 c->fx_out[0].mode == TFX_VIBRATE || c->fx_out[1].mode == TFX_VIBRATE;
-    motion_update(&c->motion, &smp, &c->s.motion, quiet);
+    /* DSXP's own vibration shakes the gyro: pause bias learning while it runs (the
+     * calibration's FLAT and LEVEL steps wait out the same pause) */
+    motion_update(&c->motion, &smp, &c->s.motion, vibrating(c));
     if (!core_calibrating(c)) return;
     /* a reading at the end of the 16-bit range is clipped (a hard shake reaches the
      * accelerometer's 4 g; measured raw 32765) */
@@ -164,8 +177,8 @@ void core_set_motion_cal(core_t *c, const motion_cal_t *cal, mcal_result_t r) {
     c->motion_cal = *cal;
     c->motion_cal_src = (r == MCAL_OK && cal->factory_axes == 6) ? MOTION_CAL_FACTORY
                                                                   : MOTION_CAL_NOMINAL;
-    dsxp_log("motion calibration: %s (%d of 6 axes from the controller)",
-             motion_cal_result_name(r), r == MCAL_OK ? cal->factory_axes : 0);
+    dsxp_log("factory calibration (report 0x%02X): %s (%d of 6 axes from the controller)",
+             MOTION_CAL_REPORT_ID, motion_cal_result_name(r), r == MCAL_OK ? cal->factory_axes : 0);
     /* Not calibrated yet: start the gyro drift at the factory's resting offset (close to
      * the measured drift on the controller tested) rather than at zero. */
     if (!c->s.motion.calibrated && !c->motion.bias_learned)
@@ -185,19 +198,29 @@ static void blend_owned(core_t *c, double now) {
 }
 
 /* The calibration reached its last step: its results become the settings (saved to
- * controls.conf), the fusion already uses them, and motion may now be switched on. */
+ * controls.conf), the fusion already uses them, and motion may now be switched on. Each
+ * value is rounded the way controls.conf writes it, so reading the file back later gives
+ * exactly what is in use and is not taken for an edit (motion_edges). */
 void core_calib_finish(core_t *c, double now) {
     motion_cfg_t *m = &c->s.motion;
-    const calib_t *k = &c->calib;
-    memcpy(m->gyro_bias_dps, k->bias, sizeof m->gyro_bias_dps);
-    m->level_bank_deg = round(k->level_bank * 10) / 10;       /* as controls.conf writes it */
+    calib_t *k = &c->calib;
+    for (int i = 0; i < 3; i++)                                /* 3 decimals in the file     */
+        m->gyro_bias_dps[i] = round(k->bias[i] * 1000) / 1000;
+    m->level_bank_deg = round(k->level_bank * 10) / 10;       /* 1 decimal in the file      */
     m->level_pitch_deg = round(k->level_pitch * 10) / 10;
-    for (int i = 0; i < MOTION_AXES; i++) m->full_deg[i] = k->full[i];
+    for (int i = 0; i < MOTION_AXES; i++) {
+        m->full_deg[i] = k->full[i];                           /* whole degrees already      */
+        motion_full_fix(m, i);                                 /* past its deadzone, as every
+                                                                  writer of full_deg         */
+        k->full[i] = m->full_deg[i];                           /* the sheet shows what saved */
+    }
     m->calibrated = true;
     apply_saved_calibration(c);                                /* level exactly as saved     */
     blend_owned(c, now);                                       /* motion flies again: fade in */
     core_mark_dirty(c, now, CFB_CONTROLS);
     lamp_blink(c, now);
+    out_mark(c);                                               /* vibration may resume       */
+    if (k->warning[0]) dsxp_log("motion calibration: %s", k->warning);
     dsxp_log("motion calibration done: drift %+.3f %+.3f %+.3f deg/s, gravity %.3f g, level bank %.1f pitch %.1f, "
              "full roll %.0f pitch %.0f yaw %.0f deg", k->bias[0], k->bias[1], k->bias[2], k->acc_g,
              m->level_bank_deg, m->level_pitch_deg, m->full_deg[MOTION_ROLL], m->full_deg[MOTION_PITCH],
@@ -209,8 +232,9 @@ void core_calib_finish(core_t *c, double now) {
 static void calibrate_cmd(core_t *c, int action, double now) {
     if (action == CALIB_ACTION_START) {
         calib_start(&c->calib);
-        blend_owned(c, now);                                   /* the controls fade to neutral */
+        blend_owned(c, now);                                   /* motion's axes fade to the sticks */
         c->motion_hold = false;
+        out_mark(c);                                           /* silence DSXP's vibration now */
         dsxp_log("motion calibration started");
     } else if (action == CALIB_ACTION_CLOSE && (c->s.motion.calibrated || c->calib.step == CALIB_DONE)) {
         bool was_running = core_calibrating(c);
@@ -218,6 +242,7 @@ static void calibrate_cmd(core_t *c, int action, double now) {
         if (was_running) {                                     /* abandoned: back to the saved */
             apply_saved_calibration(c);
             blend_owned(c, now);
+            out_mark(c);                                       /* vibration may resume        */
             dsxp_log("motion calibration cancelled; the previous calibration stays");
         }
     }
@@ -350,13 +375,14 @@ static void apply_light(light_t *L, const light_t *v, unsigned m) {
     if (m & LF_SOURCE) L->source = v->source == LIGHT_SRC_SIM ? LIGHT_SRC_SIM : LIGHT_SRC_MANUAL;
 }
 
-/* CMD_MOTION: copy the fields the mapper sent, clamped to the ranges controls.conf
- * documents (the same MOTION_*_FULL_* constants as the schema), then keep each
- * full-deflection angle past its deadzone the way config_validate does. Saved. */
+/* CMD_MOTION: copy the fields the mapper sent, each full-deflection angle held inside its
+ * documented range and past its deadzone (settings.c motion_full_range / motion_full_fix,
+ * the rules config_validate applies too). Saved only when something changed. Logged when
+ * the switch, an axis's source or an invert changed: the slider sends many full-deflection
+ * values per second while dragged, and those are saved quietly, as the other tuning. */
 static void apply_motion(core_t *c, const motion_cmd_t *v, double now) {
-    static const double FULL_MIN[MOTION_AXES] = { MOTION_ROLL_FULL_MIN, MOTION_PITCH_FULL_MIN, MOTION_YAW_FULL_MIN };
-    static const double FULL_MAX[MOTION_AXES] = { MOTION_ROLL_FULL_MAX, MOTION_PITCH_FULL_MAX, MOTION_YAW_FULL_MAX };
     motion_cfg_t *m = &c->s.motion;
+    const motion_cfg_t was = *m;                                  /* to tell what changed */
     if (v->has_enabled) {
         m->enabled = v->enabled && m->calibrated;     /* not before the calibration has run */
         if (v->enabled && !m->calibrated) dsxp_log("motion: not switched on - calibrate first");
@@ -365,17 +391,25 @@ static void apply_motion(core_t *c, const motion_cmd_t *v, double now) {
         unsigned bit = 1u << i;                                   /* this axis' bit       */
         if (v->use_mask & bit) m->use[i] = v->use[i];
         if (v->inv_mask & bit) m->invert[i] = v->inv[i];
-        if (v->full_mask & bit)                                       /* the documented range */
-            m->full_deg[i] = clampd(round(v->full[i]), FULL_MIN[i], FULL_MAX[i], m->full_deg[i]);
-        double dz = i == MOTION_YAW ? m->yaw_deadzone_deg : m->deadzone_deg;
-        if (m->full_deg[i] < dz + 1.0) m->full_deg[i] = ceil(dz + 1.0);  /* as config_validate */
+        if (v->full_mask & bit) {                                 /* the documented range */
+            double lo, hi;
+            motion_full_range(i, &lo, &hi);
+            m->full_deg[i] = clampd(round(v->full[i]), lo, hi, m->full_deg[i]);
+        }
+        motion_full_fix(m, i);                                    /* past its deadzone    */
     }
+    bool switched = m->enabled != was.enabled, tuned = false;    /* field by field: the  */
+    for (int i = 0; i < MOTION_AXES; i++) {                       /* struct has padding   */
+        if (m->use[i] != was.use[i] || m->invert[i] != was.invert[i]) switched = true;
+        if (m->full_deg[i] != was.full_deg[i]) tuned = true;
+    }
+    if (!switched && !tuned) return;                              /* nothing to save      */
     core_mark_dirty(c, now, CFB_CONTROLS);
-    dsxp_log("motion: %s; roll %s %.0f deg, pitch %s %.0f deg, yaw %s %.0f deg",
-             m->enabled ? "on" : "off",
-             m->use[MOTION_ROLL] ? "motion" : "sticks", m->full_deg[MOTION_ROLL],
-             m->use[MOTION_PITCH] ? "motion" : "sticks", m->full_deg[MOTION_PITCH],
-             m->use[MOTION_YAW] ? "motion" : "sticks", m->full_deg[MOTION_YAW]);
+    if (switched)
+        dsxp_log("motion: %s; roll %s%s, pitch %s%s, yaw %s%s", m->enabled ? "on" : "off",
+                 m->use[MOTION_ROLL] ? "motion" : "sticks", m->invert[MOTION_ROLL] ? " (inverted)" : "",
+                 m->use[MOTION_PITCH] ? "motion" : "sticks", m->invert[MOTION_PITCH] ? " (inverted)" : "",
+                 m->use[MOTION_YAW] ? "motion" : "sticks", m->invert[MOTION_YAW] ? " (inverted)" : "");
 }
 
 /* System sleep: hand X-Plane its controls back and quiet the controller. */
@@ -558,11 +592,17 @@ static void dsxp_buttons(core_t *c, double now) {
     }
 }
 
+/* Three values equal (values, not bytes: -0.0 equals 0.0, which memcmp would miss). */
+static bool same3(const double a[3], const double b[3]) {
+    return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
+}
+
 /*
  * React to motion settings changing, however they changed (mapper, bound button, or an
  * edit of controls.conf, which replaces the settings wholesale - hence edges against
  * last tick's copy rather than hooks in each setter):
- *   the saved calibration changed (level, drift, or calibrated) -> applied to the fusion
+ *   the saved calibration changed (level, drift, or calibrated) -> applied to the fusion,
+ *     faded in from what X-Plane was sent (a new level moves every angle at once)
  *   switched on   -> the calibrated level again (dropping any Recenter), lamps blink
  *   switched off  -> the lamps blink
  *   an axis changes hands (motion <-> sticks) -> 0.3 s crossfade from the value sent
@@ -571,9 +611,10 @@ static void motion_edges(core_t *c, double now) {
     const motion_cfg_t *m = &c->s.motion;
     if (!core_calibrating(c) &&
         (m->calibrated != c->applied_calibrated || m->level_bank_deg != c->applied_level[0] ||
-         m->level_pitch_deg != c->applied_level[1] ||
-         memcmp(m->gyro_bias_dps, c->applied_bias, sizeof c->applied_bias) != 0))
+         m->level_pitch_deg != c->applied_level[1] || !same3(m->gyro_bias_dps, c->applied_bias))) {
         apply_saved_calibration(c);
+        blend_owned(c, now);
+    }
     if (m->enabled != c->motion_was_enabled) {
         if (m->enabled && m->calibrated)                /* level = the calibrated one     */
             motion_set_level(&c->motion, m->level_bank_deg, m->level_pitch_deg);
@@ -614,7 +655,7 @@ void core_tick(core_t *c, double now) {
 
 }
 
-void core_snapshot(const core_t *c, dsxp_snap_t *o) {
+void core_snapshot(const core_t *c, double now, dsxp_snap_t *o) {
     memset(o, 0, sizeof *o);
     o->connected = c->have_report;
     o->reports = c->reports_window;
@@ -652,7 +693,7 @@ void core_snapshot(const core_t *c, dsxp_snap_t *o) {
     o->motion_angle[MOTION_YAW]   = c->motion.yaw_deg;
     memcpy(o->motion_out, c->motion_hold ? c->motion_frozen : c->motion.out, sizeof o->motion_out);
     o->motion_cal_src = c->motion_cal_src;
-    o->motion_seeded = c->motion.seeded && c->have_report;   /* data is flowing          */
+    o->motion_seeded = c->motion.seeded && core_input_live(c, now);   /* data is flowing  */
     o->motion_out_of_range = c->motion.out_of_range;
     o->motion_bias_learned = c->motion.bias_learned;
     o->motion_hold = c->motion_hold;

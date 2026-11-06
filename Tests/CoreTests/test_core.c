@@ -682,6 +682,13 @@ static void motion_control(void) {
     CHECK_NEAR(C.s.motion.full_deg[MOTION_YAW], 5, 1e-12);       /* 4.4 -> 4 -> range min 5; deadzone 4 + 1 */
     CHECK(C.s.motion.use[MOTION_YAW] && C.s.motion.invert[MOTION_PITCH]);
     CHECK(C.s.motion.use[MOTION_ROLL]);                          /* not in the mask: kept   */
+    C.cfg_dirty_mask = 0;                                        /* the same values again:  */
+    core_apply_cmd(&C, &mc, 2.1);                                /*   nothing to save       */
+    CHECK_INT(C.cfg_dirty_mask, 0);
+    mc.u.motion.full[MOTION_ROLL] = 60;                          /* a slider moved: saved   */
+    core_apply_cmd(&C, &mc, 2.2);
+    CHECK(C.cfg_dirty_mask & CFB_CONTROLS);
+    CHECK_NEAR(C.s.motion.full_deg[MOTION_ROLL], 60, 1e-12);
 
     /* switching on (here through a config edit) restores the calibrated level, dropping
      * any Recenter: held at 15 deg with level saved at 10 deg reads 5 deg */
@@ -721,20 +728,35 @@ static void motion_control(void) {
     core_set_motion_cal(&C, &cal, MCAL_BAD_CRC);
     CHECK_INT(C.motion_cal_src, MOTION_CAL_NOMINAL);
 
-    /* calibration through the core: while it runs motion flies nothing (faded out), the
-     * DSXP buttons do nothing, and finishing saves the results and lets motion fly again */
+    /* calibration through the core: while it runs the sticks fly motion's axes too (faded
+     * over), DSXP's own vibration is silenced, the DSXP buttons do nothing, and finishing
+     * saves the results and lets motion fly again */
     motion_fresh(false, 20);
+    core_on_device(&C, true, true);                       /* output reports can go out      */
+    C.s.rumble_source = RUMBLE_SRC_MANUAL;
+    C.rumble.left = 200;                                  /* buzzing, and L2 in Vibrate      */
+    C.s.fx_manual[0] = (trig_manual_t){ TFX_VIBRATE, 2, 30, 200, 40 };
     feed_m(&C, 128, 0, 0, 0x08, 0, 20, 1.02);
     core_tick(&C, 1.02);
     CHECK(C.sent[MOTION_ROLL] > 0.4);
+    CHECK_INT(OUTLAST[6], 200);                           /* rumble left (OFF_RUMBLE_L)      */
+    CHECK_INT(C.fx_out[0].mode, TFX_VIBRATE);
     cmd_t cal_cmd = { .kind = CMD_CALIBRATE, .key = CALIB_ACTION_START };
     core_apply_cmd(&C, &cal_cmd, 1.05);
     CHECK(core_calibrating(&C));
-    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 1.5);
+    feed_m(&C, 255, 0, 0, 0x08, 0, 20, 1.5);              /* full right stick on roll        */
     core_tick(&C, 1.5);
-    CHECK_NEAR(C.sent[MOTION_ROLL], 0, 1e-9);
-    C.calib.bias[1] = -0.8; C.calib.level_bank = 20.04; C.calib.level_pitch = 6.36;
-    C.calib.full[MOTION_ROLL] = 33; C.calib.full[MOTION_PITCH] = 21; C.calib.full[MOTION_YAW] = 28;
+    CHECK_NEAR(C.sent[MOTION_ROLL], 1.0, 1e-6);           /* the stick flies roll now        */
+    CHECK_INT(OUTLAST[6], 0);                             /* the rumble is silenced          */
+    unsigned char off[11];
+    put_effect(off, &(trigger_fx_t){ TFX_OFF, 0, 0, 0 });
+    CHECK(memcmp(OUTLAST + 24, off, sizeof off) == 0);    /* L2 (OFF_TRIG_L) not vibrating   */
+    C.calib.bias[0] = -0.6573;                            /* rounded to the file's 3 places: */
+    C.calib.bias[1] = -0.8004;                            /*   -0.657, -0.800, and -0.000    */
+    C.calib.bias[2] = -0.0004;
+    C.calib.level_bank = 20.04; C.calib.level_pitch = 6.36;
+    C.calib.full[MOTION_ROLL] = 33; C.calib.full[MOTION_PITCH] = 21; C.calib.full[MOTION_YAW] = 10;
+    C.s.motion.yaw_deadzone_deg = 12;                     /* deadzone past the reach         */
     C.calib.step = CALIB_DONE;
     C.cfg_dirty_mask = 0;
     core_calib_finish(&C, 1.6);
@@ -743,12 +765,54 @@ static void motion_control(void) {
     CHECK_NEAR(C.s.motion.level_bank_deg, 20.0, 1e-12);          /* rounded as the file writes */
     CHECK_NEAR(C.s.motion.level_pitch_deg, 6.4, 1e-12);
     CHECK_NEAR(C.s.motion.full_deg[MOTION_PITCH], 21, 1e-12);
+    CHECK_NEAR(C.s.motion.full_deg[MOTION_YAW], 13, 1e-12);      /* 12 + 1, like config_validate */
+    CHECK_NEAR(C.calib.full[MOTION_YAW], 13, 1e-12);             /* and the sheet shows that    */
+    CHECK(C.s.motion.gyro_bias_dps[0] == -0.657);                /* exactly the file's value    */
     CHECK_NEAR(C.s.motion.gyro_bias_dps[1], -0.8, 1e-12);
     CHECK_NEAR(C.motion.bias[1], -0.8, 1e-12);
     feed_m(&C, 128, 0, 0, 0x08, 0, 20, 2.0);
     feed_m(&C, 128, 0, 0, 0x08, 0, 20, 2.0);
     core_tick(&C, 2.0);
     CHECK_NEAR(C.motion.bank_deg, 0, 0.1);                       /* held at the new level */
+    CHECK_INT(OUTLAST[6], 200);                                  /* vibration back        */
+
+    /* controls.conf written and read back unchanged is not an edit: the held twist and the
+     * learned drift stay (each saved value is exactly what the file holds, -0.000 too) */
+    static config_t disk;
+    static char text[64 * 1024];
+    static conf_warns_t warns;
+    core_get_config(&C, &disk);
+    size_t len = conf_format(CF_CONTROLS, &disk, text, sizeof text);
+    CHECK(len > 0 && len < sizeof text);
+    config_defaults(&disk);
+    CHECK(conf_parse(CF_CONTROLS, text, len, &disk, &warns));
+    CHECK(disk.s.motion.gyro_bias_dps[0] == C.s.motion.gyro_bias_dps[0]);
+    C.motion.yaw_deg = 7;                                        /* a held twist          */
+    C.motion.bias[2] = 0.25;                                     /* refined since         */
+    core_apply_config(&C, &disk, CFB_CONTROLS, 2.05);
+    core_tick(&C, 2.05);
+    CHECK_NEAR(C.motion.yaw_deg, 7, 1e-12);
+    CHECK_NEAR(C.motion.bias[2], 0.25, 1e-12);
+    /* ... while an edited level is applied, faded in rather than jumping */
+    double before = C.sent[MOTION_ROLL];
+    disk.s.motion.level_bank_deg = 30;                           /* held at 20: now -10    */
+    core_apply_config(&C, &disk, CFB_CONTROLS, 2.1);
+    core_tick(&C, 2.1);                                          /* applied, fade started  */
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 2.11);
+    core_tick(&C, 2.11);
+    CHECK_NEAR(C.motion.bank_deg, -10, 0.1);
+    CHECK(fabs(C.sent[MOTION_ROLL] - before) < 0.01);            /* eased, not a step      */
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 2.5);
+    core_tick(&C, 2.5);
+    CHECK_NEAR(C.sent[MOTION_ROLL], shape(-10.0 / 33.0, 2.0 / 33.0, 1.0), 1e-3);
+
+    /* the confirmation flash shows on the player lamps even with the light switched off */
+    C.s.light.on = false;
+    core_motion_recenter(&C, 2.6);
+    core_tick(&C, 2.6);
+    CHECK(C.lamp_blinking);
+    CHECK_INT(OUTLAST[46], 0x1F);                                /* OFF_PLAYER: all five   */
+    CHECK_INT(OUTLAST[47], 0);                                   /* OFF_RED: the bar dark  */
     /* close is refused before the first calibration, and abandoning a re-run restores */
     motion_fresh(false, 0);
     C.s.motion.calibrated = false;
@@ -780,8 +844,10 @@ static void motion_control(void) {
     motion_fresh(false, 20);
     feed_m(&C, 128, 0, 0, 0x08, 0, 20, 1.02);
     core_tick(&C, 1.02);
-    core_snapshot(&C, &snap);
+    core_snapshot(&C, 1.02, &snap);
     CHECK(snap.motion.enabled && snap.motion_seeded && snap.sent_valid);
+    core_snapshot(&C, 1.02 + 5.0, &snap);                  /* reports stopped, no removal */
+    CHECK(!snap.motion_seeded);
     CHECK_NEAR(snap.motion_angle[MOTION_ROLL], 20, 0.01);
     CHECK_NEAR(snap.motion_out[MOTION_ROLL], want, 1e-4);
     CHECK_NEAR(snap.sent[MOTION_ROLL], want, 1e-4);

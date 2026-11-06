@@ -393,6 +393,31 @@ bool cmd_is_dsxp(const char *cmd);                   /* starts with DSXP_CMD_PRE
 
 /* ------------------------------------------------------- pure modules */
 
+/* Little-endian fields, the byte order of every DualSense report: input 0x31 (decode.c),
+ * feature 0x05 (motion_cal.c) and the CRC at the end of output 0x31 (output.c). */
+
+/* Signed 16-bit value at p (portable: no cast of an out-of-range unsigned value to a
+ * signed type, which C leaves implementation-defined). */
+static inline int16_t le16s(const unsigned char *p) {
+    int v = p[0] | (p[1] << 8);              /* 0..65535: low byte first, then high byte   */
+    if (v >= 32768) v -= 65536;              /* upper half of the range is negative        */
+    return (int16_t)v;                       /* now in -32768..32767, so the cast is exact */
+}
+
+/* Unsigned 32-bit value at p. */
+static inline uint32_t le32u(const unsigned char *p) {
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 |       /* bytes 0 and 1: the low half  */
+           (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;  /* bytes 2 and 3: the high half */
+}
+
+/* Store v at p as an unsigned 32-bit value, low byte first. */
+static inline void put_le32(unsigned char *p, uint32_t v) {
+    p[0] = (unsigned char)(v & 0xFF);                     /* low byte first               */
+    p[1] = (unsigned char)((v >> 8) & 0xFF);
+    p[2] = (unsigned char)((v >> 16) & 0xFF);
+    p[3] = (unsigned char)((v >> 24) & 0xFF);             /* high byte last               */
+}
+
 /* decode.c */
 double shape(double v, double deadzone, double curve);
 void   decode_touch(ds_state_t *st, const unsigned char *r);
@@ -410,6 +435,8 @@ typedef struct {
     unsigned char rumble_l, rumble_r;
     bool          rumble_v2;
     bool          light_on;
+    bool          player_force;   /* show the player lamps even with light_on false (the
+                                     confirmation flash of a DSXP command, core.c)       */
     unsigned char player, r, g, b;
     trigger_fx_t  fx[2];          /* [0] = L2, [1] = R2 */
 } out_frame_t;
@@ -448,6 +475,11 @@ bool   cmd_valid(const char *cmd);
 double clampd(double v, double lo, double hi, double dflt);
 int    clampi(long v, int lo, int hi);
 bool   bindings_parse(settings_t *s, const char *text, size_t len);
+
+/* settings.c - the one rule for a motion axis's full-deflection angle, shared by every
+ * writer of motion.full_deg (config_validate, the mapper's CMD_MOTION, the calibration) */
+void   motion_full_range(int axis, double *lo, double *hi);   /* MOTION_*_FULL_MIN / MAX  */
+bool   motion_full_fix(motion_cfg_t *m, int axis);            /* true if it had to change */
 
 /* commands.c */
 int    commands_parse(const char *text, size_t len, xcmd_t **out);
@@ -490,7 +522,7 @@ bool core_gate_due(const core_t *c, double now, double last_gate);
 void core_apply_cmd(core_t *c, const cmd_t *cmd, double now);
 void core_set_suspended(core_t *c, bool suspended, double now);
 void core_tick(core_t *c, double now);
-void core_snapshot(const core_t *c, dsxp_snap_t *out);
+void core_snapshot(const core_t *c, double now, dsxp_snap_t *out);
 void core_mark_dirty(core_t *c, double now, unsigned files);
 unsigned core_save_due(core_t *c, double now);      /* CFB_* mask due for saving, cleared */
 void core_set_trigger_source(core_t *c, int mode, double now);

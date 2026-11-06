@@ -70,15 +70,18 @@ static void print_motion(void) {
     dsxp_api("GET", "/api/state", "", &r);
     const char *m = r.body ? strstr(r.body, "\"motion\":{") : NULL;
     if (!m) { printf("  Motion: no data\n"); dsxp_response_free(&r); return; }
-    char cal[16] = "?";
-    const char *c = strstr(m, "\"cal\":\"");
-    if (c) sscanf(c + 7, "%15[^\"]", cal);
+    char scales[16] = "?";                       /* factory calibration, or nominal */
+    const char *c = strstr(m, "\"scales\":\"");
+    if (c) sscanf(c + 10, "%15[^\"]", scales);
+    double calibrated = 0;                       /* the user's calibration routine  */
+    json_num(m, "calibrated", &calibrated);
     double live = 0, oor = 0, bias = 0;
     json_num(m, "live", &live);
     json_num(m, "out_of_range", &oor);
     json_num(m, "bias_learned", &bias);
-    printf("  Motion   calibration %s, gyro bias %s%s%s\n", cal, bias ? "learned" : "learning",
-           live ? "" : ", no data", oor ? ", OUT OF RANGE (held neutral)" : "");
+    printf("  Motion   sensor scales %s, %s, gyro bias %s%s%s\n", scales,
+           calibrated ? "calibrated" : "NOT CALIBRATED (Motion control > Calibrate in the mapper)",
+           bias ? "learned" : "learning", live ? "" : ", no data", oor ? ", OUT OF RANGE (held neutral)" : "");
     static const char *const NAME[3] = { "Bank (roll)", "Pitch", "Held twist (yaw)" };
     const char *p = strstr(m, "\"axes\":[");
     for (int i = 0; i < 3 && p; i++) {

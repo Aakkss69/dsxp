@@ -29,7 +29,7 @@ for the buttons.
   or toe brakes, with invert, dead zone and response curve.
 - **Motion control**: fly by tilting the controller - bank it to roll, raise or
   lower its top edge to pitch, twist it flat to yaw (hold-to-steer: the twist eases
-  back by itself and never overshoots on the way back). Each axis is flown by motion
+  back by itself, and twisting back afterwards does not overshoot). Each axis is flown by motion
   or the sticks, never both, with its own sensitivity; switching fades over 0.3 s.
   Uses the controller's own factory calibration. The mapper draws the aircraft at
   the attitude DSXP sent to X-Plane. See [Motion control](#motion-control).
@@ -121,9 +121,11 @@ be switched on until that's done (your sticks keep working meanwhile). It takes 
 minute and finishes each step by itself:
 
 1. **Lie flat**: face up on a table, hands off, for 3 seconds. DSXP measures each
-   gyro axis's resting drift and checks that gravity reads 1 g.
-2. **Hold level**: the way you fly, steady, for 2 seconds. That attitude is level from
-   now on.
+   gyro axis's resting drift and checks that gravity reads 1 g (if not, a warning
+   stays on the sheet until the end).
+2. **Hold level**: pick it up (a turn, a tilt or simply your hand's tremor shows it),
+   then hold it the way you fly, steady, for 2 seconds. That attitude is level from
+   now on. Tilted more than 55° toward you leaves no room to pitch, so hold it flatter.
 3. **Bank**, 4. **Pitch**, 5. **Twist**: as far as is comfortable each way, then back.
    Each axis's full deflection becomes 90 % of your smaller side, so full control is
    reachable without straining.
@@ -131,13 +133,16 @@ minute and finishes each step by itself:
 The results are saved in `controls.conf` (`motion.calibrated`, `motion.level.*`,
 `motion.gyro_bias.*` and the full-deflection angles). Run it again any time with
 **Calibrate…** in the Motion control panel; Cancel keeps the previous calibration.
+While it runs, your sticks fly every axis (motion's included) and DSXP pauses its own
+rumble and vibrating triggers, which would shake the gyro.
 Then switch motion control on in the panel (or `motion.enabled = yes`). **Recenter**
 makes the way you hold the controller now level until you switch motion off or restart.
 
 - **Roll**: bank the controller. **Pitch**: raise the top edge (the triggers) to pull,
   lower it to push. **Yaw**: twist the controller about its face, like a steering
   wheel lying flat; the rudder eases back to center over `motion.yaw_return`
-  (4 s by default).
+  (4 s by default). Twist back within about that time and it stops at center;
+  hold a twist much longer and that grip becomes the new center.
 - Tick **Motion** for each axis it should fly. An axis on motion ignores every stick
   set to it (yaw also ignores the rudder triggers); the others work as set under Axes.
 - **Full deflection at** is the angle that gives full control (40° bank, 30° pitch,

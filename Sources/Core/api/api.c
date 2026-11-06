@@ -129,15 +129,18 @@ static void api_init(const api_env_t *env, dsxp_response_t *out) {
 }
 
 /* "motion": the settings, the live angles and outputs, the calibration, and what X-Plane
- * was sent (the mapper's 3D plane draws only that). Axis order: roll, pitch, yaw. */
+ * was sent (the mapper's 3D plane draws only that). Axis order: roll, pitch, yaw.
+ * Two different calibrations appear, named apart: "scales" says where the sensor scales
+ * come from (the controller's factory calibration, report 0x05, or nominal values), while
+ * "calibrated" and "calibration" are the user's routine (motion_calib.c). */
 static void state_motion(jbuf_t *j, const dsxp_snap_t *s) {
-    static const char *const CAL[] = { "none", "nominal", "factory" };   /* motion_cal_source_t */
-    int cal = s->motion_cal_src >= 0 && s->motion_cal_src <= 2 ? s->motion_cal_src : 0;
+    static const char *const SCALES[] = { "none", "nominal", "factory" };   /* motion_cal_source_t */
+    int scales = s->motion_cal_src >= 0 && s->motion_cal_src <= 2 ? s->motion_cal_src : 0;
     const motion_cfg_t *m = &s->motion;
-    jb_printf(j, "\"motion\":{\"enabled\":%d,\"cal\":\"%s\",\"live\":%d,\"out_of_range\":%d,"
+    jb_printf(j, "\"motion\":{\"enabled\":%d,\"scales\":\"%s\",\"live\":%d,\"out_of_range\":%d,"
                  "\"bias_learned\":%d,\"hold\":%d,\"deadzone\":%.1f,\"yaw_deadzone\":%.1f,"
                  "\"yaw_return\":%.1f,\"axes\":[",
-              m->enabled ? 1 : 0, CAL[cal], s->motion_seeded ? 1 : 0, s->motion_out_of_range ? 1 : 0,
+              m->enabled ? 1 : 0, SCALES[scales], s->motion_seeded ? 1 : 0, s->motion_out_of_range ? 1 : 0,
               s->motion_bias_learned ? 1 : 0, s->motion_hold ? 1 : 0,
               m->deadzone_deg, m->yaw_deadzone_deg, m->yaw_return_s);
     for (int i = 0; i < MOTION_AXES; i++)
@@ -154,6 +157,8 @@ static void state_motion(jbuf_t *j, const dsxp_snap_t *s) {
               m->calibrated ? 1 : 0, calib_step_name(k->step), k->hold_s, k->need_s,
               isfinite(k->angle) ? k->angle : 0.0, k->lo, k->hi, k->min_reach, k->reached ? 1 : 0);
     jb_str(j, k->note);
+    jb_printf(j, ",\"warning\":");
+    jb_str(j, k->warning);
     jb_printf(j, ",\"result\":{\"bias\":[%.3f,%.3f,%.3f],\"gravity\":%.3f,\"level\":[%.1f,%.1f],"
                  "\"full\":[%.0f,%.0f,%.0f]}}}",
               k->bias[0], k->bias[1], k->bias[2], k->acc_g, k->level_bank, k->level_pitch,

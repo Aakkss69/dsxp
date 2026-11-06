@@ -57,20 +57,65 @@
     return null;
   }
 
+  /* Per-frame working storage, allocated once. An edge borders at most two cells and
+   * each cell links it to one other edge, so an edge has at most two neighbours. */
+  const NE = NZ * NT * 2;                          /* edge keys                        */
+  const LINK = new Int32Array(NE * 2).fill(-1);    /* neighbours of edge k at 2k, 2k+1 */
+  const SEEN = new Uint8Array(NE);                 /* already in a chain, this frame   */
+  const TOUCHED = new Int32Array(NE);              /* edges linked this frame, in the
+                                                      order first linked               */
+  let touched = 0;
+  const KEYS = new Int32Array(NE + 1);             /* the chain being walked           */
+  const CROSSED = new Int32Array(4);               /* one cell's crossed edges         */
+
+  /* q becomes a neighbour of p (the first free slot). */
+  function addLink(p, q) {
+    if (LINK[2 * p] < 0) { LINK[2 * p] = q; TOUCHED[touched++] = p; }
+    else LINK[2 * p + 1] = q;
+  }
+  const link = (a, b) => { addLink(a, b); addLink(b, a); };
+
+  /* Follow the links from `start` until they run out; the chain's surface points. */
+  function walk(start) {
+    let n = 0;
+    KEYS[n++] = start;
+    SEEN[start] = 1;
+    let prev = -1, cur = start;
+    for (;;) {
+      const l0 = LINK[2 * cur], l1 = LINK[2 * cur + 1];   /* the next unseen neighbour */
+      const next = l0 >= 0 && l0 !== prev && !SEEN[l0] ? l0
+                 : l1 >= 0 && l1 !== prev && !SEEN[l1] ? l1 : -1;
+      if (next < 0) {                              /* end of the chain              */
+        if (n > 2 && (l0 === start || l1 === start)) KEYS[n++] = start;   /* closed     */
+        break;
+      }
+      KEYS[n++] = next;
+      SEEN[next] = 1;
+      prev = cur;
+      cur = next;
+    }
+    const points = new Array(n);
+    for (let i = 0; i < n; i++) points[i] = crossing(KEYS[i]);
+    const a = tipOf(KEYS[0]), b = tipOf(KEYS[n - 1]);
+    if (a) points.unshift(a);                      /* close through the tip         */
+    if (b && n > 1) points.push(b);
+    return points;
+  }
+
   function contour(eye) {
+    /* last frame's links and marks off (only the edges it touched) */
+    for (let i = 0; i < touched; i++) {
+      const k = TOUCHED[i];
+      LINK[2 * k] = LINK[2 * k + 1] = -1;
+      SEEN[k] = 0;
+    }
+    touched = 0;
+
     /* g at every node for this eye position */
     for (let n = 0, o = 0; n < NZ * NT; n++, o += 3)
       G[n] = GN[o] * (GP[o] - eye[0]) + GN[o + 1] * (GP[o + 1] - eye[1]) + GN[o + 2] * (GP[o + 2] - eye[2]);
 
     /* marching squares: each cell links the edges where g changes sign */
-    const adjacent = new Map();
-    const link = (a, b) => {
-      for (const [p, q] of [[a, b], [b, a]]) {
-        let list = adjacent.get(p);
-        if (!list) adjacent.set(p, list = []);
-        list.push(q);
-      }
-    };
     for (let i = 0; i < NZ - 1; i++) {
       for (let j = 0; j < NT; j++) {
         const j1 = (j + 1) % NT;
@@ -79,43 +124,26 @@
         const s0 = g0 > 0, s1 = g1 > 0, s2 = g2 > 0, s3 = g3 > 0;
         if (s0 === s1 && s1 === s2 && s2 === s3) continue;          /* no crossing      */
         const e0 = zEdge(i, j), e1 = tEdge(i + 1, j), e2 = zEdge(i, j1), e3 = tEdge(i, j);
-        const crossed = [];
-        if (s0 !== s1) crossed.push(e0);
-        if (s1 !== s2) crossed.push(e1);
-        if (s2 !== s3) crossed.push(e2);
-        if (s3 !== s0) crossed.push(e3);
-        if (crossed.length === 2) link(crossed[0], crossed[1]);
+        let crossed = 0;
+        if (s0 !== s1) CROSSED[crossed++] = e0;
+        if (s1 !== s2) CROSSED[crossed++] = e1;
+        if (s2 !== s3) CROSSED[crossed++] = e2;
+        if (s3 !== s0) CROSSED[crossed++] = e3;
+        if (crossed === 2) link(CROSSED[0], CROSSED[1]);
         /* a saddle (4 crossings): the cell's mean decides which corners connect */
         else if ((g0 + g1 + g2 + g3 > 0) === s0) { link(e0, e1); link(e2, e3); }
         else { link(e3, e0); link(e1, e2); }
       }
     }
 
-    /* chain the links into polylines: open chains (ending on a tip row) first */
-    const seen = new Set(), chains = [];
-    const walk = start => {
-      const keys = [start];
-      seen.add(start);
-      let prev = -1, cur = start;
-      for (;;) {
-        const next = adjacent.get(cur).find(k => k !== prev && !seen.has(k));
-        if (next === undefined) {                    /* end of the chain              */
-          if (keys.length > 2 && adjacent.get(cur).includes(start)) keys.push(start);   /* closed */
-          break;
-        }
-        keys.push(next);
-        seen.add(next);
-        prev = cur;
-        cur = next;
-      }
-      const points = keys.map(crossing);
-      const a = tipOf(keys[0]), b = tipOf(keys[keys.length - 1]);
-      if (a) points.unshift(a);                      /* close through the tip         */
-      if (b && keys.length > 1) points.push(b);
-      return points;
-    };
-    for (const [k, v] of adjacent) if (v.length === 1 && !seen.has(k)) chains.push(walk(k));
-    for (const k of adjacent.keys()) if (!seen.has(k)) chains.push(walk(k));
+    /* chain the links into polylines: open chains (ending on a tip row) first, then the
+     * closed ones, each started from the edge linked first (the order TOUCHED keeps) */
+    const chains = [];
+    for (let i = 0; i < touched; i++) {
+      const k = TOUCHED[i];
+      if (LINK[2 * k + 1] < 0 && !SEEN[k]) chains.push(walk(k));   /* one neighbour: an end */
+    }
+    for (let i = 0; i < touched; i++) if (!SEEN[TOUCHED[i]]) chains.push(walk(TOUCHED[i]));
     return chains;
   }
 

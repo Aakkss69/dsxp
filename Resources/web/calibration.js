@@ -92,7 +92,8 @@
     const waiting = !m.live && step !== 'done';             /* no motion data at all      */
     setText(byId('cal-instruction'), waiting && !running
       ? 'Connect the DualSense over Bluetooth to begin.' : INSTRUCTION[step] || '');
-    setText(byId('cal-note'), waiting && running ? 'Waiting for the controller.' : k.note || '');
+    /* the step's own hint first; otherwise a warning that holds until the end (gravity) */
+    setText(byId('cal-note'), waiting && running ? 'Waiting for the controller.' : k.note || k.warning || '');
 
     /* the meter: a bar for the timed steps, a gauge for the reaches, the result at the end */
     const meter = byId('cal-meter');
@@ -133,7 +134,7 @@
     byId('cal-cancel').hidden = !(running && m.calibrated);
     setText(byId('cal-foot-note'), step === 'done'
       ? 'Saved in controls.conf. Run it again any time from the Motion control panel.'
-      : m.calibrated ? 'About a minute. Motion control holds the controls still meanwhile; Cancel keeps your previous calibration.'
+      : m.calibrated ? 'About a minute. Your sticks fly meanwhile; Cancel keeps your previous calibration.'
       : 'About a minute. Your sticks keep working meanwhile; motion control can be switched on once this is done.');
 
     /* the aircraft follows the controller: relative to the new level once it is set */

@@ -6,7 +6,7 @@
 static core_t AC;
 static double AT = 100.0;
 
-static void a_snap(void *ctx, dsxp_snap_t *o) { (void)ctx; core_snapshot(&AC, o); }
+static void a_snap(void *ctx, dsxp_snap_t *o) { (void)ctx; core_snapshot(&AC, AT, o); }
 static bool a_submit(void *ctx, const cmd_t *c) { (void)ctx; core_apply_cmd(&AC, c, AT); return true; }
 static void a_cat(void *ctx, void (*fn)(void *, const xcmd_t *, int), void *arg) {
     (void)ctx;
@@ -158,7 +158,7 @@ void test_api(void) {
     CHECK_INT(call("GET", "/api/motionrecenter", ""), 405);
 
     /* ... and in /api/state, still valid JSON */
-    CHECK(body_has("GET", "/api/state", "", "\"motion\":{\"enabled\":1,\"cal\":\"none\"", &valid));
+    CHECK(body_has("GET", "/api/state", "", "\"motion\":{\"enabled\":1,\"scales\":\"none\"", &valid));
     CHECK(valid);
     CHECK(body_has("GET", "/api/state", "", "{\"use\":\"sticks\",\"full\":55,\"invert\":0,", NULL));
     CHECK(body_has("GET", "/api/state", "", "\"sent\":{\"valid\":0,", NULL));

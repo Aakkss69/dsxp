@@ -15,17 +15,9 @@
 #include <math.h>
 #include <stdlib.h>          /* abs() */
 
-/* Signed little-endian 16-bit field at p. Linux reads every calibration field into a
- * `short` (:954-960), so all of them, the "minus" values included, are signed. */
-static int le16s(const unsigned char *p) {
-    int v = p[0] | (p[1] << 8);              /* 0..65535, low byte first          */
-    return v >= 32768 ? v - 65536 : v;       /* upper half of the range: negative */
-}
-
-/* Unsigned little-endian 32-bit field at p (the CRC). */
-static uint32_t le32u(const unsigned char *p) {
-    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
+/* Every calibration field is a signed little-endian 16-bit value (le16s, core_internal.h);
+ * Linux reads each into a `short` (:954-960), so the "minus" values are signed too. The
+ * CRC is the unsigned 32-bit value le32u reads. */
 
 /* True when `v` is within MOTION_CAL_TOLERANCE of `nominal` (both positive). */
 static bool near_nominal(double v, double nominal) {

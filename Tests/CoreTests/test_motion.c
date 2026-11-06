@@ -216,6 +216,28 @@ static void calib_run(calib_t *k, motion_t *m, sim_t *s, const motion_cfg_t *cfg
     }
 }
 
+/* A calibration that has just finished FLAT on a still, flat controller without drift. */
+static void calib_to_level(calib_t *k, motion_t *m, sim_t *s, const motion_cfg_t *cfg) {
+    motion_init(m);
+    sim_init(s, 7000);
+    calib_start(k);
+    calib_run(k, m, s, cfg, 0, 0, 0, 3.3, false);
+}
+
+/* `secs` of a still controller, as calib_run, but with `quiet` passed to the fusion (true:
+ * DSXP is vibrating it) and the accelerometer scaled by `acc_scale`. */
+static void calib_run_raw(calib_t *k, motion_t *m, sim_t *s, const motion_cfg_t *cfg,
+                          double secs, bool quiet, double acc_scale) {
+    double z[3] = { 0, 0, 0 };
+    motion_sample_t smp;
+    for (int i = 0; i < (int)lround(secs * SIM_HZ); i++) {
+        sim_step(s, z, &smp);
+        for (int j = 0; j < 3; j++) smp.acc_g[j] *= acc_scale;
+        motion_update(m, &smp, cfg, quiet);
+        calib_update(k, m, &smp, false);
+    }
+}
+
 /* The calibration routine, step by step, on a simulated controller with a real drift. */
 void test_motion_calib(void) {
     static motion_t m;
@@ -306,6 +328,67 @@ void test_motion_calib(void) {
     calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);
     CHECK_INT(k.step, CALIB_YAW);
     CHECK_NEAR(k.full[MOTION_PITCH], 35, 1e-12);                 /* 65 - 30, not 45       */
+    calib_start(&k);                                             /* a level past 55 deg   */
+    k.step = CALIB_PITCH; k.min_reach = 10; k.level_pitch = 58;  /* (LEVEL refuses it)    */
+    k.hi = 50; k.lo = -50; k.reached = true; k.angle = 0;
+    motion_init(&m);
+    sim_init(&s, 9000);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);
+    CHECK_NEAR(k.full[MOTION_PITCH], MOTION_PITCH_FULL_MIN, 1e-12);   /* never below range */
+
+    /* LEVEL notices a pick-up by any of its signs, not only a quick turn */
+    calib_to_level(&k, &m, &s, &cfg);
+    CHECK_INT(k.step, CALIB_LEVEL);
+    calib_run(&k, &m, &s, &cfg, 15, 0, 0, 1.0 / SIM_HZ, false);  /* one knock on the table */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 2.0, false);
+    CHECK(!k.picked_up && k.tremor < 0.1);                       /* not a hand            */
+    calib_to_level(&k, &m, &s, &cfg);                            /* a tilt alone: lifted  */
+    calib_run(&k, &m, &s, &cfg, 0.25, 0, 0, 10.0, false);        /* very slowly, 2.5 deg  */
+    CHECK(!k.picked_up);
+    calib_run(&k, &m, &s, &cfg, 0.25, 0, 0, 3.0, false);         /* 3.25 deg from the table */
+    CHECK(k.picked_up && k.tremor < 0.3);                        /* the tilt did it: under
+                                                                    PICKUP_TREMOR_DPS     */
+    calib_to_level(&k, &m, &s, &cfg);                            /* a tremor alone        */
+    for (int i = 0; i < 32; i++) {                               /* 0.5 s, no net turn    */
+        double t = (i % 2) ? 1.0 : -1.0;
+        calib_run(&k, &m, &s, &cfg, t, 0, t, 1.0 / SIM_HZ, false);
+    }
+    CHECK(k.picked_up);
+
+    /* held tilted more than 55 deg toward you: no room left to pitch, so refused */
+    calib_to_level(&k, &m, &s, &cfg);
+    calib_run(&k, &m, &s, &cfg, 58, 0, 0, 1.0, false);           /* nose up 58 deg        */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 3.0, false);
+    CHECK_INT(k.step, CALIB_LEVEL);
+    CHECK(strstr(k.note, "flatter") != NULL);
+    calib_run(&k, &m, &s, &cfg, -10, 0, 0, 0.8, false);          /* 50 deg: accepted      */
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 2.5, false);
+    CHECK_INT(k.step, CALIB_ROLL);
+    CHECK_NEAR(k.level_pitch, 50, 0.5);
+
+    /* gravity off 1 g: a warning that lasts to the end, alongside the steps' own hints */
+    motion_init(&m);
+    sim_init(&s, 7000);
+    calib_start(&k);
+    calib_run_raw(&k, &m, &s, &cfg, 3.3, false, 0.93);           /* a scale 7 % short     */
+    CHECK_INT(k.step, CALIB_LEVEL);
+    CHECK(strstr(k.warning, "0.93") != NULL);
+    calib_run_raw(&k, &m, &s, &cfg, 0.5, false, 0.93);
+    CHECK(k.note[0] != 0 && strstr(k.warning, "0.93") != NULL);  /* both kept            */
+    calib_start(&k);
+    CHECK(k.warning[0] == 0);                                    /* a new run clears it   */
+
+    /* DSXP vibrated the controller just now: FLAT waits the half second out */
+    motion_init(&m);
+    sim_init(&s, 7000);
+    calib_start(&k);
+    calib_run_raw(&k, &m, &s, &cfg, 1.0, true, 1.0);             /* vibrating             */
+    CHECK_NEAR(k.hold_s, 0, 1e-12);
+    CHECK(strstr(k.note, "vibrating") != NULL);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 3.0, false);            /* 0.5 s wait, 2.5 still */
+    CHECK_INT(k.step, CALIB_FLAT);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 0.6, false);
+    CHECK_INT(k.step, CALIB_LEVEL);
 
     calib_cancel(&k);
     CHECK_INT(k.step, CALIB_IDLE);
@@ -361,7 +444,8 @@ void test_motion(void) {
     CHECK(m.yaw_deg > 15 && m.yaw_deg < 20);     /* the return already took a little     */
     CHECK(m.out[MOTION_YAW] > 0.3);
 
-    /* hold-to-steer returns to center and never overshoots on the way back */
+    /* hold-to-steer returns to center; twisting back after a hold about as long as
+     * yaw_return ends inside the yaw deadzone (the credit absorbs nearly all of it) */
     run(&m, &s, &cfg, 0, 0, 0, 4.0);             /* held: it eases back                  */
     CHECK(m.yaw_deg > 0 && m.yaw_deg < 6);
     double lowest = m.yaw_deg;
@@ -369,9 +453,19 @@ void test_motion(void) {
         run(&m, &s, &cfg, 0, 40, 0, 1.0 / SIM_HZ);
         if (m.yaw_deg < lowest) lowest = m.yaw_deg;
     }
-    CHECK(lowest > -1e-9);
-    CHECK_NEAR(m.yaw_deg, 0, 1e-6);
-    CHECK_NEAR(m.out[MOTION_YAW], 0, 1e-9);
+    CHECK(lowest > -cfg.yaw_deadzone_deg);
+    CHECK(m.yaw_deg < 0 && m.yaw_deg > -cfg.yaw_deadzone_deg);
+    CHECK_NEAR(m.out[MOTION_YAW], 0, 1e-9);      /* inside the deadzone: no rudder        */
+
+    /* held for a long while, that grip becomes the new center: the credit has faded, so
+     * a twist the other way steers instead of being absorbed */
+    start(&m, &s, &cfg);
+    run(&m, &s, &cfg, 0, -40, 0, 0.5);           /* twist right 20 deg                    */
+    run(&m, &s, &cfg, 0, 0, 0, 60.0);            /* held for a minute                     */
+    CHECK(m.yaw_credit > 0 && m.yaw_credit < 1.0);
+    run(&m, &s, &cfg, 0, 30, 0, 0.5);            /* twist left 15 deg                     */
+    CHECK(m.yaw_deg < -10);
+    CHECK(m.out[MOTION_YAW] < -0.2);             /* left rudder                           */
 
     /* recenter while held tilted toward you: that becomes level; a bank from there
      * reads as a bank, not a mix */

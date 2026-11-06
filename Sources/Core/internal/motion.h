@@ -111,11 +111,13 @@ typedef struct {
     double   t;               /* seconds of sensor time fused since the last reset     */
     double   up[3];           /* estimated "up" in the controller frame, unit length   */
     /* level reference */
-    double   neutral[3];      /* up[] captured by Recenter: this attitude reads as level */
+    double   neutral[3];      /* the attitude that reads as level: the calibration's
+                                 (motion_set_level) or the one Recenter captured        */
     /* hold-to-steer yaw */
     double   yaw_deg;         /* integrated twist about the vertical, deg               */
     double   yaw_credit;      /* what the return removed since the last zero crossing,
-                                 signed like yaw_deg; spent when twisting back          */
+                                 signed like yaw_deg; spent when twisting back, and
+                                 fading by itself (motion.c YAW_CREDIT_KEEP)            */
     /* gyro bias, learned while the controller is still */
     double   bias[3];         /* deg/s subtracted from the gyro                         */
     bool     bias_learned;    /* at least one still window has been folded in            */
@@ -174,10 +176,13 @@ typedef struct {
     bool   reached;              /* reach steps: both sides far enough, now return to center  */
     bool   picked_up;            /* LEVEL: the controller has been lifted off the table       */
     char   note[112];            /* a hint for the user ("Keep your hands off it."), or ""   */
+    char   warning[112];         /* worth knowing until the end (gravity off 1 g), or ""      */
     /* working values (not shown) */
     double last_t;               /* fusion time of the previous sample, for time steps       */
     double sum_g[3], min_g[3], max_g[3], sum_a[3];  /* FLAT: the still streak's gyro, accel */
     double sum_up[3];            /* LEVEL: the steady streak's "up" vectors                  */
+    double rest_up[3];           /* LEVEL: "up" as it lay in FLAT, to notice it being lifted */
+    double tremor;               /* LEVEL: running average of the rotation rate, deg/s       */
     long   n;                    /* samples in the streak                                     */
     double twist;                /* YAW: integrated twist since the step began, degrees      */
     /* results */

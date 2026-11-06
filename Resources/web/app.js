@@ -35,10 +35,16 @@ const bytePercent = v => Math.round(v / 255 * 100) + '%';
 const setText = (element, text) => { if (element && element.textContent !== text) element.textContent = text; };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-/* Panels kept in their own files (motion-panel.js) register here and get every
-   /api/state after the panels in this file have been updated. */
+/* Panels kept in their own files (motion-panel.js, calibration.js) register here and get
+   every /api/state after the panels in this file have been updated (end of poll). Each
+   runs on its own: one that throws is reported in the console and the rest still run. */
 const stateListeners = [];
 const onState = fn => { stateListeners.push(fn); };
+function runStateListeners(state) {
+  for (const listener of stateListeners) {
+    try { listener(state); } catch (e) { console.error('state listener', e); }
+  }
+}
 
 /* a segmented control: exactly one segment on */
 function selectSegment(group, isOn) {
@@ -593,7 +599,6 @@ async function poll() {
   syncAxes();
   renderApp(state.app || {}, state);
   setText(byId('controller-status'), state.connected ? 'Receiving input' : 'Waiting for input');
-  for (const listener of stateListeners) listener(state);
 
   if (!recentlyEdited('tune')) {
     tune = state.tune;
@@ -774,6 +779,8 @@ async function poll() {
   setText(byId('command-current'), selectedSlot < 0 ? 'Select a control'
     : (bindings[selectedSlot] && bindings[selectedSlot].c) ? 'Now: ' + bindings[selectedSlot].c : 'Not assigned');
   byId('command-clear').disabled = selectedSlot < 0 || !(bindings[selectedSlot] && bindings[selectedSlot].c);
+
+  runStateListeners(state);            /* the panels in other files, last */
 }
 
 /* --------------------------------------------------------------- events */

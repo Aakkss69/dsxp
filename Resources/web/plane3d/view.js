@@ -6,7 +6,9 @@
  * Chase view from behind and above. +-100 % sent draws as 45 deg bank, 25 deg pitch and
  * 30 deg yaw (rotation roll, then pitch, then yaw). While nothing is being sent (valid
  * false) the aircraft eases to level and its lines fade to 40 %. The drawing eases toward
- * each new value in about 70 ms, and the canvas is redrawn only while something moves.
+ * each new value in about 70 ms, and the canvas is redrawn only while something moves
+ * (a /api/state poll that changes nothing draws nothing). Per-frame work reuses buffers
+ * made once here, so drawing allocates little beyond the Path2D and the contour.
  * The line color is the canvas's CSS `color` (the panel sets it to the label color), read
  * again when the appearance changes.
  *
@@ -15,7 +17,7 @@
  * Requires math.js, airframe.js, contour.js, zbuffer.js, lines.js. */
 (function (P3) {
   'use strict';
-  const { sub, dot, cross, norm, basis, toWorld, toBody } = P3.math;
+  const { sub, cross, norm, basis, toWorldTo, toBody } = P3.math;
   const AF = P3.airframe;
 
   const RANGE_DEG = { roll: 45, pitch: 25, yaw: 30 };   /* drawn angle at 100 % sent        */
@@ -52,6 +54,12 @@
       this.sy = new Float64Array(n);                     /* device-pixel y                     */
       this.iz = new Float64Array(n);                     /* 1 / distance                       */
       this.wp = new Float64Array(n * 3);                 /* world position                     */
+      this.w = new Float64Array(3);                      /* one point, world and projected     */
+      this.s = new Float64Array(3);
+      /* the part outlines' vertices: their world position and facing change per frame */
+      this.loops = AF.loops.map(loop => loop.map(o => ({ w: new Float64Array(3), own: o.own,
+                                                          junction: o.junction, facing: 0 })));
+      this.chain = [];                                   /* contour vertices, grown as needed  */
       this.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
       this.readColor();
       matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -65,13 +73,19 @@
     /* The panel's label color, resolved by the browser (works for system colors too). */
     readColor() { this.color = getComputedStyle(this.canvas).color; }
 
-    /* New values from /api/state. Anything outside -1..1 is clamped. */
+    /* New values from /api/state. Anything outside -1..1 is clamped. A frame is asked for
+     * only when the target changed: the poll repeats the same values ~20 times a second. */
     show(sent) {
       const valid = !!(sent && sent.valid);
       const c = v => Math.max(-1, Math.min(1, Number(v) || 0));
-      this.target = valid ? { roll: c(sent.roll), pitch: c(sent.pitch), yaw: c(sent.yaw) }
-                          : { roll: 0, pitch: 0, yaw: 0 };   /* standing by: level             */
-      this.targetAlpha = valid ? 1 : STANDBY_ALPHA;
+      const target = valid ? { roll: c(sent.roll), pitch: c(sent.pitch), yaw: c(sent.yaw) }
+                           : { roll: 0, pitch: 0, yaw: 0 };   /* standing by: level            */
+      const alpha = valid ? 1 : STANDBY_ALPHA;
+      const t = this.target;
+      if (target.roll === t.roll && target.pitch === t.pitch && target.yaw === t.yaw &&
+          alpha === this.targetAlpha) return;            /* nothing new to draw             */
+      this.target = target;
+      this.targetAlpha = alpha;
       this.request();
     }
 
@@ -113,16 +127,24 @@
                         yaw: this.current.yaw * RANGE_DEG.yaw * DEG });
       const eyeBody = toBody(m, EYE);
       const focal = Math.min(H * FOCAL_PER_HEIGHT, W * FOCAL_PER_WIDTH);
-      /* world point -> [x, y] in CSS pixels and the distance along the view */
-      const project = w => {
-        const d = sub(w, EYE), z = dot(d, FORWARD), k = focal / z;
-        return [W / 2 + dot(d, RIGHT) * k, H * CENTER_Y - dot(d, UP) * k, z];
+      /* world point -> out = [x, y] in CSS pixels and the distance along the view (the
+       * dot products written out, in the same order as dot(): no arrays per call) */
+      const E0 = EYE[0], E1 = EYE[1], E2 = EYE[2];
+      const project = (w, out) => {
+        const d0 = w[0] - E0, d1 = w[1] - E1, d2 = w[2] - E2;
+        const z = d0 * FORWARD[0] + d1 * FORWARD[1] + d2 * FORWARD[2], k = focal / z;
+        out[0] = W / 2 + (d0 * RIGHT[0] + d1 * RIGHT[1] + d2 * RIGHT[2]) * k;
+        out[1] = H * CENTER_Y - (d0 * UP[0] + d1 * UP[1] + d2 * UP[2]) * k;
+        out[2] = z;
+        return out;
       };
 
       /* every mesh vertex, once */
       const V = AF.mesh.vertices, sx = this.sx, sy = this.sy, iz = this.iz, wp = this.wp;
+      const w = this.w, s = this.s;
       for (let v = 0; v < V.length; v++) {
-        const w = toWorld(m, V[v]), s = project(w);
+        toWorldTo(m, V[v], w);
+        project(w, s);
         wp[3 * v] = w[0]; wp[3 * v + 1] = w[1]; wp[3 * v + 2] = w[2];
         sx[v] = s[0] * dpr; sy[v] = s[1] * dpr; iz[v] = 1 / s[2];
       }
@@ -132,23 +154,34 @@
       for (let t = 0; t < T.length; t += 3) {
         const a = T[t], b = T[t + 1], c = T[t + 2];
         if (!plate[t / 3]) {
-          const A = [wp[3 * a], wp[3 * a + 1], wp[3 * a + 2]];
-          const n = cross(sub([wp[3 * b], wp[3 * b + 1], wp[3 * b + 2]], A),
-                          sub([wp[3 * c], wp[3 * c + 1], wp[3 * c + 2]], A));   /* outward */
-          if (dot(n, sub(EYE, A)) <= 0) continue;        /* faces away: behind the front     */
+          /* outward normal n = (B - A) x (C - A), then n . (eye - A), as cross() and dot() */
+          const ax = wp[3 * a], ay = wp[3 * a + 1], az = wp[3 * a + 2];
+          const ux = wp[3 * b] - ax, uy = wp[3 * b + 1] - ay, uz = wp[3 * b + 2] - az;
+          const vx = wp[3 * c] - ax, vy = wp[3 * c + 1] - ay, vz = wp[3 * c + 2] - az;
+          const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+          if (nx * (E0 - ax) + ny * (E1 - ay) + nz * (E2 - az) <= 0) continue;   /* faces away */
         }
         zb.triangle(sx[a], sy[a], iz[a], sx[b], sy[b], iz[b], sx[c], sy[c], iz[c], part[t / 3]);
       }
 
       /* the lines: fuselage contour, then each part's outline */
       const path = new Path2D(), fuselage = 1 << AF.PART.FUSELAGE;
-      for (const chain of P3.contour(eyeBody))
-        P3.traceLine(path, chain.map(b => ({ w: toWorld(m, b), own: fuselage, junction: false, facing: 0 })),
-                     project, zb, dpr);
-      for (const loop of AF.loops)
-        P3.traceLine(path, loop.map(o => ({ w: toWorld(m, o.b), own: o.own, junction: o.junction,
-                                            facing: o.normal ? dot(o.normal, sub(eyeBody, o.b)) : 0 })),
-                     project, zb, dpr);
+      const pool = this.chain;
+      for (const chain of P3.contour(eyeBody)) {
+        while (pool.length < chain.length)               /* grow the pool once, reuse after */
+          pool.push({ w: new Float64Array(3), own: fuselage, junction: false, facing: 0 });
+        for (let i = 0; i < chain.length; i++) toWorldTo(m, chain[i], pool[i].w);
+        P3.traceLine(path, pool, project, zb, dpr, chain.length);
+      }
+      AF.loops.forEach((loop, l) => {
+        const vs = this.loops[l];
+        for (let i = 0; i < loop.length; i++) {
+          const o = loop[i], v = vs[i], b = o.b, n = o.normal;
+          toWorldTo(m, b, v.w);
+          v.facing = n ? n[0] * (eyeBody[0] - b[0]) + n[1] * (eyeBody[1] - b[1]) + n[2] * (eyeBody[2] - b[2]) : 0;
+        }
+        P3.traceLine(path, vs, project, zb, dpr);
+      });
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);            /* draw in CSS pixels               */
       ctx.clearRect(0, 0, W, H);

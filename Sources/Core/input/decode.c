@@ -37,20 +37,6 @@ void decode_touch(ds_state_t *st, const unsigned char *r) {
     }
 }
 
-/* Signed little-endian 16-bit value at p (portable: no cast of an out-of-range
- * unsigned value to a signed type, which C leaves implementation-defined). */
-static int16_t le16s(const unsigned char *p) {
-    int v = p[0] | (p[1] << 8);              /* 0..65535: low byte first, then high byte */
-    if (v >= 32768) v -= 65536;              /* upper half of the range is negative      */
-    return (int16_t)v;                       /* now in -32768..32767, so the cast is exact */
-}
-
-/* Unsigned little-endian 32-bit value at p. */
-static uint32_t le32u(const unsigned char *p) {
-    return (uint32_t)p[0] | (uint32_t)p[1] << 8 |      /* bytes 0 and 1: the low half  */
-           (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; /* bytes 2 and 3: the high half */
-}
-
 /* Motion sensors, copied as delivered. Turning counts into deg/s and g needs the
  * controller's calibration (motion_cal_apply in motion_cal.c), so it is not done here. */
 static void decode_motion(ds_state_t *st, const unsigned char *r) {

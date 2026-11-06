@@ -13,9 +13,10 @@
  *      R. Mahony, T. Hamel, J.-M. Pflimlin, "Nonlinear Complementary Filters on the
  *      Special Orthogonal Group", IEEE TAC 53(5), 2008), reduced to the one vector this
  *      feature needs. Bank and pitch come from it exactly, whatever the heading.
- *   3. Bank and pitch relative to the "level" the user captured with Recenter.
+ *   3. Bank and pitch relative to the level: the calibrated one (motion_set_level), or
+ *      the attitude captured by Recenter.
  *   4. Yaw: the twist rate about the vertical, integrated while held, easing back to
- *      center on its own, and never overshooting past center on the way back.
+ *      center on its own, and not overshooting past center on the way back.
  *   5. Gyro bias learned whenever the controller is still.
  *   6. Each axis through the user's sensitivity (full-deflection angle), deadzone and
  *      invert, using the same shape() as the sticks.
@@ -41,6 +42,12 @@
 #define OOR_UP        0.2 /* "up" this close to horizontal (or below) is out of range       */
 #define OOR_PITCH_DEG 70  /* pitch beyond this is out of range (controller stood on edge)   */
 #define YAW_WINDUP    2.0 /* the held twist is capped at this many times its full angle     */
+/* The yaw credit (what the return took off, absorbed when twisting back) fades with a time
+ * constant of this many times yaw_return_s. Twisting back after a hold of up to about
+ * yaw_return_s still ends inside the 4 deg default yaw deadzone (a 20 deg twist held
+ * 4 s: 15.9 deg absorbed); after holding a twist for a long while that grip has become
+ * the new center, so a later twist the other way steers (after 60 s, 0.5 deg absorbed). */
+#define YAW_CREDIT_KEEP 4.0
 
 /* ------------------------------------------------------------- vector helpers */
 
@@ -139,7 +146,8 @@ void motion_recenter(motion_t *m) {
 
 /* Step 5: gyro bias. A window of still samples (every axis inside BIAS_RANGE) whose mean
  * is near the current bias is folded in; anything else just restarts the window. Paused
- * while DSXP itself vibrates the controller (`quiet` false), which shakes the gyro. */
+ * while DSXP itself vibrates the controller (`quiet` true), which shakes the gyro, and for
+ * QUIET_HOLD_S after. */
 static void learn_bias(motion_t *m, const motion_sample_t *s, bool quiet) {
     if (quiet) m->quiet_until = m->t + QUIET_HOLD_S;     /* our motors or a vibrating trigger */
     if (m->t < m->quiet_until) { m->win_n = 0; return; } /* not yet: drop the window      */
@@ -193,11 +201,14 @@ static void integrate_yaw(motion_t *m, double rate, double dt, const motion_cfg_
     if (m->yaw_deg < -cap) m->yaw_deg = -cap;
     /* The return: exponential decay toward center, with a time constant of a third of
      * yaw_return_s, so the twist is about 95 % back (e^-3) after yaw_return_s. What it
-     * removes is remembered as credit (same sign as the angle). */
+     * removes is remembered as credit (same sign as the angle), which itself fades over
+     * YAW_CREDIT_KEEP x yaw_return_s, so it cannot swallow a twist made much later. */
     double tau = cfg->yaw_return_s / 3.0;
     double ret = tau > 0 ? fmin(1.0, dt / tau) : 1.0;
     double leak = m->yaw_deg * ret;
     m->yaw_deg -= leak;
+    double keep = YAW_CREDIT_KEEP * cfg->yaw_return_s;   /* the credit's time constant    */
+    m->yaw_credit -= m->yaw_credit * (keep > 0 ? fmin(1.0, dt / keep) : 1.0);
     m->yaw_credit += leak;
 }
 
@@ -208,11 +219,11 @@ static double axis_output(double angle, double full, double deadzone, bool inver
     return invert ? -v : v;
 }
 
-/* Bank, pitch, out-of-range and the three outputs, from the current state. */
-static void refresh_outputs(motion_t *m, const motion_cfg_t *cfg) {
-    /* Step 3: relative to the captured level, by subtracting its bank and pitch. For the
-     * usual grip (held tilted toward you, then rolled about the controller's long axis)
-     * this is exact; rotating the vector instead would mix some roll into pitch. */
+/* Step 3: bank, pitch and out-of-range from the current "up". */
+static void refresh_attitude(motion_t *m) {
+    /* Relative to the level, by subtracting its bank and pitch. For the usual grip (held
+     * tilted toward you, then rolled about the controller's long axis) this is exact;
+     * rotating the vector instead would mix some roll into pitch. */
     double bank, pitch, bank0, pitch0;
     attitude_deg(m->up, &bank, &pitch);                  /* the controller now          */
     attitude_deg(m->neutral, &bank0, &pitch0);           /* the captured level           */
@@ -222,6 +233,10 @@ static void refresh_outputs(motion_t *m, const motion_cfg_t *cfg) {
      * turned down or sideways (little "up" through the face), or the long axis near
      * vertical, where bank has no meaning. */
     m->out_of_range = m->up[1] < OOR_UP || fabs(pitch) > OOR_PITCH_DEG;
+}
+
+/* Step 6 for all three axes, from the angles refresh_attitude() and the yaw set. */
+static void refresh_outputs(motion_t *m, const motion_cfg_t *cfg) {
     if (m->out_of_range) {                               /* face down, or stood on edge   */
         m->out[0] = m->out[1] = m->out[2] = 0;           /* hold every axis neutral        */
         return;
@@ -258,6 +273,7 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
         m->seeded = true;
         m->yaw_deg = m->yaw_credit = 0;                  /* a held twist is lost in a gap   */
         m->win_n = 0;
+        refresh_attitude(m);
         refresh_outputs(m, cfg);
         return;
     }
@@ -289,15 +305,13 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
         return;
     }
 
+    refresh_attitude(m);                                 /* step 3, and out_of_range        */
     /* Step 4: the twist rate about the true vertical is the gyro's component along "up";
      * twisting right (clockwise seen from above) is a negative rotation about +up, hence
      * the minus. Not integrated while out of range (lying on a table, face down). */
-    refresh_outputs(m, cfg);                             /* updates out_of_range first      */
     if (!m->out_of_range) integrate_yaw(m, -dot3(w_dps, m->up), dt, cfg);
     else m->yaw_deg = m->yaw_credit = 0;                 /* set down: nothing held          */
-    m->out[MOTION_YAW] = m->out_of_range ? 0 :
-        axis_output(m->yaw_deg, cfg->full_deg[MOTION_YAW], cfg->yaw_deadzone_deg,
-                    cfg->invert[MOTION_YAW]);            /* yaw output after this sample   */
+    refresh_outputs(m, cfg);                             /* step 6, once, after the yaw     */
 }
 
 /* ------------------------------------------------------------- crossfade */

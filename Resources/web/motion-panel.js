@@ -50,7 +50,7 @@
     if (!m.live) return 'On, waiting for the controller';
     if (m.out_of_range) return 'Controller set down: holding the controls neutral';
     if (m.hold) return 'Held: controls frozen until you let go';
-    if (m.cal === 'nominal') return 'On, using standard sensor scales';
+    if (m.scales === 'nominal') return 'On, using standard sensor scales';
     return 'On';
   }
 
