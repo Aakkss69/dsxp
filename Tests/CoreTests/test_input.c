@@ -73,6 +73,29 @@ void test_decode(void) {
     CHECK_NEAR(st.touch[0].x, 1919 / 1920.0, 1e-9);
     CHECK_NEAR(st.touch[0].y, 1079 / 1080.0, 1e-9);
     CHECK_NEAR(st.touch[1].x, 0.0, 1e-9);
+
+    /* motion sensors: signed little-endian counts, the clock unsigned; the touch
+     * bytes right after them (34..41) must still decode the same */
+    make_report(r, 128, 128, 128, 128, 0, 0, 0x08, 0, 0);
+    set_touch(r, 0, true, 700, 300);
+    const int16_t gyro[3] = { -1, 32767, -32768 }, acc[3] = { 8183, -8207, 0 };
+    for (int i = 0; i < 3; i++) {
+        r[OFF_GYRO + 2 * i]      = (unsigned char)((uint16_t)gyro[i] & 0xFF);   /* low byte  */
+        r[OFF_GYRO + 2 * i + 1]  = (unsigned char)((uint16_t)gyro[i] >> 8);     /* high byte */
+        r[OFF_ACCEL + 2 * i]     = (unsigned char)((uint16_t)acc[i] & 0xFF);
+        r[OFF_ACCEL + 2 * i + 1] = (unsigned char)((uint16_t)acc[i] >> 8);
+    }
+    r[OFF_SENSOR_TS] = 0x78; r[OFF_SENSOR_TS + 1] = 0x56;       /* 0xF2345678, top bit set */
+    r[OFF_SENSOR_TS + 2] = 0x34; r[OFF_SENSOR_TS + 3] = 0xF2;
+    CHECK(ds_decode_report(&st, &g, &tz, r, 78, 1.0));
+    for (int i = 0; i < 3; i++) {
+        CHECK_INT(st.gyro_raw[i], gyro[i]);
+        CHECK_INT(st.acc_raw[i], acc[i]);
+    }
+    CHECK(st.sensor_ts == 0xF2345678u);
+    CHECK(st.touch[0].active && !st.touch[1].active);
+    CHECK_NEAR(st.touch[0].x, 700 / 1920.0, 1e-9);
+    CHECK_NEAR(st.touch[0].y, 300 / 1080.0, 1e-9);
 }
 
 void test_shape(void) {

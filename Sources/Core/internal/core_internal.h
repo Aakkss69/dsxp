@@ -77,6 +77,14 @@
 #define OFF_BTN0 9   /* dpad nibble (bits 0-3) + square/cross/circle/triangle */
 #define OFF_BTN1 10  /* L1 R1 L2 R2 Create Options L3 R3                      */
 #define OFF_BTN2 11  /* PS Touchpad Mute                                      */
+/* Motion sensors. Linux hid-playstation.c v6.12 struct dualsense_input_report
+ * (:216-218) puts gyro[3] at payload byte 15, accel[3] at 21 and sensor_timestamp
+ * at 27; +2 here for the report ID and the Bluetooth framing byte, as above.
+ * Each gyro/accel value is a signed little-endian 16-bit count; the timestamp is
+ * an unsigned little-endian 32-bit count of 0.33 us ticks (:1416). */
+#define OFF_GYRO      17  /* bytes 17-22: gyro x, y, z (counts)          */
+#define OFF_ACCEL     23  /* bytes 23-28: accelerometer x, y, z (counts) */
+#define OFF_SENSOR_TS 29  /* bytes 29-32: sensor clock (0.33 us ticks)   */
 /* Two touch points, 4 bytes each. Each point: [0] bit7 set = NOT touching,
  * bits0-6 = touch id; [1] x_lo; [2] low nibble x_hi, high nibble y_lo; [3] y_hi.
  * Pad resolution 1920 x 1080. */
@@ -168,6 +176,9 @@ typedef struct {
     double val[S_COUNT];     /* shaped: -1..1, or 0..1 for triggers */
     bool   btn[B_COUNT];
     touch_t touch[2];        /* normalized 0..1 across the pad */
+    int16_t  gyro_raw[3];    /* gyro x, y, z as delivered (counts; see motion_cal_apply)  */
+    int16_t  acc_raw[3];     /* accelerometer x, y, z as delivered (counts)              */
+    uint32_t sensor_ts;      /* sensor clock in 0.33 us ticks; wraps every ~23.9 minutes */
 } ds_state_t;
 
 /* Gesture recognizer state (was function statics in the prototype). */

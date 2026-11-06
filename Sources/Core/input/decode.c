@@ -1,4 +1,4 @@
-/* Decode Bluetooth input report 0x31: sticks, triggers, buttons, touchpad. Pure. */
+/* Decode Bluetooth input report 0x31: sticks, triggers, buttons, touchpad, motion sensors. Pure. */
 #include "core_internal.h"
 #include <math.h>
 #include <string.h>
@@ -35,6 +35,30 @@ void decode_touch(ds_state_t *st, const unsigned char *r) {
         st->touch[i].x = x / TOUCH_W;
         st->touch[i].y = y / TOUCH_H;
     }
+}
+
+/* Signed little-endian 16-bit value at p (portable: no cast of an out-of-range
+ * unsigned value to a signed type, which C leaves implementation-defined). */
+static int16_t le16s(const unsigned char *p) {
+    int v = p[0] | (p[1] << 8);              /* 0..65535: low byte first, then high byte */
+    if (v >= 32768) v -= 65536;              /* upper half of the range is negative      */
+    return (int16_t)v;                       /* now in -32768..32767, so the cast is exact */
+}
+
+/* Unsigned little-endian 32-bit value at p. */
+static uint32_t le32u(const unsigned char *p) {
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 |      /* bytes 0 and 1: the low half  */
+           (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; /* bytes 2 and 3: the high half */
+}
+
+/* Motion sensors, copied as delivered. Turning counts into deg/s and g needs the
+ * controller's calibration (motion_cal_apply in motion_cal.c), so it is not done here. */
+static void decode_motion(ds_state_t *st, const unsigned char *r) {
+    for (int i = 0; i < 3; i++) {                        /* axis x, y, z           */
+        st->gyro_raw[i] = le16s(r + OFF_GYRO + 2 * i);   /* two bytes per axis      */
+        st->acc_raw[i]  = le16s(r + OFF_ACCEL + 2 * i);  /* same layout, next block */
+    }
+    st->sensor_ts = le32u(r + OFF_SENSOR_TS);            /* 0.33 us ticks           */
 }
 
 /* A gesture is an event, not a state, so it is published as a short pulse on its
@@ -129,6 +153,7 @@ bool ds_decode_report_cfg(ds_state_t *st, gesture_t *g, const tuning_t *tune,
     st->btn[B_MUTE]     = (b2 & 0x04) != 0;
 
     decode_touch(st, r);
+    decode_motion(st, r);                    /* bytes 17-32, all below IN_REPORT_MIN_LEN */
     detect_gestures_cfg(st, g, tune->gesture, gc, now);
     for (int i = B_TP_TAP; i < B_COUNT; i++)
         st->btn[i] = now < g->pulse[i];
