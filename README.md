@@ -27,6 +27,12 @@ for the buttons.
   assign. Hold-to-repeat or fire-once per button.
 - **Axes**: any stick or trigger to roll, pitch, yaw, throttle, differential rudder
   or toe brakes, with invert, dead zone and response curve.
+- **Motion control**: fly by tilting the controller - bank it to roll, raise or
+  lower its top edge to pitch, twist it flat to yaw (hold-to-steer: the twist eases
+  back by itself and never overshoots on the way back). Each axis is flown by motion
+  or the sticks, never both, with its own sensitivity; switching fades over 0.3 s.
+  Uses the controller's own factory calibration. The mapper draws the aircraft at
+  the attitude DSXP sent to X-Plane. See [Motion control](#motion-control).
 - **Touchpad gestures**: tap, two-finger tap and eight swipe directions as buttons.
 - **Adaptive triggers**: hand-set Resist / Weapon / Vibrate effects, or *wind mode*,
   where rudder-pedal force follows airspeed squared, crosswind loads one side, and
@@ -92,7 +98,7 @@ Everything DSXP can be tuned with lives in three text files in
 | File | What it holds | Written by |
 |---|---|---|
 | `bridge.conf` | How DSXP talks to X-Plane: port, loop and repeat rates, timeouts, telemetry rate, logging | you only (DSXP creates it once) |
-| `controls.conf` | Stick dead zone and curve, touchpad gestures, the six axes, the 33 buttons | you and the mapper |
+| `controls.conf` | Stick dead zone and curve, touchpad gestures, the six axes, motion control, the 33 buttons | you and the mapper |
 | `feedback.conf` | Trigger effects and the wind model, rumble, light bar and its simulator thresholds | you and the mapper |
 
 - DSXP writes them on first run with every setting at its default, and each
@@ -107,6 +113,31 @@ Everything DSXP can be tuned with lives in three text files in
 - When the mapper saves `controls.conf` or `feedback.conf` it rewrites the file
   from the same template, so the documentation stays, but comments you added
   yourself are lost. If you edited the file meanwhile, both changes are kept.
+
+## Motion control
+
+Switch it on in the mapper's **Motion control** panel (or `motion.enabled = yes` in
+`controls.conf`). Hold the controller the way level should feel and press
+**Recenter**; switching on does that too.
+
+- **Roll**: bank the controller. **Pitch**: raise the top edge (the triggers) to pull,
+  lower it to push. **Yaw**: twist the controller about its face, like a steering
+  wheel lying flat; the rudder eases back to center over `motion.yaw_return`
+  (4 s by default).
+- Tick **Motion** for each axis it should fly. An axis on motion ignores every stick
+  set to it (yaw also ignores the rudder triggers); the others work as set under Axes.
+- **Full deflection at** is the angle that gives full control (40° bank, 30° pitch,
+  30° twist by default); lower is more sensitive. A small deadzone (2°, yaw 4°) hides
+  hand tremor.
+- Bind DSXP's own commands to buttons like any X-Plane command; they come first in
+  the command list: `dsxp/motion/recenter`, `dsxp/motion/toggle`, and
+  `dsxp/motion/hold` (a clutch: the controls freeze while held, and the attitude you
+  let go at becomes level). They work whether or not DSXP is flying, and the player
+  lamps flash to confirm.
+- Face down or stood on its edge, the controller holds every motion axis neutral.
+- DSXP reads the controller's factory calibration (feature report 0x05) when it
+  connects and learns the gyro's drift whenever the controller is still.
+  `dsxp-cli --verify` shows bank, pitch, the held twist and what each would send.
 
 ## Files
 
@@ -127,9 +158,9 @@ Quit DSXP, then delete `/Applications/DSXP.app`,
 
 | Path | Contents |
 |---|---|
-| `Sources/Core/` | The bridge, in C, by responsibility: `input/` (report decoding, gestures), `output/` (controller output, trigger/rumble/light models), `sim/` (X-Plane UDP), `settings/`, `api/` (mapper JSON API), `runtime/` (state machine, threads), `platform/` (macOS services). `include/` is the public API. Pure logic is separated from I/O so it can be tested without hardware. |
+| `Sources/Core/` | The bridge, in C, by responsibility: `input/` (report decoding, gestures, motion calibration and fusion), `output/` (controller output, trigger/rumble/light models), `sim/` (X-Plane UDP), `settings/`, `api/` (mapper JSON API), `runtime/` (state machine, threads), `platform/` (macOS services). `include/` is the public API. Pure logic is separated from I/O so it can be tested without hardware. |
 | `Sources/App/` | The macOS app, in Swift: `Lifecycle/`, `Bridge/` (C bridge, `dsxp://` scheme), `UI/` (menu-bar item, mapper window), `System/`, `Support/` (Info.plist, entitlements). |
-| `Resources/` | What ships inside the app: `web/` (the mapper UI, plain HTML/CSS/JS) and the asset catalog. |
+| `Resources/` | What ships inside the app: `web/` (the mapper UI, plain HTML/CSS/JS; `web/plane3d/` draws the motion panel's aircraft) and the asset catalog. |
 | `Tests/CoreTests/` | C unit tests, run by `Scripts/test-core.sh` (AddressSanitizer + UBSan) and by `xcodebuild test`. |
 | `configs/` | The three settings files with their defaults, generated from `Sources/Core/settings/config_schema.c` (`Scripts/test-core.sh --update-configs`); a test fails if they drift. |
 | `docs/` | [`REFERENCES.md`](docs/REFERENCES.md): every outside source the code relies on (X-Plane, DualSense, Apple), with links and the lines that use it, plus known limits and pitfalls. |

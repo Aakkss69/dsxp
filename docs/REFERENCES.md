@@ -19,18 +19,18 @@ Conventions:
 
 | Reference | What it is | Where to read it | Used at |
 |---|---|---|---|
-| Exchanging Data with X-Plane | Laminar's spec of the UDP interface: `DREF` (write a dataref), `CMND` (run a command), `RREF` (subscribe to datarefs; frequency 0 cancels), port 49000 | No official online copy found. Local: `XP12/Instructions/Exchanging Data with X-Plane.rtfd/TXT.rtf` — line 36 (X-Plane always receives on 49000), 397–412 `CMND`, 416–475 `RREF` (475: frequency 0 stops it), 479–512 `DREF` (509 bytes), 839 `raknet_port` 49010. Third-party summary: [xppython3 UDP](https://xppython3.readthedocs.io/en/latest/development/udp/index.html), [CMND](https://xppython3.readthedocs.io/en/latest/development/udp/cmnd.html), [RREF](https://xppython3.readthedocs.io/en/latest/development/udp/rref.html) | `Sources/Core/sim/xp_packets.c:2`, `Sources/Core/sim/xp_packets.c:25`, `Sources/Core/sim/telemetry.c:6`, `Sources/Core/internal/core_internal.h:369`, `Sources/Core/platform/guard.c:126` |
-| `DataRefs.txt` | Laminar's list of built-in datarefs: path, type, writable (`y`/`n`), units, description | [developer.x-plane.com/datarefs](https://developer.x-plane.com/datarefs/) (loads, but entries are rendered by JavaScript, so not checked online). Local: `XP12/Resources/plugins/DataRefs.txt`; every dataref DSXP uses is in [the table below](#datarefs) | `Sources/Core/sim/xplane.c:9`, `Sources/Core/internal/core_internal.h:198` |
+| Exchanging Data with X-Plane | Laminar's spec of the UDP interface: `DREF` (write a dataref), `CMND` (run a command), `RREF` (subscribe to datarefs; frequency 0 cancels), port 49000 | No official online copy found. Local: `XP12/Instructions/Exchanging Data with X-Plane.rtfd/TXT.rtf` — line 36 (X-Plane always receives on 49000), 397–412 `CMND`, 416–475 `RREF` (475: frequency 0 stops it), 479–512 `DREF` (509 bytes), 839 `raknet_port` 49010. Third-party summary: [xppython3 UDP](https://xppython3.readthedocs.io/en/latest/development/udp/index.html), [CMND](https://xppython3.readthedocs.io/en/latest/development/udp/cmnd.html), [RREF](https://xppython3.readthedocs.io/en/latest/development/udp/rref.html) | `Sources/Core/sim/xp_packets.c:2`, `Sources/Core/sim/xp_packets.c:25`, `Sources/Core/sim/telemetry.c:6`, `Sources/Core/internal/core_internal.h:429`, `Sources/Core/platform/guard.c:126` |
+| `DataRefs.txt` | Laminar's list of built-in datarefs: path, type, writable (`y`/`n`), units, description | [developer.x-plane.com/datarefs](https://developer.x-plane.com/datarefs/) (loads, but entries are rendered by JavaScript, so not checked online). Local: `XP12/Resources/plugins/DataRefs.txt`; every dataref DSXP uses is in [the table below](#datarefs) | `Sources/Core/sim/xplane.c:9`, `Sources/Core/internal/core_internal.h:221` |
 | `Commands.txt` | Laminar's command list: a path, whitespace, a description per line. Most lines use two or more spaces; lines 1672 and 1847 use one, so DSXP ends the path at the first whitespace | Local only: `XP12/Resources/plugins/Commands.txt` (3165 lines; line 1 is `sim/none/none`) | `Sources/Core/sim/commands.c:28`, `Sources/App/System/XPlaneLocator.swift:3`, `Tests/CoreTests/test_wire.c:112` |
-| Override datarefs | Without the override flag X-Plane keeps writing its own values over the yoke and brake ratios | `DataRefs.txt` 1996–2002 (yoke ratios: "Use override_joystick or override_joystick_pitch"), 3472–3474 and 3506 (`override_toe_brakes` "Gives plugins control of … left_brake_ratio and right_brake_ratio"); Laminar on how overrides work, with prop pitch as the example: [understanding override_prop_pitch](https://developer.x-plane.com/article/understanding-override_prop_pitch-and-override_prop_mode) | `Sources/Core/sim/xplane.c:124`, `Sources/Core/sim/xplane.c:131` |
-| Wing datarefs | `sim/flightmodel2/wing` arrays are indexed by wing: 0 = left wing 1, 1 = right wing 1, 2 and 3 = wing 2, and so on, 10 elements each | [sim/flightmodel2/wing](https://developer.x-plane.com/article/sim-flightmodel2-wing/), [Using the correct wing datarefs](https://developer.x-plane.com/article/using-the-correct-wing-datarefs/). `DataRefs.txt` 5662: `element_is_stalled` is `float[480]`; its siblings at 5658 and 5663–5670 are `float[48][10]` | `Sources/Core/internal/core_internal.h:200`, `Sources/Core/sim/telemetry.c:41` |
-| X-Plane 12 weather layers | Weather is published per layer: 13 turbulence values with 13 layer altitudes. The old `sim/weather/turbulence[0..2]` are marked REPLACED | `DataRefs.txt` 3750 (`wind_altitude_msl_m float[13]`, "The center altitude of this layer of wind"), 3755 (`turbulence float[13]`), 3726–3728 (REPLACED) | `Sources/Core/internal/core_internal.h:197`, `Sources/Core/sim/telemetry.c:50` |
+| Override datarefs | Without the override flag X-Plane keeps writing its own values over the yoke and brake ratios | `DataRefs.txt` 1996–2002 (yoke ratios: "Use override_joystick or override_joystick_pitch"), 3472–3474 and 3506 (`override_toe_brakes` "Gives plugins control of … left_brake_ratio and right_brake_ratio"); Laminar on how overrides work, with prop pitch as the example: [understanding override_prop_pitch](https://developer.x-plane.com/article/understanding-override_prop_pitch-and-override_prop_mode) | `Sources/Core/sim/xplane.c:128`, `Sources/Core/sim/xplane.c:135` |
+| Wing datarefs | `sim/flightmodel2/wing` arrays are indexed by wing: 0 = left wing 1, 1 = right wing 1, 2 and 3 = wing 2, and so on, 10 elements each | [sim/flightmodel2/wing](https://developer.x-plane.com/article/sim-flightmodel2-wing/), [Using the correct wing datarefs](https://developer.x-plane.com/article/using-the-correct-wing-datarefs/). `DataRefs.txt` 5662: `element_is_stalled` is `float[480]`; its siblings at 5658 and 5663–5670 are `float[48][10]` | `Sources/Core/internal/core_internal.h:223`, `Sources/Core/sim/telemetry.c:41` |
+| X-Plane 12 weather layers | Weather is published per layer: 13 turbulence values with 13 layer altitudes. The old `sim/weather/turbulence[0..2]` are marked REPLACED | `DataRefs.txt` 3750 (`wind_altitude_msl_m float[13]`, "The center altitude of this layer of wind"), 3755 (`turbulence float[13]`), 3726–3728 (REPLACED) | `Sources/Core/internal/core_internal.h:220`, `Sources/Core/sim/telemetry.c:50` |
 | `sim/time/paused` | 1 while the simulator is paused | `DataRefs.txt` 3589 | `Sources/Core/sim/telemetry.c:24`, `Sources/Core/sim/telemetry.c:212` |
 | `joy_use_*` axis enum | X-Plane's axis functions (1 pitch, 2 roll, 3 heading, 52 commands, 74/75 left/right rudder) | [Joystick datarefs](https://developer.x-plane.com/article/joystick-datarefs/) (verified: 1, 2, 3 and 52 match; the published table ends at 66). 74 and 75 are not published: recovered from the ordered string table in `XP12/X-Plane.app/Contents/MacOS/X-Plane` | `Sources/Core/settings/bindings.c:20` |
-| Control profile (`.prf`) | The author's saved X-Plane joystick profile, from which the default bindings were transcribed. Keys `_joy_AXIS_useN` / `_joy_BUTN_useN`; 25 axes and 160 buttons per device, matching `joystick_axis_assignments int[500]` and `joystick_button_assignments int[3200]` (`DataRefs.txt` 2025–2026) | User file, not online: `XP12/Output/preferences/control profiles/final - Joysticks.prf` (lines 4711–4716 `_joy_AXIS_use0..5` = 2, 1, 3, 52, 74, 75; 5211 `_joy_BUTN_use0 sim/none/none`; 5213 `_joy_BUTN_use2 …landing_gear_down`). Not committed (`.gitignore`) | `Sources/Core/settings/bindings.c:12`, `Sources/Core/internal/core_internal.h:90` |
+| Control profile (`.prf`) | The author's saved X-Plane joystick profile, from which the default bindings were transcribed. Keys `_joy_AXIS_useN` / `_joy_BUTN_useN`; 25 axes and 160 buttons per device, matching `joystick_axis_assignments int[500]` and `joystick_button_assignments int[3200]` (`DataRefs.txt` 2025–2026) | User file, not online: `XP12/Output/preferences/control profiles/final - Joysticks.prf` (lines 4711–4716 `_joy_AXIS_use0..5` = 2, 1, 3, 52, 74, 75; 5211 `_joy_BUTN_use0 sim/none/none`; 5213 `_joy_BUTN_use2 …landing_gear_down`). Not committed (`.gitignore`) | `Sources/Core/settings/bindings.c:12`, `Sources/Core/internal/core_internal.h:100` |
 | `Log.txt` "SKIPPED (ff00/..)" | X-Plane's own log showing it discards the DualSense's vendor-page elements over Bluetooth | Local: `XP12/Log.txt` (line 388 when checked: "SKIPPED (ff00/3b) … because of usage page") | `Sources/Core/internal/core_internal.h:8` |
-| RakNet, port 49010 | X-Plane's multiplayer networking; binding that port makes X-Plane fail with "Failed to initialize UDP RakNet connectivity" | Spec `TXT.rtf` line 839 (`raknet_port` defaults to 49010); the error string is in the X-Plane binary | `Sources/Core/runtime/core_thread.c:631`, `Sources/Core/settings/config_schema.c:35` |
-| Accept incoming connections | X-Plane 12 setting that must be on for UDP input | Label confirmed in the X-Plane binary only; xppython3's UDP page (above) says X-Plane 12 needs it | `Sources/Core/runtime/core.c:112`, `README.md` (Requirements) |
+| RakNet, port 49010 | X-Plane's multiplayer networking; binding that port makes X-Plane fail with "Failed to initialize UDP RakNet connectivity" | Spec `TXT.rtf` line 839 (`raknet_port` defaults to 49010); the error string is in the X-Plane binary | `Sources/Core/runtime/core_thread.c:721`, `Sources/Core/settings/config_schema.c:36` |
+| Accept incoming connections | X-Plane 12 setting that must be on for UDP input | Label confirmed in the X-Plane binary only; xppython3's UDP page (above) says X-Plane 12 needs it | `Sources/Core/runtime/core.c:170`, `README.md` (Requirements) |
 | Install and app bundle | Default folders, the simulator executable, and its version | `~/X-Plane/X-Plane 12`, `/Applications/X-Plane 12`; `X-Plane.app/Contents/MacOS/X-Plane`; `X-Plane.app/Contents/Info.plist` `CFBundleShortVersionString` | `Sources/App/System/XPlaneLocator.swift:30`, `Sources/Core/platform/gate.c:9`, `Sources/Core/platform/gate.c:14` |
 | Joystick configurations (`.joy`) | Per-device joystick definitions | [Creating joystick configuration files](https://developer.x-plane.com/article/creating-joystick-configuration-joy-files/); local `XP12/Resources/joystick configs/` | Not used by DSXP |
 
@@ -47,10 +47,10 @@ marked writable (`y`). Read-only ones are only subscribed to.
 | `sim/cockpit2/engine/actuators/throttle_ratio_all` | 4276 | float | y | writes | `Sources/Core/sim/xplane.c:14` |
 | `sim/cockpit2/controls/left_brake_ratio` | 4139 | float | y | writes | `Sources/Core/sim/xplane.c:15`, `Sources/Core/platform/guard.c:111` |
 | `sim/cockpit2/controls/right_brake_ratio` | 4140 | float | y | writes | `Sources/Core/sim/xplane.c:16`, `Sources/Core/platform/guard.c:112` |
-| `sim/operation/override/override_joystick_pitch` | 3473 | int | y | writes | `Sources/Core/sim/xplane.c:19`, `Sources/Core/platform/guard.c:113`, `Sources/Core/runtime/core_thread.c:728` |
-| `sim/operation/override/override_joystick_roll` | 3474 | int | y | writes | `Sources/Core/sim/xplane.c:20`, `Sources/Core/platform/guard.c:114`, `Sources/Core/runtime/core_thread.c:729` |
-| `sim/operation/override/override_joystick_heading` | 3472 | int | y | writes | `Sources/Core/sim/xplane.c:21`, `Sources/Core/platform/guard.c:115`, `Sources/Core/runtime/core_thread.c:730` |
-| `sim/operation/override/override_toe_brakes` | 3506 | int | y | writes | `Sources/Core/sim/xplane.c:22`, `Sources/Core/platform/guard.c:116`, `Sources/Core/runtime/core_thread.c:731` |
+| `sim/operation/override/override_joystick_pitch` | 3473 | int | y | writes | `Sources/Core/sim/xplane.c:19`, `Sources/Core/platform/guard.c:113`, `Sources/Core/runtime/core_thread.c:823` |
+| `sim/operation/override/override_joystick_roll` | 3474 | int | y | writes | `Sources/Core/sim/xplane.c:20`, `Sources/Core/platform/guard.c:114`, `Sources/Core/runtime/core_thread.c:824` |
+| `sim/operation/override/override_joystick_heading` | 3472 | int | y | writes | `Sources/Core/sim/xplane.c:21`, `Sources/Core/platform/guard.c:115`, `Sources/Core/runtime/core_thread.c:825` |
+| `sim/operation/override/override_toe_brakes` | 3506 | int | y | writes | `Sources/Core/sim/xplane.c:22`, `Sources/Core/platform/guard.c:116`, `Sources/Core/runtime/core_thread.c:826` |
 | `sim/flightmodel/position/indicated_airspeed` | 1749 | float | y | reads | `Sources/Core/sim/telemetry.c:17` |
 | `sim/weather/aircraft/wind_now_speed_msc` | 3766 | float | n | reads | `Sources/Core/sim/telemetry.c:18` |
 | `sim/weather/aircraft/wind_now_direction_degt` | 3765 | float | n | reads | `Sources/Core/sim/telemetry.c:19` |
@@ -77,14 +77,26 @@ Default commands (`Sources/Core/settings/bindings.c:30` onward), with their
 |---|---|---|---|
 | Linux `hid-playstation.c` | The upstream DualSense driver, the only public description of the Bluetooth reports. Pinned to tag v6.12 because lines move on master | [v6.12 on GitHub](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c) (verified; mirrors: [git.kernel.org](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/drivers/hid/hid-playstation.c?h=v6.12), [elixir](https://elixir.bootlin.com/linux/v6.12/source/drivers/hid/hid-playstation.c)). Anchors below | see rows below |
 | CRC seed 0xA2 | Bluetooth output reports end in a CRC-32 over 0xA2 + the report | [#L76](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L76), [#L1242-L1245](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L1242-L1245); 0xEDB88320 is the standard reflected CRC-32 polynomial | `Sources/Core/output/output.c:13`, `Sources/Core/output/output.c:154` |
-| Input report 0x31, 78 bytes | Bluetooth input report id and size; payload starts at byte 2 | [#L81-L82](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L81-L82), structs [#L198-L229](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L198-L229), Bluetooth parse [#L1336-L1346](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L1336-L1346) | `Sources/Core/internal/core_internal.h:67` |
+| Input report 0x31, 78 bytes | Bluetooth input report id and size; payload starts at byte 2 | [#L81-L82](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L81-L82), structs [#L198-L229](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L198-L229), Bluetooth parse [#L1336-L1346](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L1336-L1346) | `Sources/Core/internal/core_internal.h:69` |
 | Output report layout | Tag 0x10, sequence in the high nibble, `valid_flag0/1/2`, light bar setup, the common block whose `reserved2` holds the two trigger effects | [#L129-L141](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L129-L141), [#L232-L266](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L232-L266) | `Sources/Core/output/output.c:8`, `Sources/Core/output/output.c:25` |
-| Touchpad 1920 × 1080 | Touch coordinates and the 4-byte touch point | [#L148-L149](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L148-L149), [#L198-L203](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L198-L203) | `Sources/Core/internal/core_internal.h:82` |
+| Touchpad 1920 × 1080 | Touch coordinates and the 4-byte touch point | [#L148-L149](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L148-L149), [#L198-L203](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L198-L203) | `Sources/Core/internal/core_internal.h:92` |
 | Player lamps | "Player 1" is the center lamp, `BIT(2)` | [#L1570-L1571](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L1570-L1571) | `Sources/Core/settings/bindings.c:61` |
+| Motion sensors in report 0x31 | `gyro[3]` and `accel[3]`, signed little-endian 16-bit, then `sensor_timestamp`, unsigned 32-bit in 0.33 µs ticks; Linux handles the clock's wrap the same way | struct [#L216-L218](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L216-L218), parse [#L1397-L1432](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L1397-L1432) | `Sources/Core/internal/core_internal.h:87`, `Sources/Core/input/decode.c:56`, `Sources/Core/internal/motion.h:79` |
+| Calibration report 0x05, 41 bytes, CRC seed 0xA3 | Feature report read with a length, report-id and (Bluetooth) CRC-32 check over 0xA3 + bytes 0–36, CRC in the last 4 bytes | [#L77](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L77), [#L88-L89](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L88-L89), `ps_get_report` [#L747-L781](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L747-L781), `ps_check_crc32` [#L700-L708](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L700-L708) | `Sources/Core/internal/motion.h:34`, `Sources/Core/input/motion_cal.c:60`, `Sources/Core/runtime/core_thread.c:296` |
+| Calibration fields and scales | Field offsets (all `short`), gyro deg/s = raw × speed_2x / (\|plus − bias\| + \|minus − bias\|) with the applied bias 0, accel g = (raw − bias) × 2 / range_2g with bias = plus − range_2g / 2; an axis with a zero denominator falls back to ±2048 deg/s or ±4 g at full scale. DSXP also rejects a scale more than 30 % off nominal | [#L952-L1075](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L952-L1075), constants [#L144-L147](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-playstation.c#L144-L147) | `Sources/Core/input/motion_cal.c:52`, `Sources/Core/input/motion_cal.c:103`, `Sources/Core/internal/motion.h:41` |
 | Bluetooth report descriptor | Report 0x31 is one vendor blob: usage page 0xFF00, usage 0x3B, size 8 × count 77, no standard axes or buttons | [nondebug/dualsense, report-descriptor-bluetooth.txt#L49-L58](https://github.com/nondebug/dualsense/blob/main/report-descriptor-bluetooth.txt#L49-L58) | `Sources/Core/internal/core_internal.h:6`, `README.md` (Why it is needed) |
-| VID/PID 054C:0CE6 | Sony's vendor id, the DualSense product id | [hid-ids.h#L1194](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-ids.h#L1194) and [#L1202](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-ids.h#L1202); also in Apple's `AppleGameControllerPersonality.kext` Info.plist (1356 / 3302) | `Sources/Core/internal/core_internal.h:42` |
+| VID/PID 054C:0CE6 | Sony's vendor id, the DualSense product id | [hid-ids.h#L1194](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-ids.h#L1194) and [#L1202](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hid-ids.h#L1202); also in Apple's `AppleGameControllerPersonality.kext` Info.plist (1356 / 3302) | `Sources/Core/internal/core_internal.h:44` |
 | Adaptive-trigger effects | 0x21 Feedback, 0x25 Weapon, 0x26 Vibration: 10 zones, strength stored as strength − 1 (3 bits), Weapon start zone 2–7 and end after it, up to 8 | Sony publishes nothing. Community source: [Nielk1's notes](https://gist.github.com/Nielk1/6d54cc2c00d2201ccb8c2720ad7538db) (verified: the values and packing match) | `Sources/Core/output/output.c:57`, `Sources/Core/output/output.c:65`, `Sources/Core/output/output.c:95`, `Sources/Core/output/wind.c:17` |
 | `AppleGCHIDUserEventDriver` | Apple's private driver that claims the DualSense | No public documentation. Local: `/System/Library/Extensions/AppleGameControllerPersonality.kext/Contents/Info.plist` ("DualSense Controller IOService" → `IOClass AppleGCHIDUserEventDriver`) | `Sources/Core/internal/core_internal.h:13`, `Sources/Core/output/output.c:6` |
+
+### Motion control maths
+
+| Reference | What it is | Where to read it | Used at |
+|---|---|---|---|
+| Complementary filter on the gravity direction | Gyro turns the estimate, the accelerometer pulls it back slowly; DSXP keeps only the "up" vector (no integral term), which is all bank and pitch need | R. Mahony, T. Hamel, J.-M. Pflimlin, "Nonlinear Complementary Filters on the Special Orthogonal Group", IEEE Transactions on Automatic Control 53(5):1203–1218, 2008, [doi:10.1109/TAC.2008.923738](https://doi.org/10.1109/TAC.2008.923738) (open copy: [HAL hal-00488376](https://hal.archives-ouvertes.fr/hal-00488376)) | `Sources/Core/input/motion.c:227` |
+| Marching squares | The 2D form of marching cubes, used to trace the fuselage outline where n · (P − eye) = 0 | W. E. Lorensen, H. E. Cline, "Marching cubes: A high resolution 3D surface construction algorithm", SIGGRAPH Computer Graphics 21(4):163–169, 1987, [doi:10.1145/37402.37422](https://doi.org/10.1145/37402.37422) | `Resources/web/plane3d/contour.js:60` |
+| Monotone cubic interpolation (PCHIP) | Smooth fuselage radii that never overshoot below zero at the nose and tail | F. N. Fritsch, R. E. Carlson, "Monotone Piecewise Cubic Interpolation", SIAM Journal on Numerical Analysis 17(2):238–246, 1980, [doi:10.1137/0717021](https://doi.org/10.1137/0717021); end slopes as in SciPy's `PchipInterpolator` | `Resources/web/plane3d/math.js:39` |
+| Controller frame and signs | x toward the right grip, y out of the face, z toward you; measured with a live tilt test on 2026-11-06 except the twist sign, which follows from the frame and is checked on hardware | This project: the tilt test notes in `Sources/Core/internal/motion.h` | `Sources/Core/internal/motion.h:12` |
 
 ### Controller drawing
 
@@ -102,8 +114,8 @@ or confirm the image's license. The app icon is original
 
 | Reference | What it is | Where to read it | Used at |
 |---|---|---|---|
-| IOHIDManager | HID device access | [IOHIDManager.h](https://developer.apple.com/documentation/iokit/iohidmanager_h), [IOHIDManagerOpen](https://developer.apple.com/documentation/iokit/1438369-iohidmanageropen), [IOHIDManagerCreate](https://developer.apple.com/documentation/iokit/1438383-iohidmanagercreate), [IOHIDManagerCopyDevices](https://developer.apple.com/documentation/iokit/1438391-iohidmanagercopydevices), [IOHIDManagerSetDeviceMatching](https://developer.apple.com/documentation/iokit/1438371-iohidmanagersetdevicematching), [kIOHIDTransportKey](https://developer.apple.com/documentation/iokit/kiohidtransportkey) | `Sources/Core/runtime/core_thread.c:286`, `Sources/Core/runtime/core_thread.c:302`, `Sources/Core/platform/guard.c:150` |
-| `IOHIDCheckAccess`, `IOHIDRequestAccess` | Input Monitoring check and request | [kIOHIDRequestTypeListenEvent](https://developer.apple.com/documentation/iokit/iohidrequesttype/kiohidrequesttypelistenevent), [IOHIDAccessType](https://developer.apple.com/documentation/iokit/iohidaccesstype). The two functions have no Apple page; the header: [IOHIDLib.h#L192](https://github.com/apple-oss-distributions/IOKitUser/blob/main/hidsystem.subproj/IOHIDLib.h#L192), [#L213](https://github.com/apple-oss-distributions/IOKitUser/blob/main/hidsystem.subproj/IOHIDLib.h#L213) | `Sources/Core/runtime/core_thread.c:339`, `Sources/Core/runtime/core_thread.c:843` |
+| IOHIDManager | HID device access | [IOHIDManager.h](https://developer.apple.com/documentation/iokit/iohidmanager_h), [IOHIDManagerOpen](https://developer.apple.com/documentation/iokit/1438369-iohidmanageropen), [IOHIDManagerCreate](https://developer.apple.com/documentation/iokit/1438383-iohidmanagercreate), [IOHIDManagerCopyDevices](https://developer.apple.com/documentation/iokit/1438391-iohidmanagercopydevices), [IOHIDManagerSetDeviceMatching](https://developer.apple.com/documentation/iokit/1438371-iohidmanagersetdevicematching), [kIOHIDTransportKey](https://developer.apple.com/documentation/iokit/kiohidtransportkey) | `Sources/Core/runtime/core_thread.c:375`, `Sources/Core/runtime/core_thread.c:391`, `Sources/Core/platform/guard.c:150` |
+| `IOHIDCheckAccess`, `IOHIDRequestAccess` | Input Monitoring check and request | [kIOHIDRequestTypeListenEvent](https://developer.apple.com/documentation/iokit/iohidrequesttype/kiohidrequesttypelistenevent), [IOHIDAccessType](https://developer.apple.com/documentation/iokit/iohidaccesstype). The two functions have no Apple page; the header: [IOHIDLib.h#L192](https://github.com/apple-oss-distributions/IOKitUser/blob/main/hidsystem.subproj/IOHIDLib.h#L192), [#L213](https://github.com/apple-oss-distributions/IOKitUser/blob/main/hidsystem.subproj/IOHIDLib.h#L213) | `Sources/Core/runtime/core_thread.c:428`, `Sources/Core/runtime/core_thread.c:938` |
 | Input Monitoring | The privacy permission DSXP needs to read the controller | [Control access to input monitoring on Mac](https://support.apple.com/guide/mac-help/control-access-to-input-monitoring-on-mac-mchl4cedafb6/mac). The `x-apple.systempreferences:…?Privacy_ListenEvent` link that opens it is not documented by Apple | `Sources/App/Lifecycle/AppDelegate.swift:177` |
 | `tccutil` | Resets a privacy permission | `man 1 tccutil` (no Apple web page) | `README.md` (Uninstall) |
 | SMAppService | Launch at Login, with the "requires approval" state | [SMAppService](https://developer.apple.com/documentation/servicemanagement/smappservice), [mainApp](https://developer.apple.com/documentation/servicemanagement/smappservice/mainapp), [requiresApproval](https://developer.apple.com/documentation/servicemanagement/smappservice/status-swift.enum/requiresapproval), [openSystemSettingsLoginItems()](https://developer.apple.com/documentation/servicemanagement/smappservice/opensystemsettingsloginitems()) | `Sources/App/System/LoginItem.swift:15` |
@@ -149,8 +161,8 @@ What WebKit provides, and where DSXP uses it:
 | `accent-color` left unset (`auto`) lets native sliders and checkboxes follow the user's accent | [MDN accent-color](https://developer.mozilla.org/en-US/docs/Web/CSS/accent-color) | `Resources/web/app.css:125` |
 | `-apple-system` / `system-ui` select San Francisco | [WebKit: Using the system font in web content](https://webkit.org/blog/3709/using-the-system-font-in-web-content/) | `Resources/web/app.css:26` |
 | `font-variant-numeric: tabular-nums` keeps changing numbers from jittering (the CSS form of `monospacedDigitSystemFont`) | [MDN browser compatibility data](https://github.com/mdn/browser-compat-data) | `Resources/web/app.css:64` |
-| The color picker is DSXP's own popover (field, hue strip, hex, presets, Cancel and OK), not `<input type=color>`, which opens the system color panel that has no OK button | — | `Resources/web/app.js:267`, `Resources/web/index.html:38` |
-| `<input type=checkbox switch>` is drawn as a native switch (seen in DSXP's own WebKit render on macOS 27.2); a WebKit without it shows a plain checkbox, which works the same | DSXP render check | `Resources/web/index.html:368` |
+| The color picker is DSXP's own popover (field, hue strip, hex, presets, Cancel and OK), not `<input type=color>`, which opens the system color panel that has no OK button | — | `Resources/web/app.js:272`, `Resources/web/index.html:38` |
+| `<input type=checkbox switch>` is drawn as a native switch (seen in DSXP's own WebKit render on macOS 27.2); a WebKit without it shows a plain checkbox, which works the same | DSXP render check | `Resources/web/index.html:411` |
 
 ## Build and legal
 
@@ -172,19 +184,19 @@ No `strcpy`, `strcat`, `sprintf`, `strncpy` or `gets` anywhere; every copy is
 
 | Buffer | Size | Where | Worst case | Bounded by |
 |---|---|---|---|---|
-| Command path / description | 256 / 256 | `Sources/Core/internal/core_internal.h:48` | Longest path in `Commands.txt`: 51 characters | `cmd_valid` (< 256), parse caps at 255 |
-| Command catalog | 8192 entries | `Sources/Core/internal/core_internal.h:47` | 3165 in X-Plane 12.4 | count checked while parsing |
-| `DREF` / `RREF` / `CMND` packets | 509 / 413 / ≤ 505 bytes | `Sources/Core/internal/core_internal.h:369` | Fixed by the spec (5 + 4 + 500, 5 + 4 + 4 + 400, 5 + path + NUL) | path capped at 499 / 399 / 499 characters |
-| UDP receive buffer | 2048 bytes | `Sources/Core/runtime/core_thread.c:315` | An `RREF` reply holds at most 183 pairs (1469 bytes); DSXP subscribes 47 ids (≤ 381 bytes) | `recvfrom` length |
+| Command path / description | 256 / 256 | `Sources/Core/internal/core_internal.h:50` | Longest path in `Commands.txt`: 51 characters | `cmd_valid` (< 256), parse caps at 255 |
+| Command catalog | 8192 entries | `Sources/Core/internal/core_internal.h:49` | 3165 in X-Plane 12.4 | count checked while parsing |
+| `DREF` / `RREF` / `CMND` packets | 509 / 413 / ≤ 505 bytes | `Sources/Core/internal/core_internal.h:429` | Fixed by the spec (5 + 4 + 500, 5 + 4 + 4 + 400, 5 + path + NUL) | path capped at 499 / 399 / 499 characters |
+| UDP receive buffer | 2048 bytes | `Sources/Core/runtime/core_thread.c:404` | An `RREF` reply holds at most 183 pairs (1469 bytes); DSXP subscribes 47 ids (≤ 381 bytes) | `recvfrom` length |
 | Telemetry pairs per reply | 128 | `Sources/Core/sim/telemetry.c:134` | 47 | parse caps at the array size |
-| Bluetooth report | 78 bytes in, 78 out | `Sources/Core/internal/core_internal.h:64` | Fixed by the device | reports shorter than 42 bytes are dropped (`Sources/Core/internal/core_internal.h:87`) |
-| Status notes | 64 | `Sources/Core/internal/core_internal.h:263` | About 30 characters | `snprintf` truncates |
+| Bluetooth report | 78 bytes in, 78 out | `Sources/Core/internal/core_internal.h:66` | Fixed by the device | reports shorter than 42 bytes are dropped (`Sources/Core/internal/core_internal.h:97`) |
+| Status notes | 64 | `Sources/Core/internal/core_internal.h:301` | About 30 characters | `snprintf` truncates |
 | Config file | 256 KB per file, 1023 characters per line, 32 reported problems per file | `Sources/Core/internal/config.h:57`, `Sources/Core/internal/config.h:56`, `Sources/Core/settings/conf.c:340` | About 9 KB each | larger files are refused with a warning; further problems are counted (`dropped`) |
 | Config text buffer | 64 KB | `Sources/Core/runtime/config_store.c:54` | About 9 KB | `conf_format` returns 0 if it would not fit |
-| Old `bindings.conf` | 1 MB, 1023 characters per line | `Sources/Core/internal/core_internal.h:65` | About 3 KB | `file_read_all` cap; long lines skipped |
-| Paths | 1024 (data, log folders), 1100 (files) | `Sources/Core/runtime/core_thread.c:46` | User-chosen | `snprintf` result checked; a path that would be cut is refused (`Sources/Core/runtime/config_store.c:88`) |
+| Old `bindings.conf` | 1 MB, 1023 characters per line | `Sources/Core/internal/core_internal.h:67` | About 3 KB | `file_read_all` cap; long lines skipped |
+| Paths | 1024 (data, log folders), 1100 (files) | `Sources/Core/runtime/core_thread.c:49` | User-chosen | `snprintf` result checked; a path that would be cut is refused (`Sources/Core/runtime/config_store.c:88`) |
 | `/api/init` JSON | about 212 KB | — | 3165 commands | grows on demand |
-| Core thread stack | 1 MB | `Sources/Core/runtime/core_thread.c:747` | Largest locals about 16 KB; big buffers are `static` or heap | Apple's default for secondary threads is 512 KB ([Threading Programming Guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/CreatingThreads/CreatingThreads.html)) |
+| Core thread stack | 1 MB | `Sources/Core/runtime/core_thread.c:842` | Largest locals about 16 KB; big buffers are `static` or heap | Apple's default for secondary threads is 512 KB ([Threading Programming Guide](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/CreatingThreads/CreatingThreads.html)) |
 
 ### UDP
 
@@ -192,28 +204,28 @@ No `strcpy`, `strcat`, `sprintf`, `strncpy` or `gets` anywhere; every copy is
   implicit in a send()", `man 2 sendto`). A busy X-Plane can drop DSXP's packets,
   so overrides are re-asserted every `timing.override_reassert`, a handed-back axis
   gets `timing.override_release_repeats` further releases
-  (`Sources/Core/sim/xplane.c:107`), and the throttle has a
-  keepalive (`Sources/Core/sim/xplane.c:203`).
+  (`Sources/Core/sim/xplane.c:111`), and the throttle has a
+  keepalive (`Sources/Core/sim/xplane.c:230`).
 - `recvfrom` discards bytes beyond the buffer (`man 2 recvfrom`); the buffer is
   larger than any reply X-Plane can send (above).
 - This Mac: `net.inet.udp.recvspace` 786896, `net.inet.udp.maxdgram` 9216,
   `kern.ipc.maxsockbuf` 8388608 (`sysctl`, macOS 27.2). DSXP keeps the default
   receive buffer.
 - DSXP binds `127.0.0.1` on a system-chosen port
-  (`Sources/Core/runtime/core_thread.c:641`)
+  (`Sources/Core/runtime/core_thread.c:731`)
   and accepts telemetry only from loopback
-  (`Sources/Core/runtime/core_thread.c:320`).
+  (`Sources/Core/runtime/core_thread.c:409`).
 
 ### X-Plane behavior
 
 - **Overrides.** The yoke and brake datarefs only take effect with their override
   flag set (`DataRefs.txt` above). Every exit path releases them: disengage
-  (`Sources/Core/sim/xplane.c:83`), quit, and the crash guard
+  (`Sources/Core/sim/xplane.c:85`), quit, and the crash guard
   (`Sources/Core/platform/guard.c:106`), which also zeroes
   the brakes.
 - **Engagement needs telemetry.** DSXP takes the controls only while X-Plane
   answers its `RREF` subscription
-  (`Sources/Core/runtime/core.c:112`); with networking
+  (`Sources/Core/runtime/core.c:170`); with networking
   off it stays idle and the menu says "Not answering".
 - **Subscriptions.** One `RREF` per array element; frequency 0 cancels. While no
   data arrives DSXP resubscribes every `telemetry.resubscribe`
@@ -225,7 +237,7 @@ No `strcpy`, `strcat`, `sprintf`, `strncpy` or `gets` anywhere; every copy is
 - **Ports.** X-Plane receives on 49000 unless changed in its Network settings
   (`xplane.port`); 49010 belongs to RakNet. A port change in `bridge.conf` releases
   everything on the old port first
-  (`Sources/Core/runtime/core_thread.c:468`) and
+  (`Sources/Core/runtime/core_thread.c:557`) and
   tells the guard (`Sources/App/Lifecycle/AppDelegate.swift:93`).
 - **Weather and wings in X-Plane 12.** Turbulence is per layer, interpolated at the
   aircraft's elevation (`Sources/Core/sim/telemetry.c:50`).
@@ -244,29 +256,29 @@ No `strcpy`, `strcat`, `sprintf`, `strncpy` or `gets` anywhere; every copy is
 - Force has 8 levels and position 10 zones
   (`Sources/Core/output/output.c:66`), which the config comments state.
 - Adaptive-trigger and light-bar writes are coalesced to one report per frame and
-  sent only on change, plus a keepalive (`Sources/Core/runtime/core.c:53`).
+  sent only on change, plus a keepalive (`Sources/Core/runtime/core.c:62`).
 
 ### C
 
 - **String to number** ([CERT ERR34-C](https://cmu-sei.github.io/secure-coding-standards/sei-cert-c-coding-standard/rules/error-handling-err/err34-c)):
   `atoi` and `sscanf` cannot report overflow. The API uses `strtol`/`strtod` with
-  `errno`, end-pointer and range checks (`Sources/Core/api/api.c:50`).
+  `errno`, end-pointer and range checks (`Sources/Core/api/api.c:54`).
 - **Locale.** `strtod` and `printf` follow the process locale, so `6,0` in German;
   the config files use `strtod_l` / `snprintf_l` with the C locale
   (`Sources/Core/settings/conf.c:29`), tested under `de_DE`
-  (`Tests/CoreTests/test_config.c:333`).
+  (`Tests/CoreTests/test_config.c:354`).
 - **Struct padding** (CERT EXP42-C): padded structs are compared field by field,
   not with `memcmp` (`Sources/Core/output/output.c:125`).
 - **Clocks.** `CLOCK_MONOTONIC_RAW` keeps counting during sleep (`man clock_gettime`;
-  `Sources/Core/runtime/core_thread.c:116`). macOS
+  `Sources/Core/runtime/core_thread.c:129`). macOS
   `pthread_cond_timedwait` compares against the wall clock, so waits use
-  `pthread_cond_timedwait_relative_np` (`Sources/Core/runtime/core_thread.c:783`).
+  `pthread_cond_timedwait_relative_np` (`Sources/Core/runtime/core_thread.c:878`).
 - **Spawning.** Signals ignored in the parent stay ignored in the child unless
   `POSIX_SPAWN_SETSIGDEF` is set; descriptors are close-on-exec at once
   (`Sources/Core/platform/guard.c:59`).
 - **Shutdown.** A Bluetooth write can block; the writer thread gets 0.3 s, then
   `dsxp_stop` reports failure and the guard cleans up
-  (`Sources/Core/runtime/core_thread.c:427`).
+  (`Sources/Core/runtime/core_thread.c:516`).
 
 ### Swift and WebKit
 
@@ -276,7 +288,7 @@ No `strcpy`, `strcat`, `sprintf`, `strncpy` or `gets` anywhere; every copy is
   (`Sources/App/Lifecycle/AppDelegate.swift:57`).
 - A `WKURLSchemeTask` must not be touched after `stop`
   ([Apple forums 712430](https://developer.apple.com/forums/thread/712430)); the
-  handler tracks live tasks (`Sources/App/Bridge/SchemeHandler.swift:99`).
+  handler tracks live tasks (`Sources/App/Bridge/SchemeHandler.swift:107`).
 - `SMAppService` has a "requires approval" state
   ([theevilbit](https://theevilbit.github.io/posts/smappservice)); the menu shows
   it as a third state (`Sources/App/System/LoginItem.swift:17`).
@@ -301,11 +313,11 @@ These are in comments as "observed". What would settle each:
 
 | Claim | Where | How to verify |
 |---|---|---|
-| Overrides reset when an aircraft is reloaded | `Sources/Core/sim/xplane.c:126` | Reload an aircraft while engaged and watch `override_joystick_*` in a dataref inspector |
+| Overrides reset when an aircraft is reloaded | `Sources/Core/sim/xplane.c:130` | Reload an aircraft while engaged and watch `override_joystick_*` in a dataref inspector |
 | `RREF` subscriptions are dropped across reloads | `Sources/Core/sim/telemetry.c:199` | Count replies before and after a reload with DSXP's resubscribe disabled |
-| X-Plane's null zone does not apply to override datarefs | `Sources/Core/input/decode.c:8`, `Sources/Core/settings/config_schema.c:126`, `Resources/web/index.html:263` | Set a large null zone in X-Plane and write small values through the override |
+| X-Plane's null zone does not apply to override datarefs | `Sources/Core/input/decode.c:8`, `Sources/Core/settings/config_schema.c:127`, `Resources/web/index.html:306` | Set a large null zone in X-Plane and write small values through the override |
 | Telemetry keeps streaming while paused | `Sources/Core/sim/telemetry.c:212` | Pause and count `RREF` replies |
-| macOS sets its own light bar color | `Sources/Core/runtime/core.c:49`, `Resources/web/app.js:335` | Stop the keepalive and watch the bar |
+| macOS sets its own light bar color | `Sources/Core/runtime/core.c:58`, `Resources/web/app.js:340` | Stop the keepalive and watch the bar |
 | `AppleGCHIDUserEventDriver` latches the controller into report 0x31 | `Sources/Core/internal/core_internal.h:12` | Compare report ids before and after the driver attaches (`ioreg`) |
 | The 824 pt body / 100 pt margin of the icon grid | `Tools/make-icon.swift:25` | Apple's macOS icon template |
 | "Accept incoming connections" is the setting's label | `README.md` (Requirements) | X-Plane 12 Settings › Network |
