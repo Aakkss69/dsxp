@@ -221,9 +221,9 @@ static void step_reach(calib_t *c, motion_t *m, const motion_sample_t *s, double
         return;
     }
     if (c->step == CALIB_YAW) {
-        /* the twist about the vertical (the same rate flight uses, motion_yaw.c), added
-         * up plainly: no hold, so the reach is the hand's own */
-        c->twist += motion_yaw_rate(s->gyro_dps, m->bias, m->up) * dt;   /* right is positive */
+        /* the twist about the controller's face (the same rate flight uses,
+         * motion_yaw.c), added up plainly: no hold, so the reach is the hand's own */
+        c->twist += motion_yaw_rate(s->gyro_dps, m->bias) * dt;   /* right is positive    */
         c->angle = c->twist;
     } else {
         c->angle = c->step == CALIB_ROLL ? m->bank_deg : m->pitch_deg;   /* relative to level */

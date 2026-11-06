@@ -324,7 +324,7 @@ static const char *const RETIRED_KEYS[] = {
 
 static bool retired_key(const char *key) {
     for (size_t i = 0; i < sizeof RETIRED_KEYS / sizeof RETIRED_KEYS[0]; i++)
-        if (!strcmp(key, RETIRED_KEYS[i])) return true;
+        if (!strcasecmp(key, RETIRED_KEYS[i])) return true;   /* keys ignore case (conf_find) */
     return false;
 }
 

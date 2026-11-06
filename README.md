@@ -142,14 +142,22 @@ makes the way you hold the controller now level until you switch motion off or r
   lower it to push. **Yaw**: twist the controller about its face, like a steering
   wheel lying flat. The rudder follows your twist and stays where you leave it; twist
   back (or Recenter) to center it.
+  - Only the twist about the controller's face counts, so banking and pitching never
+    move the rudder, whatever your level.
   - Held still (less than 1° of change over 0.5 s), it keeps the average of that half
-    second, so hand tremor doesn't wiggle it. While held, change slower than 0.25°/s is
-    taken as the gyro's drift and ignored, so the rudder can't creep off center.
-  - A slow twist still counts: once it adds up to 1°, the rudder eases over to it.
+    second, so hand tremor doesn't wiggle it.
+  - A slow twist still counts in full: once it adds up to 1°, the rudder eases over to
+    it. Change that crept up slower than 0.25°/s (over the last 2 s) is the gyro's drift
+    instead: DSXP takes it out, and from then on subtracts it all the time, so the
+    rudder can't creep off center.
   - A quick twist (0.1° or more in each of two 100 ms windows in a row, the same way)
     lets go at once and the rudder follows your hand.
-  - These values are constants in `Sources/Core/internal/motion_yaw.h`. The old
-    `motion.yaw_return` setting is no longer used; DSXP ignores it in an existing file.
+  - Set the controller down (as still as on a table for 3 s) and the rudder eases back to
+    center, so picking it up starts there. A gap in the controller's reports of up to
+    1 s keeps the rudder where it was; a longer one centers it.
+  - These values are constants in `Sources/Core/internal/motion_yaw.h` (set-down in
+    `motion.c`). The old `motion.yaw_return` setting is no longer used; DSXP ignores it
+    in an existing file.
 - Tick **Motion** for each axis it should fly. An axis on motion ignores every stick
   set to it (yaw also ignores the rudder triggers); the others work as set under Axes.
 - **Full deflection at** is the angle that gives full control (40° bank, 30° pitch,

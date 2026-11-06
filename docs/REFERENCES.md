@@ -95,7 +95,7 @@ Default commands (`Sources/Core/settings/bindings.c:30` onward), with their
 
 | Reference | What it is | Where to read it | Used at |
 |---|---|---|---|
-| Complementary filter on the gravity direction | Gyro turns the estimate, the accelerometer pulls it back slowly; DSXP keeps only the "up" vector (no integral term), which is all bank and pitch need | R. Mahony, T. Hamel, J.-M. Pflimlin, "Nonlinear Complementary Filters on the Special Orthogonal Group", IEEE Transactions on Automatic Control 53(5):1203–1218, 2008, [doi:10.1109/TAC.2008.923738](https://doi.org/10.1109/TAC.2008.923738) (open copy: [HAL hal-00488376](https://hal.archives-ouvertes.fr/hal-00488376)) | `Sources/Core/input/motion.c:190` |
+| Complementary filter on the gravity direction | Gyro turns the estimate, the accelerometer pulls it back slowly; DSXP keeps only the "up" vector (no integral term), which is all bank and pitch need | R. Mahony, T. Hamel, J.-M. Pflimlin, "Nonlinear Complementary Filters on the Special Orthogonal Group", IEEE Transactions on Automatic Control 53(5):1203–1218, 2008, [doi:10.1109/TAC.2008.923738](https://doi.org/10.1109/TAC.2008.923738) (open copy: [HAL hal-00488376](https://hal.archives-ouvertes.fr/hal-00488376)) | `Sources/Core/input/motion.c:221` |
 | Marching squares | The 2D form of marching cubes, used to trace the fuselage outline where n · (P − eye) = 0 | W. E. Lorensen, H. E. Cline, "Marching cubes: A high resolution 3D surface construction algorithm", SIGGRAPH Computer Graphics 21(4):163–169, 1987, [doi:10.1145/37402.37422](https://doi.org/10.1145/37402.37422) | `Resources/web/plane3d/contour.js:105` |
 | Monotone cubic interpolation (PCHIP) | Smooth fuselage radii that never overshoot below zero at the nose and tail | F. N. Fritsch, R. E. Carlson, "Monotone Piecewise Cubic Interpolation", SIAM Journal on Numerical Analysis 17(2):238–246, 1980, [doi:10.1137/0717021](https://doi.org/10.1137/0717021); end slopes as in SciPy's `PchipInterpolator` | `Resources/web/plane3d/math.js:39` |
 | Controller frame and signs | x toward the right grip, y out of the face, z toward you; measured with a live tilt test on 2026-11-06; the twist sign, derived from the frame, confirmed on 2026-11-07 (a right twist integrated to −63 deg of gyro y) | This project: the tilt test notes in `Sources/Core/internal/motion.h` | `Sources/Core/internal/motion.h:16` |
@@ -268,7 +268,7 @@ No `strcpy`, `strcat`, `sprintf`, `strncpy` or `gets` anywhere; every copy is
 - **Locale.** `strtod` and `printf` follow the process locale, so `6,0` in German;
   the config files use `strtod_l` / `snprintf_l` with the C locale
   (`Sources/Core/settings/conf.c:29`), tested under `de_DE`
-  (`Tests/CoreTests/test_config.c:369`).
+  (`Tests/CoreTests/test_config.c:370`).
 - **Struct padding** (CERT EXP42-C): padded structs are compared field by field,
   not with `memcmp` (`Sources/Core/output/output.c:125`).
 - **Clocks.** `CLOCK_MONOTONIC_RAW` keeps counting during sleep (`man clock_gettime`;

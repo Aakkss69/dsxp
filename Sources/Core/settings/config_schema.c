@@ -209,9 +209,9 @@ static const conf_key_t CONTROLS_KEYS[] = {
       "corrections need a deliberate tilt. Lower: finer corrections, more wander."),
     K("motion.yaw.deadzone", CT_REAL, s.motion.yaw_deadzone_deg, 0, 20, 1, "deg",
       "Yaw: twist from center that does nothing. The rudder stays where you leave it (twist\n"
-      "back, or Recenter, to center it), and the gyro's slow drift is taken out while you\n"
-      "hold still, so a few degrees is plenty. Higher: the rudder stays centered unless you\n"
-      "mean it. Lower: smaller twists already move the rudder."),
+      "back, or Recenter, to center it), and the gyro's slow drift is measured and taken\n"
+      "out, so a few degrees is plenty. Higher: the rudder stays centered unless you mean\n"
+      "it. Lower: smaller twists already move the rudder."),
     KX("motion.roll.invert", CT_BOOL, s.motion.invert[MOTION_ROLL],
        "yes: banking the controller right rolls left."),
     KX("motion.pitch.invert", CT_BOOL, s.motion.invert[MOTION_PITCH],

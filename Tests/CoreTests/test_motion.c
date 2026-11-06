@@ -195,6 +195,14 @@ static motion_sample_t run(motion_t *m, sim_t *s, const motion_cfg_t *cfg, doubl
     return smp;
 }
 
+/* Held in a hand, otherwise still: `secs` of tremor, +-2 deg/s about the side axis in
+ * turn (no net turn). 4 deg/s peak to peak, like the stillest hand measured, so the fusion
+ * never takes it for set down (motion.c REST_P2P_DPS 2.5). */
+static void hold_hand(motion_t *m, sim_t *s, const motion_cfg_t *cfg, double secs) {
+    for (int i = 0; i < (int)lround(secs * SIM_HZ); i++)
+        run(m, s, cfg, (i % 2) ? 2 : -2, 0, 0, 1.0 / SIM_HZ);
+}
+
 /* Start a fusion at rest, flat, with one sample to seed it. */
 static void start(motion_t *m, sim_t *s, const motion_cfg_t *cfg) {
     motion_init(m);
@@ -313,9 +321,9 @@ void test_motion_calib(void) {
     calib_run(&k, &m, &s, &cfg, 0, -80, 0, 0.5, false);          /* back                 */
     calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0, false);
     CHECK_INT(k.step, CALIB_DONE);
-    /* held 25 deg nose-up, a 40 deg twist about the face is 40 cos 25 = 36.3 deg about the
-     * vertical, the same twist flight uses (motion.c); 90 % of that is 33 */
-    CHECK_NEAR(k.full[MOTION_YAW], 33, 1e-12);
+    /* held 25 deg nose-up, the twist is still measured about the face, as in flight
+     * (motion_yaw.c): 40 deg, so 90 % of it is 36 (about the vertical it read 36.3) */
+    CHECK_NEAR(k.full[MOTION_YAW], 36, 1e-12);
     calib_run(&k, &m, &s, &cfg, 0, 0, 30, 1.0, false);           /* done: nothing changes */
     CHECK_INT(k.step, CALIB_DONE);
 
@@ -444,10 +452,10 @@ void test_motion(void) {
     CHECK_NEAR(m.yaw.deg, 20, 0.05);             /* followed while moving                 */
     CHECK(m.out[MOTION_YAW] > 0.5);
 
-    /* held still, the rudder stays where it is for as long as the hand stays still (no
-     * return to center) */
-    run(&m, &s, &cfg, 0, 0, 0, 30.0);
-    CHECK(m.yaw.holding);
+    /* held still in the hand, the rudder stays where it is for as long as the hand holds
+     * it (no return to center) */
+    hold_hand(&m, &s, &cfg, 30.0);
+    CHECK(m.yaw.holding && !m.resting);
     CHECK_NEAR(m.yaw.deg, 20, 0.05);
     /* twisting back the full 20 deg brings it to center, without overshooting */
     double lowest = m.yaw.deg;
@@ -459,6 +467,43 @@ void test_motion(void) {
     CHECK(lowest > -0.1);
     CHECK_NEAR(m.yaw.deg, 0, 0.05);
     CHECK_NEAR(m.out[MOTION_YAW], 0, 1e-9);      /* centered: no rudder                   */
+
+    /* banking or pitching, whatever the level, never reads as twist: the twist is the turn
+     * about the controller's face (about the vertical, 30 deg of bank at a 15.3 deg level
+     * read as -7.8 deg of yaw) */
+    for (int lv = 0; lv < 2; lv++) {
+        double level = lv ? 25.0 : 15.3;
+        start(&m, &s, &cfg);
+        run(&m, &s, &cfg, level * 2, 0, 0, 0.5);     /* nose up to the level              */
+        motion_set_level(&m, 0, level);
+        run(&m, &s, &cfg, 0, 0, -60, 0.5);           /* bank right 30 about the long axis */
+        hold_hand(&m, &s, &cfg, 3.0);
+        CHECK_NEAR(m.bank_deg, 30, 0.5);
+        CHECK_NEAR(m.yaw.deg, 0, 1e-9);
+        CHECK_NEAR(m.out[MOTION_YAW], 0, 1e-12);
+    }
+    /* ... and tilting round in circles adds nothing up (about the vertical, 4 circles of
+     * 10 deg built up 40.7 deg) */
+    start(&m, &s, &cfg);
+    run(&m, &s, &cfg, 20, 0, 0, 0.5);                /* nose up 10                        */
+    for (int i = 0; i < 4 * 128; i++) {              /* a 10 deg circle every 2 s, 4 times */
+        double ph = 2 * M_PI * i / 128.0, a = 10 * M_PI;
+        run(&m, &s, &cfg, a * cos(ph), 0, a * sin(ph), 1.0 / SIM_HZ);
+    }
+    CHECK_NEAR(m.yaw.deg, 0, 1e-9);
+
+    /* set down (as still as on a table), the yaw eases back to center */
+    start(&m, &s, &cfg);
+    run(&m, &s, &cfg, 0, -40, 0, 0.5);               /* twist right 20 deg                */
+    hold_hand(&m, &s, &cfg, 1.0);
+    CHECK_NEAR(m.yaw.deg, 20, 0.05);
+    run(&m, &s, &cfg, 0, 0, 0, 2.5);                 /* lying still, not yet 3 s          */
+    CHECK(!m.resting);
+    CHECK_NEAR(m.yaw.deg, 20, 0.05);
+    run(&m, &s, &cfg, 0, 0, 0, 1.5);                 /* past 3 s: set down                */
+    CHECK(m.resting);
+    CHECK_NEAR(m.yaw.deg, 0, 0.01);
+    CHECK_NEAR(m.out[MOTION_YAW], 0, 1e-12);
 
     /* recenter while held tilted toward you: that becomes level; a bank from there
      * reads as a bank, not a mix */
@@ -516,13 +561,18 @@ void test_motion(void) {
     run(&m, &s, &cfg, 0, 0, 0, 1.0);
     CHECK_NEAR(m.bank_deg, 15, 0.5);
 
-    /* a 0.2 s gap is a break: re-seeded from the accelerometer, held yaw dropped */
+    /* a 0.2 s gap is a break: re-seeded from the accelerometer; the held yaw is kept (the
+     * hand barely moves in it), and only a gap over YAW_GAP_KEEP_S centers it */
     run(&m, &s, &cfg, 0, -40, 0, 0.25);
-    CHECK(m.yaw.deg > 5);
+    double before_gap = m.yaw.deg;
+    CHECK(before_gap > 5);
     s.ts += (uint32_t)(0.2 * MOTION_TICKS_PER_SEC);
     run(&m, &s, &cfg, 0, 0, 0, 1.0 / SIM_HZ);
-    CHECK_NEAR(m.yaw.deg, 0, 1e-12);
+    CHECK_NEAR(m.yaw.deg, before_gap, 1e-12);
     CHECK_NEAR(m.bank_deg, 15, 0.5);
+    s.ts += (uint32_t)(1.5 * MOTION_TICKS_PER_SEC);
+    run(&m, &s, &cfg, 0, 0, 0, 1.0 / SIM_HZ);
+    CHECK_NEAR(m.yaw.deg, 0, 1e-12);
 
     /* the same timestamp twice is a duplicate: ignored */
     long n1 = m.samples;
@@ -584,29 +634,47 @@ void test_motion(void) {
 
 /* ------------------------------------------------------------------ yaw on its own */
 
-/* Feed the yaw `secs` of a constant twist rate at 64 Hz, the clock running on from *t.
- * Returns the largest change of the yaw flown from one sample to the next. */
+/* Feed the yaw `secs` of a constant twist rate (deg/s, right positive) at 64 Hz, the clock
+ * running on from *t. Returns the largest change of the yaw flown from one sample to the
+ * next. */
 static double yaw_run(motion_yaw_t *y, double *t, double rate, double secs, const motion_cfg_t *cfg) {
     double dt = 1.0 / SIM_HZ, step = 0;
+    double g[3] = { 0, -rate, 0 }, b[3] = { 0, 0, 0 };   /* twist right = negative gyro y */
     for (int i = 0; i < (int)lround(secs * SIM_HZ); i++) {
         double before = y->deg;
         *t += dt;
-        motion_yaw_update(y, rate, dt, *t, cfg);
+        motion_yaw_update(y, g, b, dt, *t, cfg);
         step = fmax(step, fabs(y->deg - before));
     }
     return step;
 }
 
-/* motion_yaw.c: follow, hold, drift, adding up, the sudden override, the cap. */
+/* A slow twist of `deg` at `rate`, held 1 s, then a quick twist back to the start: the
+ * yaw reached, and where it ends (it should end at the start). */
+static void slow_and_back(double deg, double rate, double *reached, double *ended) {
+    static motion_yaw_t y;
+    motion_cfg_t cfg = MOTION_DEFAULTS;
+    double t = 0;
+    motion_yaw_reset(&y);
+    yaw_run(&y, &t, 0, 1.0, &cfg);
+    yaw_run(&y, &t, rate, deg / rate, &cfg);
+    yaw_run(&y, &t, 0, 1.0, &cfg);
+    *reached = y.deg;
+    yaw_run(&y, &t, -40, deg / 40, &cfg);
+    yaw_run(&y, &t, 0, 1.0, &cfg);
+    *ended = y.deg;
+}
+
+/* motion_yaw.c: follow, hold, drift, adding up, the sudden override, set down, gaps. */
 void test_motion_yaw(void) {
     static motion_yaw_t y;
     motion_cfg_t cfg = MOTION_DEFAULTS;
     double t = 0;
 
-    /* the twist rate: the bias-removed gyro along "up", twist right positive */
-    double up[3] = { 0, 1, 0 }, g[3] = { 0, -40, 0 }, b0[3] = { 0, 0, 0 };
-    CHECK_NEAR(motion_yaw_rate(g, b0, up), 40, 1e-12);
-    CHECK_NEAR(motion_yaw_rate(g, g, up), 0, 1e-12);            /* all of it was bias    */
+    /* the twist rate: the bias-removed turn about the face, twist right positive */
+    double g[3] = { 7, -40, 9 }, b0[3] = { 0, 0, 0 };
+    CHECK_NEAR(motion_yaw_rate(g, b0), 40, 1e-12);              /* bank and pitch: none   */
+    CHECK_NEAR(motion_yaw_rate(g, g), 0, 1e-12);                /* all of it was bias    */
 
     /* follow: one to one while the hand moves */
     motion_yaw_reset(&y);
@@ -628,10 +696,12 @@ void test_motion_yaw(void) {
     CHECK(y.holding);
     CHECK_NEAR(y.deg, held, 0.01);
 
-    /* drift slower than YAW_CREEP_DPS is taken out: a minute at 0.1 deg/s adds nothing */
+    /* drift slower than YAW_CREEP_DPS is taken out while held: a minute at 0.1 deg/s
+     * moves nothing, and the drift it measured is subtracted from then on */
     yaw_run(&y, &t, 0.1, 60.0, &cfg);
     CHECK(y.holding);
     CHECK_NEAR(y.deg, held, 0.01);
+    CHECK(y.drift_dps > 0.05 && y.drift_dps < 0.1);
 
     /* a bump that goes and comes back (0.2 deg out in 0.1 s, then back) does not let go */
     yaw_run(&y, &t, 2, 0.1, &cfg);
@@ -645,26 +715,48 @@ void test_motion_yaw(void) {
     CHECK(y.holding);
     yaw_run(&y, &t, 0, 1.0, &cfg);
 
-    /* a slow deliberate twist adds up: past YAW_STEADY_DEG it moves the yaw, smoothly */
-    double before = y.deg;
-    step = yaw_run(&y, &t, 0.5, 10.0, &cfg);                    /* 5 deg at 0.5 deg/s    */
-    CHECK(y.deg - before > 1.5 && y.deg - before < 5.0);
-    CHECK(step < 0.2);                                          /* eased, never a step   */
-    yaw_run(&y, &t, 0, 1.0, &cfg);
-
     /* faster than 1 deg/s, the same way in two windows in a row: let go at once and follow
-     * the twist one to one (the yaw also catches up with any slow twist still adding up) */
+     * the twist one to one */
     CHECK(y.holding);
-    before = y.raw;
+    double before = y.raw;
     yaw_run(&y, &t, 1.5, YAW_FAST_WINDOWS * YAW_FAST_S + 0.05, &cfg);
     CHECK(!y.holding);
     yaw_run(&y, &t, 1.5, 2.0, &cfg);
     CHECK(!y.holding);
-    CHECK_NEAR(y.raw - before, 1.5 * (2.0 + YAW_FAST_WINDOWS * YAW_FAST_S + 0.05), 0.1);
     CHECK_NEAR(y.deg, y.raw, 0.01);                             /* following, caught up  */
+
+    /* drift is taken out while following too: with 0.1 deg/s of real drift on top of a
+     * steady 1.5 deg/s twist for 10 s, the twist reads 15 deg, not 16 */
+    motion_yaw_reset(&y);
+    yaw_run(&y, &t, 0.1, 180.0, &cfg);                          /* learn it while held   */
+    CHECK_NEAR(y.drift_dps, 0.1, 0.01);
+    before = y.raw;
+    yaw_run(&y, &t, 1.6, 10.0, &cfg);                           /* 1.5 twist + 0.1 drift */
+    CHECK(!y.holding);
+    CHECK_NEAR(y.raw - before, 15.0, 0.15);
+    /* a new bias means the drift is measured afresh */
+    double g2[3] = { 0, 0, 0 }, b2[3] = { 0, 0.3, 0 };
+    motion_yaw_update(&y, g2, b2, 1.0 / SIM_HZ, t += 1.0 / SIM_HZ, &cfg);
+    CHECK(y.drift_dps == 0);
+
+    /* a slow deliberate twist counts in full, and twisting back to the start ends there
+     * (taking 0.25 deg/s off every slow twist reached 3.96 of 10 deg and ended at -5.21) */
+    double reached, ended;
+    slow_and_back(10, 0.5, &reached, &ended);
+    CHECK(reached > 8.8 && reached < 10.01);
+    CHECK_NEAR(ended, 0, 0.2);
+    slow_and_back(10, 0.3, &reached, &ended);
+    CHECK(reached > 8.8 && reached < 10.01);
+    CHECK_NEAR(ended, 0, 0.2);
+    /* ... and smoothly: every step eased */
+    motion_yaw_reset(&y);
+    yaw_run(&y, &t, 0, 1.0, &cfg);
+    step = yaw_run(&y, &t, 0.5, 10.0, &cfg);
+    CHECK(step < 0.2);
 
     /* the output: through the yaw deadzone, inverted if asked */
     motion_yaw_reset(&y);
+    y.drift_dps = 0;
     yaw_run(&y, &t, 40, 0.25, &cfg);                            /* 10 deg right          */
     double want = shape(10.0 / cfg.full_deg[MOTION_YAW], cfg.yaw_deadzone_deg / cfg.full_deg[MOTION_YAW], 1.0);
     CHECK_NEAR(motion_yaw_output(&y, &cfg), want, 1e-9);
@@ -672,12 +764,36 @@ void test_motion_yaw(void) {
     inv.invert[MOTION_YAW] = true;
     CHECK_NEAR(motion_yaw_output(&y, &inv), -want, 1e-9);
 
+    /* a reading that is not a number changes nothing (it must never fly full rudder) */
+    double nan_g[3] = { 0, NAN, 0 }, deg_before = y.deg, raw_before = y.raw;
+    motion_yaw_update(&y, nan_g, b0, 1.0 / SIM_HZ, t += 1.0 / SIM_HZ, &cfg);
+    CHECK(y.deg == deg_before && y.raw == raw_before);
+    CHECK_NEAR(motion_yaw_output(&y, &cfg), want, 1e-9);
+
+    /* gaps: a short one keeps the yaw, a long (or unknown) one centers it */
+    motion_yaw_gap(&y, 0.5);
+    CHECK(y.deg == deg_before);
+    motion_yaw_gap(&y, 1.5);
+    CHECK(y.deg == 0 && y.raw == 0 && !y.holding);
+    yaw_run(&y, &t, 40, 0.25, &cfg);
+    motion_yaw_gap(&y, NAN);
+    CHECK(y.deg == 0);
+
+    /* set down: the yaw eases (no step) to center, and stays there */
+    yaw_run(&y, &t, 40, 0.25, &cfg);
+    motion_yaw_rest(&y);
+    step = yaw_run(&y, &t, 0, 1.0, &cfg);
+    CHECK(y.holding && step < 2.0);                             /* 10 deg, eased         */
+    CHECK_NEAR(y.deg, 0, 1e-3);
+
     /* no endless wind-up: the twist stops at YAW_WINDUP times its full angle */
+    motion_yaw_reset(&y);
     yaw_run(&y, &t, 100, 2.0, &cfg);
     CHECK_NEAR(y.raw, YAW_WINDUP * cfg.full_deg[MOTION_YAW], 1e-9);
     CHECK_NEAR(motion_yaw_output(&y, &cfg), 1.0, 1e-9);
 
-    /* reset: center, following, no history */
+    /* reset: center, following, no history; the measured drift (the gyro's) stays */
+    y.drift_dps = 0.05;
     motion_yaw_reset(&y);
-    CHECK(y.deg == 0 && y.raw == 0 && !y.holding && y.hist_n == 0);
+    CHECK(y.deg == 0 && y.raw == 0 && !y.holding && y.hist_n == 0 && y.drift_dps == 0.05);
 }

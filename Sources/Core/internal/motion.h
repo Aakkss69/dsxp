@@ -23,8 +23,8 @@
  * Those five measured signs fix the directions above, and they form a right-handed frame
  * (x right, y up, z back) shared by gyro and accelerometer. In that frame a twist to the
  * left is positive gyro y; derived from the frame, then confirmed by a one-way twist test
- * on 2026-11-07 (a right twist integrated to -63 deg of gyro y). motion.c turns it into
- * "twist right = positive yaw".
+ * on 2026-11-07 (a right twist integrated to -63 deg of gyro y). motion_yaw.c turns it
+ * into "twist right = positive yaw".
  * The controller stands in for the aircraft: the top edge is the nose.
  */
 #ifndef DSXP_MOTION_H
@@ -127,6 +127,11 @@ typedef struct {
     double   win_min[3], win_max[3], win_sum[3];   /* raw gyro extremes and sum in it     */
     int      win_n;           /* samples in the window                                    */
     double   quiet_until;     /* learning paused until this sensor time (own vibration)  */
+    /* set down: lying as still as on a table (centers the yaw) */
+    double   rest_start;      /* sensor time the current still stretch began             */
+    double   rest_min[3], rest_max[3];   /* raw gyro extremes in it                       */
+    int      rest_n;          /* samples in it (0: none yet)                              */
+    bool     resting;         /* the stretch has lasted long enough: lying down           */
     /* results, refreshed by every motion_update() */
     double   bank_deg;        /* relative to neutral; right wing down is positive        */
     double   pitch_deg;       /* relative to neutral; nose (top edge) up is positive     */

@@ -20,9 +20,10 @@
  *   3. Bank (motion_roll.c) and pitch (motion_pitch.c) relative to the level: the
  *      calibrated one (motion_set_level), or the attitude captured by Recenter; and
  *      whether the controller is out of range (face down, or stood on its edge).
- *   4. Yaw (motion_yaw.c): the twist rate about the vertical, kept as a steering angle
- *      that holds while the hand is still.
- *   5. Gyro bias learned whenever the controller is still.
+ *   4. Yaw (motion_yaw.c): the twist about the controller's face (so bank and pitch
+ *      never read as twist), kept as a steering angle that holds while the hand is still.
+ *   5. Gyro bias learned whenever the controller is still; and whether it has been set
+ *      down (lying as still as on a table), which centers the yaw.
  *   6. Each axis through the user's sensitivity (full-deflection angle), deadzone and
  *      invert, in its own file, using the same shape() as the sticks.
  */
@@ -48,6 +49,11 @@
 #define QUIET_HOLD_S  0.5 /* learning stays paused this long after DSXP's own vibration     */
 #define OOR_UP        0.2 /* "up" this close to horizontal (or below) is out of range       */
 #define OOR_PITCH_DEG 70  /* pitch beyond this is out of range (controller stood on edge)   */
+/* Set down: on a table every gyro axis stayed within 2.5 deg/s peak-to-peak over each 3 s
+ * stretch (137 of 137 stretches), while the stillest 3 s held in a hand spanned 4.0 deg/s
+ * (measured 2026-11-07, motion_calib.c FLAT). So 3 s within 2.5 means nobody holds it. */
+#define REST_P2P_DPS  2.5
+#define REST_S        3.0
 
 /* ------------------------------------------------------------- vector helpers */
 
@@ -91,6 +97,8 @@ void motion_reset(motion_t *m) {
     m->win_start = 0;
     m->win_n = 0;
     m->quiet_until = 0;
+    m->rest_n = 0;
+    m->resting = false;
     m->bank_deg = m->pitch_deg = 0;
     m->out_of_range = false;
     m->out[0] = m->out[1] = m->out[2] = 0;       /* nothing to fly with yet         */
@@ -160,6 +168,29 @@ static void learn_bias(motion_t *m, const motion_sample_t *s, bool quiet) {
     m->win_n = 0;                                        /* next window                   */
 }
 
+/* Step 5b: set down. A stretch of REST_S with every gyro axis within REST_P2P_DPS is
+ * stiller than any hand: nobody is steering, so the yaw eases to center (once per
+ * stretch; any movement starts a new one). Raw rates: the bias does not matter here. */
+static void watch_rest(motion_t *m, const motion_sample_t *s) {
+    if (m->rest_n == 0) {                                /* a new stretch starts here     */
+        m->rest_start = m->t;
+        for (int i = 0; i < 3; i++) m->rest_min[i] = m->rest_max[i] = s->gyro_dps[i];
+    }
+    bool still = true;
+    for (int i = 0; i < 3; i++) {
+        double g = s->gyro_dps[i];
+        if (g < m->rest_min[i]) m->rest_min[i] = g;      /* widen the stretch's range     */
+        if (g > m->rest_max[i]) m->rest_max[i] = g;
+        if (m->rest_max[i] - m->rest_min[i] > REST_P2P_DPS) still = false;
+    }
+    m->rest_n++;
+    if (!still) { m->rest_n = 0; m->resting = false; return; }   /* picked up, or held  */
+    if (!m->resting && m->t - m->rest_start >= REST_S) {
+        m->resting = true;
+        motion_yaw_rest(&m->yaw);                        /* motion_yaw.c: ease to center  */
+    }
+}
+
 /* Step 3: bank, pitch and out-of-range from the current "up". */
 static void refresh_attitude(motion_t *m) {
     m->bank_deg  = motion_roll_angle(m->up, m->neutral);    /* motion_roll.c          */
@@ -201,10 +232,12 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
 
     if (!m->seeded || !fresh || dt > DT_MAX_S) {         /* first sample, or a break        */
         if (!normalize3(a)) return;                      /* no direction (free fall, junk) */
+        if (m->seeded && fresh) motion_yaw_gap(&m->yaw, dt);   /* a break: kept if short   */
+        else motion_yaw_reset(&m->yaw);                  /* the first sample: from center   */
         memcpy(m->up, a, sizeof m->up);                  /* seed: trust the accelerometer   */
         m->seeded = true;
-        motion_yaw_reset(&m->yaw);                       /* a held twist is lost in a gap   */
         m->win_n = 0;
+        m->rest_n = 0;
         refresh_attitude(m);
         refresh_outputs(m, cfg);
         return;
@@ -214,6 +247,7 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
     m->samples++;
 
     learn_bias(m, s, quiet);                             /* step 5 (raw rates)              */
+    watch_rest(m, s);                                    /* step 5b: set down?              */
 
     /* Step 2a: rotate the estimate with the gyro. A direction fixed in the world, seen
      * from the turning controller, turns the opposite way: du/dt = -(w x u). Checked
@@ -235,10 +269,10 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
     }
 
     refresh_attitude(m);                                 /* step 3, and out_of_range        */
-    /* Step 4 (motion_yaw.c): the twist rate about the vertical, added up and held. Not
-     * while out of range (lying on a table, face down): nothing is held then. */
+    /* Step 4 (motion_yaw.c): the twist about the controller's face, added up and held.
+     * Not while out of range (face down, or stood on its edge): nothing is held then. */
     if (!m->out_of_range)
-        motion_yaw_update(&m->yaw, motion_yaw_rate(s->gyro_dps, m->bias, m->up), dt, m->t, cfg);
+        motion_yaw_update(&m->yaw, s->gyro_dps, m->bias, dt, m->t, cfg);
     else
         motion_yaw_reset(&m->yaw);
     refresh_outputs(m, cfg);                             /* step 6, once, after the yaw     */
