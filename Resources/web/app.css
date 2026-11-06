@@ -280,6 +280,38 @@ mark{background:color-mix(in srgb,var(--orange) 35%,transparent);color:inherit;b
 .swatch.current{outline:2px solid var(--accent);outline-offset:2px}
 .swatch:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
+/* --------------------------------------------------------- motion control */
+/* The same two halves as the light bar: the aircraft under the left column, the
+ * controls starting where the right-hand panels' forms start above. Every row has a
+ * fixed height, so switching anything on or off never resizes the panel. */
+.motion-layout{display:grid;align-items:stretch;gap:12px 8px;   /* 8 px beside the gutter, as .light-grid */
+  grid-template-columns:minmax(0,1fr) calc(2 * var(--pad) + 2px + var(--gap) - 16px) minmax(0,1fr)}
+.motion-view{grid-column:1;position:relative;min-height:168px}
+.motion-view canvas{position:absolute;inset:0;width:100%;height:100%;display:block;color:var(--label)}
+.motion-standby{position:absolute;left:0;right:0;bottom:0;margin:0;text-align:center;
+  font-size:11px;line-height:14px;color:var(--label2);pointer-events:none}
+.motion-grid{grid-column:3;display:grid;align-items:center;gap:12px 8px;
+  grid-template-columns:var(--labelw) auto 64px 48px minmax(0,1fr) var(--valuew);
+  grid-template-rows:24px 14px repeat(3,24px)}
+.motion-grid .form-label{text-align:right;white-space:nowrap}
+.motion-grid output{text-align:right;color:var(--label2);font-size:12px}
+.mg-switch{grid-column:2 / 5}
+.mg-recenter{grid-column:5 / 7;justify-self:end}
+.mg-head{font-size:11px;line-height:14px;color:var(--label2);text-align:right;white-space:nowrap}
+.mg-head.mg-angle{grid-column:3} .mg-head.mg-sent{grid-column:4}
+.mg-head.mg-full{grid-column:5 / 7;text-align:left}
+.motion-grid output.mg-angle,.motion-grid output.mg-sent{color:var(--label)}
+/* the slider, with a tick under it at the angle the controller is at now */
+.mg-slider{position:relative;min-width:0}
+.mg-slider i{position:absolute;top:calc(100% + 1px);left:8px;width:2px;height:5px;margin-left:-1px;
+  border-radius:1px;background:var(--label2);pointer-events:none}
+.mg-slider i.full{background:var(--label)}    /* past full deflection: darker, not a status color */
+@container (max-width:980px){
+  .motion-layout{grid-template-columns:minmax(0,1fr)}
+  .motion-view{min-height:200px}
+  .motion-grid{grid-column:1}
+}
+
 /* ------------------------------------------------- popovers, toast, quit */
 .popover{position:absolute;z-index:30;padding:12px;border-radius:10px;background:var(--ctl);
   border:1px solid var(--sep);box-shadow:0 12px 32px rgba(0,0,0,.22);-webkit-user-select:text;user-select:text}

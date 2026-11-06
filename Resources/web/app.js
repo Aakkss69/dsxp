@@ -35,6 +35,11 @@ const bytePercent = v => Math.round(v / 255 * 100) + '%';
 const setText = (element, text) => { if (element && element.textContent !== text) element.textContent = text; };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+/* Panels kept in their own files (motion-panel.js) register here and get every
+   /api/state after the panels in this file have been updated. */
+const stateListeners = [];
+const onState = fn => { stateListeners.push(fn); };
+
 /* a segmented control: exactly one segment on */
 function selectSegment(group, isOn) {
   group.querySelectorAll('button').forEach(b => {
@@ -588,6 +593,7 @@ async function poll() {
   syncAxes();
   renderApp(state.app || {}, state);
   setText(byId('controller-status'), state.connected ? 'Receiving input' : 'Waiting for input');
+  for (const listener of stateListeners) listener(state);
 
   if (!recentlyEdited('tune')) {
     tune = state.tune;
@@ -1001,8 +1007,10 @@ async function loadCatalog() {
   commands = init.commands.map(c => ({ path: c.c, desc: c.d, pathLower: c.c.toLowerCase(),
                                        descLower: (c.d || '').toLowerCase() }));
   slots = init.slots; axisSources = init.sources; axisTargets = init.targets;
-  byId('command-search').placeholder = commands.length
-    ? 'Search ' + commands.length.toLocaleString() + ' X-Plane commands'
+  /* the count is X-Plane's own; DSXP's few dsxp/ commands come first in the list */
+  const xplaneCount = commands.filter(c => !c.path.startsWith('dsxp/')).length;
+  byId('command-search').placeholder = xplaneCount
+    ? 'Search ' + xplaneCount.toLocaleString() + ' X-Plane commands'
     : 'No command list yet';
   renderResults();
 }

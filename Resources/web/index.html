@@ -206,6 +206,49 @@
     <footer class="group-foot"><p class="note">The dashed outline marks a fully pressed trigger. Click a trigger to choose the command for its click; its analog axis is set under Axes.</p></footer>
   </section>
 
+  <section class="wide" id="panel-motion">
+    <header class="group-title"><h2>Motion control</h2><span class="group-status" id="motion-status">Off</span></header>
+    <div class="box">
+      <div class="motion-layout">
+        <div class="motion-view">
+          <canvas id="motion-plane" role="img" aria-label="The roll, pitch and yaw DSXP sent to X-Plane, drawn as an aircraft seen from behind"></canvas>
+          <p class="motion-standby" id="motion-standby">Standing by. Nothing sent to X-Plane yet.</p>
+        </div>
+        <div class="motion-grid">
+          <label class="form-label mg-row1" for="motion-on">Motion control:</label>
+          <label class="check mg-switch"><input type="checkbox" id="motion-on" switch> On</label>
+          <button class="mg-recenter" id="motion-recenter" title="Make the way you hold the controller now level">Recenter</button>
+
+          <span class="mg-head mg-angle">Angle</span>
+          <span class="mg-head mg-sent">Sent</span>
+          <span class="mg-head mg-full">Full deflection at</span>
+
+          <span class="form-label">Roll:</span>
+          <label class="check" title="Tick: banking the controller flies roll. Untick: the sticks do."><input type="checkbox" data-motion-use="roll"> Motion</label>
+          <output class="mg-angle" data-motion-angle="roll">&mdash;</output>
+          <output class="mg-sent" data-motion-sent="roll">&mdash;</output>
+          <div class="mg-slider"><input type="range" min="10" max="90" step="1" data-motion-full="roll" aria-label="Roll: full deflection at"><i data-motion-marker="roll"></i></div>
+          <output data-motion-full-value="roll">40&deg;</output>
+
+          <span class="form-label">Pitch:</span>
+          <label class="check" title="Tick: raising or lowering the top edge flies pitch. Untick: the sticks do."><input type="checkbox" data-motion-use="pitch"> Motion</label>
+          <output class="mg-angle" data-motion-angle="pitch">&mdash;</output>
+          <output class="mg-sent" data-motion-sent="pitch">&mdash;</output>
+          <div class="mg-slider"><input type="range" min="10" max="60" step="1" data-motion-full="pitch" aria-label="Pitch: full deflection at"><i data-motion-marker="pitch"></i></div>
+          <output data-motion-full-value="pitch">30&deg;</output>
+
+          <span class="form-label">Yaw:</span>
+          <label class="check" title="Tick: twisting the controller flat flies the rudder. Untick: the sticks and rudder triggers do."><input type="checkbox" data-motion-use="yaw"> Motion</label>
+          <output class="mg-angle" data-motion-angle="yaw">&mdash;</output>
+          <output class="mg-sent" data-motion-sent="yaw">&mdash;</output>
+          <div class="mg-slider"><input type="range" min="5" max="90" step="1" data-motion-full="yaw" aria-label="Yaw: full deflection at"><i data-motion-marker="yaw"></i></div>
+          <output data-motion-full-value="yaw">30&deg;</output>
+        </div>
+      </div>
+    </div>
+    <footer class="group-foot"><p class="note">Bank the controller to roll, raise or lower its top edge to pitch, twist it flat to yaw. Tick <b>Motion</b> for each axis it should fly; the others stay on the sticks. <b>Recenter</b> makes the way you hold it now level. Lower <b>Full deflection at</b> for a more sensitive axis; the tick under each slider is the angle now. Bind dsxp/motion/recenter, toggle or hold to a button to do this from the controller; the player lamps flash to confirm. The aircraft shows what DSXP sent to X-Plane.</p></footer>
+  </section>
+
   <section id="panel-command">
     <header class="group-title"><h2 id="command-title">Command</h2><span class="group-status" id="command-current">Select a control</span></header>
     <div class="box flush">
@@ -393,6 +436,13 @@
   </section>
 </main>
 
+<script src="/plane3d/math.js"></script>
+<script src="/plane3d/airframe.js"></script>
+<script src="/plane3d/contour.js"></script>
+<script src="/plane3d/zbuffer.js"></script>
+<script src="/plane3d/lines.js"></script>
+<script src="/plane3d/view.js"></script>
 <script src="/app.js"></script>
+<script src="/motion-panel.js"></script>
 </body>
 </html>
