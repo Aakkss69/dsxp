@@ -513,6 +513,9 @@ double now_sec(void);                       /* monotonic seconds */
 extern bool runtime_test_disable_hid;       /* tests: run without IOKit HID */
 int  runtime_udp_socket(void);              /* the core's socket, -1 if not running */
 int  runtime_xp_port(void);
+void runtime_cal_post(unsigned gen, const motion_cal_t *cal, mcal_result_t res, int ior);
+bool runtime_cal_drain(core_t *c);          /* core thread: apply a current result      */
+unsigned runtime_dev_gen(void);             /* the current Bluetooth connection's number */
 
 /* guard.c */
 void guard_build_release(void (*send)(void *ctx, const unsigned char *buf, size_t len), void *ctx);

@@ -705,6 +705,19 @@ static void motion_control(void) {
     core_set_motion_cal(&C, &cal, MCAL_BAD_CRC);
     CHECK_INT(C.motion_cal_src, MOTION_CAL_NOMINAL);
 
+    /* the runtime's hand-over: a result is applied only for the connection it was read
+     * for; one from an earlier connection is dropped (core_thread.c runtime_cal_drain) */
+    motion_fresh(false, 0);
+    CHECK(!runtime_cal_drain(&C));                         /* nothing posted              */
+    cal.factory_axes = 6;
+    runtime_cal_post(runtime_dev_gen() - 1, &cal, MCAL_OK, 0);
+    CHECK(!runtime_cal_drain(&C));                         /* stale: dropped              */
+    CHECK_INT(C.motion_cal_src, MOTION_CAL_NONE);
+    runtime_cal_post(runtime_dev_gen(), &cal, MCAL_OK, 0);
+    CHECK(runtime_cal_drain(&C));
+    CHECK_INT(C.motion_cal_src, MOTION_CAL_FACTORY);
+    CHECK(!runtime_cal_drain(&C));                         /* taken once                  */
+
     /* the snapshot carries it all to the mapper */
     static dsxp_snap_t snap;
     motion_fresh(false, 20);
