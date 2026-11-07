@@ -576,8 +576,10 @@ static void publish_config(void) {
 /* bridge.conf changed while running: apply what needs more than a new value. */
 static void apply_bridge_runtime(core_t *c, const bridge_cfg_t *old, double now) {
     if (c->bridge.port != old->port) {
-        /* hand X-Plane back on the old port before talking to the new one */
+        /* hand X-Plane back on the old port before talking to the new one: every
+         * release repeat goes out now, while the address is still the old one */
         xp_disengage(c, now);
+        xp_release_now(c);
         telemetry_unsubscribe(c);
         sim_release(c, "X-Plane port changed");
         R.xp.sin_port = htons((uint16_t)c->bridge.port);

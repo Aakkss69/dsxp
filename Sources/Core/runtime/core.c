@@ -248,12 +248,18 @@ static void calibrate_cmd(core_t *c, int action, double now) {
     }
 }
 
-/* Recenter: the attitude held now becomes level, faded in so the controls do not jump. */
-void core_motion_recenter(core_t *c, double now) {
-    motion_recenter(&c->motion);
+/* Recenter: the attitude held now becomes level, faded in so the controls do not jump.
+ * Refused, with nothing changed, when the controller cannot be read as a level (motion.c
+ * motion_recenter: face down, on its edge, or tilted past MOTION_LEVEL_MAX_DEG). */
+bool core_motion_recenter(core_t *c, double now) {
+    if (!motion_recenter(&c->motion)) {
+        dsxp_log("motion: not recentered - hold the controller the way you fly level");
+        return false;
+    }
     blend_owned(c, now);
     lamp_blink(c, now);
     dsxp_log("motion: recentered");
+    return true;
 }
 
 bool core_input_live(const core_t *c, double now) {
@@ -518,6 +524,10 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         calibrate_cmd(c, cmd->key, now);
         break;
     case CMD_MOTION_RECENTER:            /* not a setting: nothing is saved */
+        if (core_calibrating(c)) {       /* the routine measures from its own level */
+            dsxp_log("motion: not recentered - the calibration is running");
+            break;
+        }
         core_motion_recenter(c, now);
         break;
     default:
@@ -559,11 +569,21 @@ static void reports_tick(core_t *c, double now) {
  * long as any button bound to it is down.
  */
 static void dsxp_buttons(core_t *c, double now) {
-    /* the same freshness rule as xp_push: stale input releases every button */
-    bool fresh = c->have_report && now - c->last_report_at <= c->bridge.input_stale_s;
+    /* Stale input (the same rule as xp_push, a Bluetooth gap): every button keeps its
+     * last known state and nothing acts, so a press held through the gap is not taken for
+     * a new one (a toggle would flip twice) and a held clutch is not let go. Only once the
+     * input is lost (core_input_live) is a held clutch let go, without recentering (the
+     * attitude is unknown then), so motion is not frozen for good. */
+    if (!xp_input_fresh(c, now)) {
+        if (c->motion_hold && !core_input_live(c, now)) {
+            c->motion_hold = false;
+            blend_owned(c, now);                        /* fade from the frozen values   */
+        }
+        return;
+    }
     bool hold = false;                                  /* any hold button down now      */
     for (int i = 0; i < B_COUNT; i++) {
-        bool down = fresh && c->state.btn[i];
+        bool down = c->state.btn[i];
         bool was = c->dsxp_prev_btn[i];
         c->dsxp_prev_btn[i] = down;                     /* remember for the next tick    */
         const char *cmd = c->s.bind[i].cmd;
@@ -588,7 +608,8 @@ static void dsxp_buttons(core_t *c, double now) {
         memcpy(c->motion_frozen, c->motion.out, sizeof c->motion_frozen);
     } else if (!hold && c->motion_hold) {
         c->motion_hold = false;
-        core_motion_recenter(c, now);
+        if (!core_motion_recenter(c, now))              /* refused: the old level stays, */
+            blend_owned(c, now);                        /*   faded in from the frozen    */
     }
 }
 
@@ -616,7 +637,8 @@ static void motion_edges(core_t *c, double now) {
         blend_owned(c, now);
     }
     if (m->enabled != c->motion_was_enabled) {
-        if (m->enabled && m->calibrated)                /* level = the calibrated one     */
+        if (m->enabled && m->calibrated && !core_calibrating(c))   /* the calibrated level; */
+            /* during a calibration the routine's own level stays in use */
             motion_set_level(&c->motion, m->level_bank_deg, m->level_pitch_deg);
         lamp_blink(c, now);
         c->motion_was_enabled = m->enabled;

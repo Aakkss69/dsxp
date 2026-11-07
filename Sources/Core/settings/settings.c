@@ -1,6 +1,6 @@
 /* Default values for everything in the config files. Pure. */
 #include "core_internal.h"
-#include <math.h>            /* ceil */
+#include <math.h>            /* ceil, floor, fabs, INFINITY */
 #include <string.h>
 
 const bridge_cfg_t BRIDGE_DEFAULTS = {
@@ -78,9 +78,20 @@ void motion_full_range(int axis, double *lo, double *hi) {
         : MOTION_YAW_FULL_MAX;
 }
 
+/* The largest full-deflection angle roll or pitch can use from this level, degrees:
+ * level + full must stay within MOTION_ATTITUDE_LIMIT_DEG, or full deflection would lie
+ * past where the fusion stops reading the controller (out of range) and could never be
+ * reached. Yaw has no such limit (its own range applies). */
+double motion_full_room(int axis, double level_bank_deg, double level_pitch_deg) {
+    if (axis == MOTION_ROLL)  return MOTION_ATTITUDE_LIMIT_DEG - fabs(level_bank_deg);
+    if (axis == MOTION_PITCH) return MOTION_ATTITUDE_LIMIT_DEG - fabs(level_pitch_deg);
+    return INFINITY;
+}
+
 /*
  * Make `axis`'s full-deflection angle valid: inside its range, and at least 1 deg past the
- * axis's deadzone (roll and pitch: motion.deadzone, yaw: motion.yaw.deadzone). Below that
+ * axis's deadzone (roll and pitch: motion.deadzone, yaw: motion.yaw.deadzone), and for
+ * roll and pitch within the room the level leaves (motion_full_room). Below the deadzone
  * the usable range collapses onto a step, and once the deadzone reaches the full angle
  * shape() ignores the deadzone altogether. Raised to whole degrees, as controls.conf
  * writes it. Every writer of motion.full_deg calls this (config_validate, CMD_MOTION, the
@@ -93,6 +104,8 @@ bool motion_full_fix(motion_cfg_t *m, int axis) {
     double v = m->full_deg[axis];
     if (!(v >= lo)) v = lo;                                  /* below the range, or NaN    */
     if (v > hi) v = hi;                                      /* above the range            */
+    double room = floor(motion_full_room(axis, m->level_bank_deg, m->level_pitch_deg));
+    if (v > room) v = fmax(lo, room);                        /* reachable from this level  */
     double dz = axis == MOTION_YAW ? m->yaw_deadzone_deg : m->deadzone_deg;   /* its deadzone */
     if (v < dz + 1.0) v = ceil(dz + 1.0);                    /* 1 deg past it, whole degrees */
     bool changed = v != m->full_deg[axis];

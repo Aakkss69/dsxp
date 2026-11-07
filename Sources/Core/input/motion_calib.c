@@ -66,10 +66,9 @@
 #define CENTER_DEG         6.0
 #define CENTER_SECONDS     0.75
 #define REACH_SHARE        0.9
-#define PITCH_LIMIT_DEG   65.0    /* level pitch + full pitch stays 5 deg inside motion.c's 70 */
-/* A level pitched further than this leaves less than the smallest full-deflection pitch
- * (MOTION_PITCH_FULL_MIN) before PITCH_LIMIT_DEG, so LEVEL refuses it (55 deg). */
-#define LEVEL_PITCH_MAX   (PITCH_LIMIT_DEG - MOTION_PITCH_FULL_MIN)
+/* A level banked or pitched past MOTION_LEVEL_MAX_DEG (55, tunables.h) leaves less than
+ * the smallest full-deflection angle before MOTION_ATTITUDE_LIMIT_DEG, so LEVEL refuses it;
+ * each reach is then capped to what the level leaves (settings.c motion_full_room). */
 
 static const char *const NAMES[CALIB_STEPS] = {
     "idle", "flat", "level", "roll", "pitch", "yaw", "done" };
@@ -185,12 +184,12 @@ static void step_level(calib_t *c, motion_t *m, const motion_sample_t *s, double
     if (!c->picked_up) { say(c, "Pick it up and hold it the way you fly."); return; }
     double bank, pitch;
     motion_attitude(m->up, &bank, &pitch);                     /* absolute attitude now      */
-    if (m->out_of_range || fabs(bank) > MOTION_LEVEL_MAX_DEG || fabs(pitch) > MOTION_LEVEL_MAX_DEG) {
+    if (m->out_of_range || fabs(bank) > MOTION_LEVEL_MAX_DEG) {
         say(c, "Hold it face up, the way you fly level.");
         c->n = 0; c->hold_s = 0;
         return;
     }
-    if (fabs(pitch) > LEVEL_PITCH_MAX) {                       /* no room left to pitch      */
+    if (fabs(pitch) > MOTION_LEVEL_MAX_DEG) {                  /* no room left to pitch      */
         say(c, "Hold it a little flatter: tilted this far there is no room left to pitch.");
         c->n = 0; c->hold_s = 0;
         return;
@@ -243,13 +242,13 @@ static void step_reach(calib_t *c, motion_t *m, const motion_sample_t *s, double
     if (c->hold_s < CENTER_SECONDS) return;
 
     /* the result: 90 % of the smaller side, in whole degrees, within the axis's range
-     * (settings.c motion_full_range); pitch also keeps level + full inside PITCH_LIMIT_DEG,
-     * which LEVEL_PITCH_MAX leaves room for, so `hi` never drops below `lo` */
+     * (settings.c motion_full_range); roll and pitch also keep level + full inside
+     * MOTION_ATTITUDE_LIMIT_DEG (motion_full_room), which the LEVEL limit leaves room for */
     double reach = fmin(c->hi, -c->lo) * REACH_SHARE;
     int axis = c->step == CALIB_ROLL ? MOTION_ROLL : c->step == CALIB_PITCH ? MOTION_PITCH : MOTION_YAW;
     double lo, hi;
     motion_full_range(axis, &lo, &hi);
-    if (axis == MOTION_PITCH) hi = fmax(lo, fmin(hi, PITCH_LIMIT_DEG - fabs(c->level_pitch)));
+    hi = fmax(lo, fmin(hi, floor(motion_full_room(axis, c->level_bank, c->level_pitch))));
     c->full[axis] = fmin(hi, fmax(lo, round(reach)));
     enter(c, c->step + 1);                                     /* the next step, or DONE     */
 }

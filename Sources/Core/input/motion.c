@@ -122,10 +122,19 @@ void motion_attitude(const double up[3], double *bank_deg, double *pitch_deg) {
     *pitch_deg = motion_pitch_deg(up);
 }
 
-/* Recenter: the attitude held now becomes level, and the held twist is dropped. */
-void motion_recenter(motion_t *m) {
-    if (m->seeded) memcpy(m->neutral, m->up, sizeof m->neutral);   /* no data: keep the old level */
+/* Recenter: the attitude held now becomes level, and the held twist is dropped. Refused
+ * (nothing changes, returns false) when that attitude cannot be a level: no data yet, out
+ * of range (face down or on its edge: held level afterwards, bank would read about 180
+ * and flip between full left and full right), or banked or pitched past
+ * MOTION_LEVEL_MAX_DEG, the same limit the calibration's LEVEL step applies. */
+bool motion_recenter(motion_t *m) {
+    if (!m->seeded || m->out_of_range) return false;     /* nothing usable to level on     */
+    double bank, pitch;
+    motion_attitude(m->up, &bank, &pitch);
+    if (fabs(bank) > MOTION_LEVEL_MAX_DEG || fabs(pitch) > MOTION_LEVEL_MAX_DEG) return false;
+    memcpy(m->neutral, m->up, sizeof m->neutral);        /* this attitude reads as level   */
     motion_yaw_reset(&m->yaw);
+    return true;
 }
 
 /* ------------------------------------------------------------- the steps */

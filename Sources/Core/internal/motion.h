@@ -146,7 +146,7 @@ typedef struct { bool active; double from, t0; } motion_blend_t;
 void   motion_init(motion_t *m);
 void   motion_reset(motion_t *m);
 void   motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cfg, bool quiet);
-void   motion_recenter(motion_t *m);
+bool   motion_recenter(motion_t *m);   /* false: refused (no data, or not a level) */
 void   motion_set_level(motion_t *m, double bank_deg, double pitch_deg);
 void   motion_attitude(const double up[3], double *bank_deg, double *pitch_deg);
 void   motion_blend_start(motion_blend_t *b, double from, double now);

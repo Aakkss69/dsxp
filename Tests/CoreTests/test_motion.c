@@ -468,6 +468,16 @@ void test_motion(void) {
     CHECK_NEAR(m.yaw.deg, 0, 0.05);
     CHECK_NEAR(m.out[MOTION_YAW], 0, 1e-9);      /* centered: no rudder                   */
 
+    /* full deflection is reachable before the controller reads as out of range: with
+     * the roll limit (65 deg) a full bank gives 1.0 (at 90 it peaked at 0.866) */
+    motion_cfg_t wide = cfg;
+    wide.full_deg[MOTION_ROLL] = MOTION_ROLL_FULL_MAX;
+    start(&m, &s, &wide);
+    run(&m, &s, &wide, 0, 0, -132, 0.5);             /* bank right 66 deg                 */
+    run(&m, &s, &wide, 0, 0, 0, 1.0);
+    CHECK(!m.out_of_range);
+    CHECK_NEAR(m.out[MOTION_ROLL], 1.0, 1e-9);
+
     /* banking or pitching, whatever the level, never reads as twist: the twist is the turn
      * about the controller's face (about the vertical, 30 deg of bank at a 15.3 deg level
      * read as -7.8 deg of yaw) */

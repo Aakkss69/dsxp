@@ -480,6 +480,7 @@ bool   bindings_parse(settings_t *s, const char *text, size_t len);
  * writer of motion.full_deg (config_validate, the mapper's CMD_MOTION, the calibration) */
 void   motion_full_range(int axis, double *lo, double *hi);   /* MOTION_*_FULL_MIN / MAX  */
 bool   motion_full_fix(motion_cfg_t *m, int axis);            /* true if it had to change */
+double motion_full_room(int axis, double level_bank_deg, double level_pitch_deg);
 
 /* commands.c */
 int    commands_parse(const char *text, size_t len, xcmd_t **out);
@@ -496,7 +497,9 @@ const char *qs_get(const char *qs, const char *key, char *out, size_t n);
 
 /* xplane.c */
 bool xp_axis_in_use(const settings_t *s, int target);
-void xp_wanted_overrides(const settings_t *s, bool want[OV_COUNT]);
+void xp_wanted_overrides(const settings_t *s, bool motion_flying, bool want[OV_COUNT]);
+bool xp_input_fresh(const core_t *c, double now);   /* reports recent enough to act on */
+void xp_release_now(core_t *c);                     /* send pending releases at once   */
 void xp_send_dref(core_t *c, const char *path, float value);
 void xp_send_cmnd(core_t *c, const char *cmd);
 void xp_engage(core_t *c, double now);
@@ -528,7 +531,7 @@ unsigned core_save_due(core_t *c, double now);      /* CFB_* mask due for saving
 void core_set_trigger_source(core_t *c, int mode, double now);
 void core_set_rumble_source(core_t *c, int mode, double now);
 void core_set_motion_cal(core_t *c, const motion_cal_t *cal, mcal_result_t r);
-void core_motion_recenter(core_t *c, double now);
+bool core_motion_recenter(core_t *c, double now);   /* false: refused, nothing changed */
 void core_calib_finish(core_t *c, double now);
 bool core_calibrating(const core_t *c);
 void out_tick(core_t *c, double now);
