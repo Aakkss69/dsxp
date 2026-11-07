@@ -164,7 +164,12 @@ static void parse_line(settings_t *s, const char *line) {
                 s->axis[i] = (axis_map_t){ t, inv != 0 };
     } else if (!strcmp(what, "button")) {
         long slot = -1, rep = 0; char cmd[CMD_PATH_MAX] = "";
-        if (sscanf(line, "%*s %ld %ld %255s", &slot, &rep, cmd) < 3) return;
+        int at = 0;                                  /* where the command starts         */
+        if (sscanf(line, "%*s %ld %ld %n", &slot, &rep, &at) < 2 || at == 0) return;
+        size_t tl = strcspn(line + at, " \t\r\n");  /* the command's length              */
+        if (tl == 0 || tl >= CMD_PATH_MAX) return;   /* missing, or too long to be one:  */
+        memcpy(cmd, line + at, tl);                  /*   skipped, never bound cut short */
+        cmd[tl] = 0;
         if (slot < 0 || slot >= B_COUNT || !cmd_valid(cmd)) return;
         snprintf(s->bind[slot].cmd, CMD_PATH_MAX, "%s", cmd);
         s->bind[slot].repeat = rep != 0;
@@ -177,12 +182,8 @@ static void parse_line(settings_t *s, const char *line) {
 bool bindings_parse(settings_t *s, const char *text, size_t len) {
     if (!text) return false;
     memset(s->bind, 0, sizeof s->bind);
-    size_t i = 0;
-    while (i < len) {
-        size_t start = i;
-        while (i < len && text[i] != '\n') i++;
-        size_t n = i - start;
-        if (i < len) i++;                          /* skip the newline */
+    size_t i = text_bom(text, len), start, n;      /* a byte-order mark is not a line */
+    while (text_next_line(text, len, &i, &start, &n)) {
         if (n == 0 || n >= 1024) continue;         /* empty or oversized: skip */
         char line[1024];
         memcpy(line, text + start, n);

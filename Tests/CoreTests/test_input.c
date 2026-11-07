@@ -136,11 +136,11 @@ static int swipe(double ang_deg, double dist, double sens) {
     memset(&st, 0, sizeof st); memset(&g, 0, sizeof g);
     double a = ang_deg * M_PI / 180.0;
     touch_at(&st, true, 0.5, 0.5);
-    detect_gestures(&st, &g, sens, 10.0);
+    detect_gestures_cfg(&st, &g, sens, NULL, 10.0);
     touch_at(&st, true, 0.5 + dist * cos(a), 0.5 + dist * sin(a));
-    detect_gestures(&st, &g, sens, 10.1);
+    detect_gestures_cfg(&st, &g, sens, NULL, 10.1);
     touch_at(&st, false, 0, 0);
-    detect_gestures(&st, &g, sens, 10.15);
+    detect_gestures_cfg(&st, &g, sens, NULL, 10.15);
     return fired(&g, 10.16);
 }
 
@@ -156,20 +156,20 @@ void test_gesture(void) {
 
     ds_state_t st; gesture_t g;
     memset(&st, 0, sizeof st); memset(&g, 0, sizeof g);
-    touch_at(&st, true, 0.4, 0.4); detect_gestures(&st, &g, 0.5, 1.0);
-    touch_at(&st, false, 0, 0);    detect_gestures(&st, &g, 0.5, 1.1);
+    touch_at(&st, true, 0.4, 0.4); detect_gestures_cfg(&st, &g, 0.5, NULL, 1.0);
+    touch_at(&st, false, 0, 0);    detect_gestures_cfg(&st, &g, 0.5, NULL, 1.1);
     CHECK_INT(fired(&g, 1.11), B_TP_TAP);
     CHECK_INT(fired(&g, 1.1 + GESTURE_PULSE_SEC + 0.001), -1);   /* pulse ends */
 
     memset(&st, 0, sizeof st); memset(&g, 0, sizeof g);
     touch_at(&st, true, 0.4, 0.4); st.touch[1].active = true;
-    detect_gestures(&st, &g, 0.5, 2.0);
+    detect_gestures_cfg(&st, &g, 0.5, NULL, 2.0);
     st.touch[1].active = false;
-    touch_at(&st, false, 0, 0);    detect_gestures(&st, &g, 0.5, 2.1);
+    touch_at(&st, false, 0, 0);    detect_gestures_cfg(&st, &g, 0.5, NULL, 2.1);
     CHECK_INT(fired(&g, 2.11), B_TP_TAP2);
 
     memset(&st, 0, sizeof st); memset(&g, 0, sizeof g);   /* long press: nothing */
-    touch_at(&st, true, 0.4, 0.4); detect_gestures(&st, &g, 0.5, 3.0);
-    touch_at(&st, false, 0, 0);    detect_gestures(&st, &g, 0.5, 4.0);
+    touch_at(&st, true, 0.4, 0.4); detect_gestures_cfg(&st, &g, 0.5, NULL, 3.0);
+    touch_at(&st, false, 0, 0);    detect_gestures_cfg(&st, &g, 0.5, NULL, 4.0);
     CHECK_INT(fired(&g, 4.01), -1);
 }

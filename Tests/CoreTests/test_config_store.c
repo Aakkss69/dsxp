@@ -90,7 +90,7 @@ static void first_run(time_t t0) {
     CHECK_INT(L.bridge.port, 49000);
     /* nothing changed: a poll does nothing, and a flush writes nothing */
     CHECK_INT(cfg_store_poll(&S, &L, 0, (double)t0 + 100), 0);
-    CHECK_INT(cfg_store_flush(&S, &L, CFB_ALL, (double)t0 + 100, false), 0);
+    CHECK_INT(cfg_store_flush(&S, &L, CFB_ALL, (double)t0 + 100, false, NULL), 0);
     CHECK_INT(WRITES, 3);
 }
 
@@ -147,7 +147,7 @@ static void outside_edits(time_t t0) {
     CHECK_INT(cfg_store_poll(&S, &L, CFB_CONTROLS, (double)t + 110), CFB_CONTROLS);
     CHECK_NEAR(L.s.tune.curve, 2.0, 1e-12);
     CHECK_NEAR(L.s.tune.deadzone, 0.25, 1e-12);
-    CHECK_INT(cfg_store_flush(&S, &L, CFB_CONTROLS, (double)t + 111, true), 0);
+    CHECK_INT(cfg_store_flush(&S, &L, CFB_CONTROLS, (double)t + 111, true, NULL), 0);
     char *text = get_file(d, "controls.conf");
     CHECK(text && strstr(text, "stick.curve = 2.00\n") && strstr(text, "stick.deadzone = 25.0 %\n"));
     CHECK(text && strstr(text, "# Response curve") != NULL);   /* written with its comments */
@@ -166,7 +166,7 @@ static void outside_edits(time_t t0) {
     free(text);
     L.s.tune.gesture = 0.8;
     S.last_reload = 0;
-    CHECK_INT(cfg_store_flush(&S, &L, CFB_CONTROLS, (double)t + 210, false), CFB_CONTROLS);
+    CHECK_INT(cfg_store_flush(&S, &L, CFB_CONTROLS, (double)t + 210, false, NULL), CFB_CONTROLS);
     CHECK_INT(S.last_reload, CF_CONTROLS + 1);       /* the mapper shows "applied your edit" */
     CHECK_NEAR(L.s.tune.deadzone, 0.30, 1e-12);
     CHECK_NEAR(L.s.tune.gesture, 0.8, 1e-12);
@@ -178,7 +178,7 @@ static void outside_edits(time_t t0) {
     /* bridge.conf is never rewritten by a save */
     text = get_file(d, "bridge.conf");
     L.bridge.port = 49999;
-    cfg_store_flush(&S, &L, CFB_ALL, (double)t + 220, true);
+    cfg_store_flush(&S, &L, CFB_ALL, (double)t + 220, true, NULL);
     char *after = get_file(d, "bridge.conf");
     CHECK(text && after && !strcmp(text, after));
     free(text); free(after);
@@ -280,6 +280,91 @@ static void gate_version(void) {
     CHECK(!gate_version_ok("/nowhere/X-Plane.app/Contents/MacOS/X-Plane"));     /* no Info.plist */
 }
 
+/* Every applied edit is checked as a whole, at the poll and at a save; an edit still
+ * landing makes a save wait; a rule across files is applied; the pulse fix is written so
+ * it passes; an unreadable file is reported; a deleted folder is made again. */
+static void store_checks(time_t t0) {
+    char d[1100];
+    make_dir(d, sizeof d, "checks");
+    CHECK_INT(cfg_store_open(&S, d, NULL, &L, (double)t0, NULL, NULL), 0);
+    time_t t = t0 + 10;
+
+    /* merged at a save: the merged result is checked (it used to be written back with
+     * a swipe shorter than the tap wander) */
+    put_file(d, "controls.conf", "gesture.swipe_length_at_100 = 3.0 %\n", t);
+    L.s.tune.curve = 2.0;                                       /* the mapper's change */
+    unsigned later = 99;
+    CHECK(cfg_store_flush(&S, &L, CFB_CONTROLS, (double)t + 5, false, &later) & CFB_CONTROLS);
+    CHECK_INT(later, 0);
+    CHECK(L.s.gesture.swipe_length_at100 > L.s.gesture.tap_wander_at100);
+    CHECK(S.warns[CF_CONTROLS].n >= 1);
+    CHECK_NEAR(L.s.tune.curve, 2.0, 1e-12);
+
+    /* an edit younger than a second when the mapper saves: the save waits for it */
+    put_file(d, "controls.conf", "stick.deadzone = 12 %\n", t + 20);
+    CHECK_INT(cfg_store_flush(&S, &L, CFB_CONTROLS, (double)t + 20.5, false, &later), 0);
+    CHECK_INT(later, CFB_CONTROLS);
+    char *text = get_file(d, "controls.conf");                 /* not overwritten         */
+    CHECK(text && !strcmp(text, "stick.deadzone = 12 %\n"));
+    free(text);
+    CHECK(cfg_store_flush(&S, &L, CFB_CONTROLS, (double)t + 22, false, &later) & CFB_CONTROLS);
+    CHECK_NEAR(L.s.tune.deadzone, 0.12, 1e-12);
+
+    /* a rule across files: a lower tick rate in bridge.conf raises gesture.pulse, with a
+     * warning on controls.conf (it used to stay below 1.5 ticks) */
+    L.s.gesture.pulse_s = 0.025;
+    put_file(d, "bridge.conf", "timing.tick_rate = 30 Hz\n", t + 40);
+    unsigned ch = cfg_store_poll(&S, &L, 0, (double)t + 45);
+    CHECK((ch & CFB_BRIDGE) && (ch & CFB_CONTROLS));
+    CHECK_NEAR(L.s.gesture.pulse_s, 0.05, 1e-12);
+    CHECK(S.warns[CF_CONTROLS].n >= 1);
+
+    /* the pulse fix is whole milliseconds that pass the check: 70 Hz needs 21.43 ms,
+     * written as 22 (21 failed the check again on every reload) */
+    static config_t pc;
+    static conf_warns_t pw[CF_COUNT];
+    config_defaults(&pc);
+    pc.bridge.tick_hz = 70;
+    pc.s.gesture.pulse_s = 0.010;
+    memset(pw, 0, sizeof pw);
+    config_validate(&pc, pw);
+    CHECK_NEAR(pc.s.gesture.pulse_s, 0.022, 1e-12);
+    memset(pw, 0, sizeof pw);
+    config_validate(&pc, pw);
+    CHECK_INT(pw[CF_CONTROLS].n, 0);
+
+    /* a file that cannot be read is reported (the warning used to be dropped) */
+    char p[1200];
+    snprintf(p, sizeof p, "%s/feedback.conf", d);
+    put_file(d, "feedback.conf", "light.on = no\n", t + 60);
+    chmod(p, 0);
+    unsigned gen = S.gen;
+    CHECK_INT(cfg_store_poll(&S, &L, 0, (double)t + 65), 0);
+    CHECK(S.gen != gen && S.warns[CF_FEEDBACK].n == 1);
+    chmod(p, 0644);
+
+    /* the whole folder deleted: made again and the defaults written back, once (the
+     * settings used to flip to defaults and back every two polls) */
+    nftw(d, rm_entry, 16, FTW_DEPTH | FTW_PHYS);
+    L.s.tune.deadzone = 0.30;
+    CHECK_INT(cfg_store_poll(&S, &L, 0, (double)t + 80), 0);   /* gone for one poll       */
+    CHECK(cfg_store_poll(&S, &L, 0, (double)t + 82) & CFB_CONTROLS);
+    CHECK(exists(d, "controls.conf"));
+    CHECK_NEAR(L.s.tune.deadzone, 0.06, 1e-12);
+    L.s.tune.deadzone = 0.30;                                   /* the mapper sets it again */
+    CHECK_INT(cfg_store_poll(&S, &L, 0, (double)t + 84), 0);
+    CHECK_NEAR(L.s.tune.deadzone, 0.30, 1e-12);
+    /* a deleted file that cannot be written back: the settings in use stay */
+    snprintf(p, sizeof p, "%s/controls.conf", d);
+    unlink(p);
+    chmod(d, 0500);
+    CHECK_INT(cfg_store_poll(&S, &L, 0, (double)t + 90), 0);
+    CHECK_INT(cfg_store_poll(&S, &L, 0, (double)t + 92) & CFB_CONTROLS, 0);
+    CHECK(S.unwritable & CFB_CONTROLS);
+    CHECK_NEAR(L.s.tune.deadzone, 0.30, 1e-12);
+    chmod(d, 0700);
+}
+
 void test_config_store(void) {
     const char *tmp = getenv("TMPDIR");
     snprintf(ROOT, sizeof ROOT, "%s/dsxp-conf-XXXXXX", tmp && *tmp ? tmp : "/tmp");
@@ -287,6 +372,7 @@ void test_config_store(void) {
     time_t t0 = (time_t)wall_now();
     first_run(t0);
     outside_edits(t0 + 1000);
+    store_checks(t0 + 2000);
     imports(t0);
     gate_version();
     nftw(ROOT, rm_entry, 16, FTW_DEPTH | FTW_PHYS);

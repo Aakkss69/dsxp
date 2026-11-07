@@ -11,7 +11,9 @@
 
 char *file_read_all(const char *path, size_t max, size_t *len) {
     *len = 0;
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    /* O_NONBLOCK: a named pipe (FIFO) put where a file should be would block open()
+     * forever; it is then turned away by the regular-file check below */
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0) return NULL;
     struct stat st;
     if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || (size_t)st.st_size > max) {

@@ -66,10 +66,9 @@
 #define CENTER_DEG         6.0
 #define CENTER_SECONDS     0.75
 #define REACH_SHARE        0.9
-#define PITCH_LIMIT_DEG   65.0    /* level pitch + full pitch stays 5 deg inside motion.c's 70 */
-/* A level pitched further than this leaves less than the smallest full-deflection pitch
- * (MOTION_PITCH_FULL_MIN) before PITCH_LIMIT_DEG, so LEVEL refuses it (55 deg). */
-#define LEVEL_PITCH_MAX   (PITCH_LIMIT_DEG - MOTION_PITCH_FULL_MIN)
+/* A level banked or pitched past MOTION_LEVEL_MAX_DEG (55, tunables.h) leaves less than
+ * the smallest full-deflection angle before MOTION_ATTITUDE_LIMIT_DEG, so LEVEL refuses it;
+ * each reach is then capped to what the level leaves (settings.c motion_full_room). */
 
 static const char *const NAMES[CALIB_STEPS] = {
     "idle", "flat", "level", "roll", "pitch", "yaw", "done" };
@@ -121,20 +120,13 @@ static void step_flat(calib_t *c, motion_t *m, const motion_sample_t *s, double 
     }
     double a = sqrt(s->acc_g[0] * s->acc_g[0] + s->acc_g[1] * s->acc_g[1] + s->acc_g[2] * s->acc_g[2]);
     bool face_up = a > 0.5 && s->acc_g[1] / a >= FLAT_FACE_UP;    /* gravity through the face */
-    bool still = true;
     if (c->n == 0) {                                           /* a new streak starts here   */
-        for (int i = 0; i < 3; i++) {
-            c->min_g[i] = c->max_g[i] = s->gyro_dps[i];
-            c->sum_g[i] = c->sum_a[i] = 0;
-        }
+        c->spread.n = 0;
+        for (int i = 0; i < 3; i++) c->sum_g[i] = c->sum_a[i] = 0;
     }
-    for (int i = 0; i < 3; i++) {                              /* widen the streak's range   */
-        if (s->gyro_dps[i] < c->min_g[i]) c->min_g[i] = s->gyro_dps[i];
-        if (s->gyro_dps[i] > c->max_g[i]) c->max_g[i] = s->gyro_dps[i];
-        if (c->max_g[i] - c->min_g[i] > FLAT_STILL_P2P_DPS) still = false;
-        /* a steady turn has no spread, but no resting drift is this large either */
-        if (fabs(s->gyro_dps[i]) > MOTION_BIAS_MAX_DPS) still = false;
-    }
+    bool still = motion_spread_add(&c->spread, s->gyro_dps) <= FLAT_STILL_P2P_DPS;
+    for (int i = 0; i < 3; i++)        /* a steady turn has no spread, but no resting drift */
+        if (fabs(s->gyro_dps[i]) > MOTION_BIAS_MAX_DPS) still = false;   /* is this large */
     if (!face_up) { say(c, "Lay it face up on a flat surface."); c->n = 0; c->hold_s = 0; return; }
     if (!still)   { say(c, "Keep your hands off it until the bar is full."); c->n = 0; c->hold_s = 0; return; }
     for (int i = 0; i < 3; i++) { c->sum_g[i] += s->gyro_dps[i]; c->sum_a[i] += s->acc_g[i]; }
@@ -171,7 +163,7 @@ static bool hand_holds(calib_t *c, const motion_t *m, double w, double dt) {
     c->tremor += k * (fmin(w, TREMOR_CLIP_DPS) - c->tremor);   /* running average of |rate|  */
     double along = c->rest_up[0] * m->up[0] + c->rest_up[1] * m->up[1] + c->rest_up[2] * m->up[2];
     return w > PICKUP_DPS                                      /* turned                     */
-        || along < cos(PICKUP_TILT_DEG * M_PI / 180.0)         /* tilted from where it lay   */
+        || along < cos(PICKUP_TILT_DEG * DEG_TO_RAD)         /* tilted from where it lay   */
         || c->tremor > PICKUP_TREMOR_DPS;                      /* a hand's tremor            */
 }
 
@@ -185,12 +177,12 @@ static void step_level(calib_t *c, motion_t *m, const motion_sample_t *s, double
     if (!c->picked_up) { say(c, "Pick it up and hold it the way you fly."); return; }
     double bank, pitch;
     motion_attitude(m->up, &bank, &pitch);                     /* absolute attitude now      */
-    if (m->out_of_range || fabs(bank) > MOTION_LEVEL_MAX_DEG || fabs(pitch) > MOTION_LEVEL_MAX_DEG) {
+    if (m->out_of_range || fabs(bank) > MOTION_LEVEL_MAX_DEG) {
         say(c, "Hold it face up, the way you fly level.");
         c->n = 0; c->hold_s = 0;
         return;
     }
-    if (fabs(pitch) > LEVEL_PITCH_MAX) {                       /* no room left to pitch      */
+    if (fabs(pitch) > MOTION_LEVEL_MAX_DEG) {                  /* no room left to pitch      */
         say(c, "Hold it a little flatter: tilted this far there is no room left to pitch.");
         c->n = 0; c->hold_s = 0;
         return;
@@ -216,7 +208,10 @@ static void step_level(calib_t *c, motion_t *m, const motion_sample_t *s, double
  * coming back to center for CENTER_SECONDS finishes the step. */
 static void step_reach(calib_t *c, motion_t *m, const motion_sample_t *s, double dt, bool saturated) {
     if (saturated) {                                           /* past what the sensor reads */
-        enter(c, c->step);
+        double twist = c->twist;                               /* YAW: where it is now, from */
+        enter(c, c->step);                                     /*   the zero the step began  */
+        if (c->step == CALIB_YAW) c->twist = twist;            /*   at: the reach restarts,  */
+                                                               /*   not the zero             */
         say(c, "That was faster than the sensor can measure. Once more, a little slower.");
         return;
     }
@@ -243,13 +238,13 @@ static void step_reach(calib_t *c, motion_t *m, const motion_sample_t *s, double
     if (c->hold_s < CENTER_SECONDS) return;
 
     /* the result: 90 % of the smaller side, in whole degrees, within the axis's range
-     * (settings.c motion_full_range); pitch also keeps level + full inside PITCH_LIMIT_DEG,
-     * which LEVEL_PITCH_MAX leaves room for, so `hi` never drops below `lo` */
+     * (settings.c motion_full_range); roll and pitch also keep level + full inside
+     * MOTION_ATTITUDE_LIMIT_DEG (motion_full_room), which the LEVEL limit leaves room for */
     double reach = fmin(c->hi, -c->lo) * REACH_SHARE;
     int axis = c->step == CALIB_ROLL ? MOTION_ROLL : c->step == CALIB_PITCH ? MOTION_PITCH : MOTION_YAW;
     double lo, hi;
     motion_full_range(axis, &lo, &hi);
-    if (axis == MOTION_PITCH) hi = fmax(lo, fmin(hi, PITCH_LIMIT_DEG - fabs(c->level_pitch)));
+    hi = fmax(lo, fmin(hi, floor(motion_full_room(axis, c->level_bank, c->level_pitch))));
     c->full[axis] = fmin(hi, fmax(lo, round(reach)));
     enter(c, c->step + 1);                                     /* the next step, or DONE     */
 }

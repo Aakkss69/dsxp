@@ -9,17 +9,15 @@
  * nose along -z and the right wing along +x): exact for any pitch followed by any bank,
  * independent of heading, and a twist about the vertical leaves it alone.
  *
- * Depends on: shape() (decode.c) for the deadzone and clamp the sticks use too.
+ * Depends on: motion_axis_output() (motion.c), the deadzone and clamp the sticks use too.
  */
-#include "core_internal.h"   /* shape()                                                  */
+#include "core_internal.h"   /* motion_axis_output() (through motion.h)                  */
 #include "motion_roll.h"
 #include <math.h>
 
-#define DEG (M_PI / 180.0)   /* degrees -> radians                                      */
-
 /* Bank of an "up" vector, degrees: right wing down is positive, -180..180. */
 double motion_roll_bank_deg(const double up[3]) {
-    return atan2(-up[0], up[1]) / DEG;
+    return atan2(-up[0], up[1]) / DEG_TO_RAD;
 }
 
 /* Bank relative to the level's, degrees, folded into -180..180 (so a bank past upside
@@ -34,8 +32,5 @@ double motion_roll_angle(const double up[3], const double level_up[3]) {
  * the deadzone (motion.deadzone), clamped, inverted if asked. A full angle at or below
  * zero (never valid after config_validate) flies nothing. */
 double motion_roll_output(double angle_deg, const motion_cfg_t *cfg) {
-    double full = cfg->full_deg[MOTION_ROLL];
-    if (!(full > 0)) return 0;                        /* misconfigured: fly nothing     */
-    double v = shape(angle_deg / full, cfg->deadzone_deg / full, 1.0);   /* NaN -> 0    */
-    return cfg->invert[MOTION_ROLL] ? -v : v;
+    return motion_axis_output(angle_deg, cfg->full_deg[MOTION_ROLL], cfg->deadzone_deg, cfg->invert[MOTION_ROLL]);
 }

@@ -43,14 +43,25 @@ bool xp_axis_in_use(const settings_t *s, int target) {
 
 /* Only the overrides an axis actually needs, so anything unmapped stays under
  * X-Plane's own control instead of being frozen. An axis motion control flies needs
- * its override even with no stick mapped to it. */
-void xp_wanted_overrides(const settings_t *s, bool want[OV_COUNT]) {
+ * its override even with no stick mapped to it. `motion_flying` is false while the
+ * calibration runs: the sticks fly then, so an axis motion owns but no stick is mapped
+ * to goes back to X-Plane instead of being held at 0 under DSXP's override. */
+void xp_wanted_overrides(const settings_t *s, bool motion_flying, bool want[OV_COUNT]) {
     const motion_cfg_t *m = &s->motion;
-    want[OV_PITCH_I]   = xp_axis_in_use(s, AX_PITCH) || motion_owns(m, MOTION_PITCH);
-    want[OV_ROLL_I]    = xp_axis_in_use(s, AX_ROLL) || motion_owns(m, MOTION_ROLL);
+    bool roll = motion_flying && motion_owns(m, MOTION_ROLL);      /* motion flies it now */
+    bool pitch = motion_flying && motion_owns(m, MOTION_PITCH);
+    bool yaw = motion_flying && motion_owns(m, MOTION_YAW);
+    want[OV_PITCH_I]   = xp_axis_in_use(s, AX_PITCH) || pitch;
+    want[OV_ROLL_I]    = xp_axis_in_use(s, AX_ROLL) || roll;
     want[OV_HEADING_I] = xp_axis_in_use(s, AX_YAW) || xp_axis_in_use(s, AX_RUDD_L) ||
-                         xp_axis_in_use(s, AX_RUDD_R) || motion_owns(m, MOTION_YAW);
+                         xp_axis_in_use(s, AX_RUDD_R) || yaw;
     want[OV_BRAKES_I]  = xp_axis_in_use(s, AX_BRAKE_L) || xp_axis_in_use(s, AX_BRAKE_R);
+}
+
+/* True while input reports are fresh enough to act on (the rule xp_push and the DSXP
+ * buttons share: older than bridge.input_stale_s, the controller is treated as silent). */
+bool xp_input_fresh(const core_t *c, double now) {
+    return c->have_report && now - c->last_report_at <= c->bridge.input_stale_s;
 }
 
 /* Neutral value for the control an override covers, sent before releasing it. */
@@ -66,12 +77,14 @@ static void center_for(core_t *c, int ov) {
 }
 
 void xp_engage(core_t *c, double now) {
-    (void)now;
     if (c->engaged || c->dry_run) return;
     c->engaged = true;
     memset(c->ov_on, 0, sizeof c->ov_on);
     memset(c->ov_release_left, 0, sizeof c->ov_release_left);
-    memset(c->prev_btn, 0, sizeof c->prev_btn);
+    /* a button already held when DSXP takes over was pressed before: it must not fire
+     * now (X-Plane commands are one-shot; a held toggle would flip again) */
+    bool fresh = xp_input_fresh(c, now);
+    for (int i = 0; i < B_COUNT; i++) c->prev_btn[i] = fresh && c->state.btn[i];
     dsxp_log("ENGAGED - streaming to %s:%d", XP_IP, XP_PORT);
     /* the overrides themselves are asserted by xp_push's planner, every tick */
 }
@@ -107,6 +120,19 @@ void xp_disengage(core_t *c, double now) {
     dsxp_log("DISENGAGED - X-Plane has controls back");
 }
 
+/* Send every pending override release now instead of spread over the next seconds:
+ * used before the X-Plane port changes, so the releases still reach the X-Plane that
+ * holds the overrides rather than the new address. */
+void xp_release_now(core_t *c) {
+    for (int k = 0; k < OV_COUNT; k++) {
+        while (c->ov_release_left[k] > 0) {
+            center_for(c, k);
+            xp_send_dref(c, OV_PATH[k], 0.0f);
+            c->ov_release_left[k]--;
+        }
+    }
+}
+
 /* Further override releases after a disengage, while X-Plane is still running. */
 void xp_release_tick(core_t *c, double now) {
     if (c->engaged || c->dry_run) return;
@@ -134,7 +160,7 @@ void xp_release_tick(core_t *c, double now) {
  */
 static void plan_overrides(core_t *c, double now) {
     bool want[OV_COUNT];
-    xp_wanted_overrides(&c->s, want);
+    xp_wanted_overrides(&c->s, !core_calibrating(c), want);
     for (int k = 0; k < OV_COUNT; k++) {
         if (want[k]) {
             if (!c->ov_on[k] || now - c->ov_last[k] >= c->bridge.override_reassert_s) {
@@ -162,15 +188,17 @@ void xp_push(core_t *c, double now) {
     plan_overrides(c, now);
 
     const settings_t *s = &c->s;
-    /* No fresh input (Bluetooth hiccup, controller switched off): hold every
-     * axis neutral and release every button rather than replaying stale values. */
-    bool live = c->have_report && (now - c->last_report_at) <= c->bridge.input_stale_s;
+    /* No fresh input (Bluetooth hiccup, controller switched off): hold every axis
+     * neutral rather than replaying stale values. Buttons keep their last known state
+     * (see the button loop below). */
+    bool live = xp_input_fresh(c, now);
 
     /* Each of roll, pitch and yaw is flown either by motion or by the sticks/triggers,
      * never a sum of both (motion_owns: motion control on and that axis set to motion).
      * While the calibration runs the user tilts the controller on purpose, so the sticks
-     * fly motion's axes too: recalibrating in the air never leaves an axis unflown. The
-     * override stays asserted either way (xp_wanted_overrides), and the switch fades. */
+     * fly motion's axes too: recalibrating in the air never leaves an axis unflown. An
+     * axis with no stick on it goes back to X-Plane meanwhile (xp_wanted_overrides), and
+     * the switch fades. */
     bool calibrating = core_calibrating(c);
     bool own_roll  = motion_owns(&s->motion, MOTION_ROLL)  && !calibrating;
     bool own_pitch = motion_owns(&s->motion, MOTION_PITCH) && !calibrating;
@@ -201,11 +229,9 @@ void xp_push(core_t *c, double now) {
         if (own_roll)  roll  = mo[MOTION_ROLL];
         if (own_pitch) pitch = mo[MOTION_PITCH];
         if (own_yaw)   yaw   = mo[MOTION_YAW];
-    } else {
-        /* throttle is left where it is (thr stays -1); X-Plane holds the value */
-        if (xp_axis_in_use(s, AX_BRAKE_L)) lb = 0;
-        if (xp_axis_in_use(s, AX_BRAKE_R)) rb = 0;
     }
+    /* stale: throttle is left where it is (thr stays -1, X-Plane holds the value), and
+     * the brakes go to 0 below (lb, rb stay -1) */
     if (roll  >  1) roll  =  1;
     if (roll  < -1) roll  = -1;
     if (pitch >  1) pitch =  1;
@@ -220,7 +246,7 @@ void xp_push(core_t *c, double now) {
     yaw   = motion_blend(&c->mblend[MOTION_YAW],   yaw,   now);
 
     bool want[OV_COUNT];
-    xp_wanted_overrides(s, want);
+    xp_wanted_overrides(s, !calibrating, want);
     if (want[OV_ROLL_I])    xp_send_dref(c, DR_ROLL,    (float)roll);
     if (want[OV_PITCH_I])   xp_send_dref(c, DR_PITCH,   (float)pitch);
     if (want[OV_HEADING_I]) xp_send_dref(c, DR_HEADING, (float)yaw);
@@ -239,11 +265,20 @@ void xp_push(core_t *c, double now) {
         c->last_thr_at = now;
         c->thr_sent = true;
     }
-    if (lb  >= 0) xp_send_dref(c, DR_LBRAKE, (float)lb);
-    if (rb  >= 0) xp_send_dref(c, DR_RBRAKE, (float)rb);
+    /* The toe-brake override takes both brakes (DataRefs.txt), so both are written while
+     * it is on: a side with no trigger mapped is released (0), never left frozen. */
+    if (want[OV_BRAKES_I]) {
+        xp_send_dref(c, DR_LBRAKE, (float)(lb > 0 ? lb : 0));
+        xp_send_dref(c, DR_RBRAKE, (float)(rb > 0 ? rb : 0));
+    }
 
+    /* Buttons: X-Plane commands are one-shot, so there is nothing to release when the
+     * input goes stale; a button held through a Bluetooth gap must not count as pressed
+     * again when the reports come back (a toggle would flip twice). So while the input
+     * is stale the buttons keep their last known state and nothing fires. */
+    if (!live) return;
     for (int i = 0; i < B_COUNT; i++) {
-        bool down = live && c->state.btn[i];
+        bool down = c->state.btn[i];
         /* unbound, or bound to one of DSXP's own commands (core.c dsxp_buttons acts on
          * those): nothing goes to X-Plane */
         if (!s->bind[i].cmd[0] || cmd_is_dsxp(s->bind[i].cmd)) { c->prev_btn[i] = down; continue; }

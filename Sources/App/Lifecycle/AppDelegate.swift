@@ -33,7 +33,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let folder = XPlaneLocator.locate()
         let rc = bridge.start(commandsPath: folder.map { XPlaneLocator.commandsFile(in: $0).path },
                               importLegacy: importLegacy)
-        if rc == 0 && importLegacy { defaults.set(true, forKey: "ImportedLegacyBindings") }
+        if rc != 0 {
+            // the bridge never started: nothing would work, and the menu would only say
+            // "not running" with no reason, so say why and quit
+            let alert = NSAlert()
+            alert.alertStyle = .critical
+            alert.messageText = "DSXP could not start"
+            alert.informativeText = "Its bridge between the controller and X-Plane did not start "
+                + "(error \(rc)). The log folder, ~/Library/Logs/DSXP, may say more."
+            alert.addButton(withTitle: "Quit")
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+            NSApp.terminate(nil)
+            return
+        }
+        if importLegacy { defaults.set(true, forKey: "ImportedLegacyBindings") }
 
         // the crash guard: cleans up after us if we ever die without doing so. Spawned
         // after the core starts so it inherits the core's UDP socket.

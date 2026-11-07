@@ -13,6 +13,12 @@
 
 static void apply_saved_calibration(core_t *c);   /* below, with the calibration helpers */
 
+/* Both triggers to the effects set by hand (trigger.source = manual). */
+static void fx_from_manual(core_t *c) {
+    c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
+    c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+}
+
 void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     memset(c, 0, sizeof *c);
     c->s = *s;
@@ -23,8 +29,7 @@ void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "%s",
              c->s.trigger_source == TRIGGER_SRC_WIND ? "Waiting for X-Plane" : "Manual");
     if (c->s.trigger_source == TRIGGER_SRC_MANUAL) {
-        c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
-        c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+        fx_from_manual(c);
     }
     c->out_dirty = true;
     c->force_gate = true;
@@ -87,7 +92,7 @@ static void out_send(core_t *c) {
     f.player_force = c->lamp_blinking;
     f.r = c->eff_r; f.g = c->eff_g; f.b = c->eff_b;
     for (int i = 0; i < 2; i++)                  /* resistance stays; only Vibrate is held off */
-        f.fx[i] = hush && c->fx_out[i].mode == TFX_VIBRATE ? (trigger_fx_t){ TFX_OFF, 0, 0, 0 }
+        f.fx[i] = hush && c->fx_out[i].mode == TFX_VIBRATE ? TFX_NONE
                                                           : c->fx_out[i];
     unsigned char rep[OUT_REPORT_LEN];
     out_build_report(&f, c->out_seq++, rep);
@@ -116,7 +121,7 @@ void out_tick(core_t *c, double now) {
 /* Leave the controller quiet: no resistance, no buzzing, bar and lamps off.
  * The user's saved light settings are not touched. */
 void out_quiet(core_t *c) {
-    c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+    c->fx_out[0] = c->fx_out[1] = TFX_NONE;
     c->rumble.left = c->rumble.right = 0;
     c->eff_r = c->eff_g = c->eff_b = 0;
     if (!c->sinks.out_report || !c->have_output_device) return;
@@ -168,6 +173,10 @@ void core_on_device(core_t *c, bool bluetooth, bool added) {
         /* the filter and any held yaw belong to the stream that just ended; the captured
          * level, the learned bias and the calibration stay (same hands, same controller) */
         motion_reset(&c->motion);
+        /* so does a touch in progress: kept, the first report after a reconnect would end
+         * it against the old position and fire a swipe nobody made */
+        memset(&c->gest, 0, sizeof c->gest);
+        for (int i = 0; i < 2; i++) c->state.touch[i].active = false;
     }
 }
 
@@ -236,24 +245,33 @@ static void calibrate_cmd(core_t *c, int action, double now) {
         c->motion_hold = false;
         out_mark(c);                                           /* silence DSXP's vibration now */
         dsxp_log("motion calibration started");
-    } else if (action == CALIB_ACTION_CLOSE && (c->s.motion.calibrated || c->calib.step == CALIB_DONE)) {
+    } else if ((action == CALIB_ACTION_CLOSE && (c->s.motion.calibrated || c->calib.step == CALIB_DONE)) ||
+               action == CALIB_ACTION_ABORT) {
         bool was_running = core_calibrating(c);
         calib_cancel(&c->calib);
         if (was_running) {                                     /* abandoned: back to the saved */
             apply_saved_calibration(c);
             blend_owned(c, now);
             out_mark(c);                                       /* vibration may resume        */
-            dsxp_log("motion calibration cancelled; the previous calibration stays");
+            dsxp_log(action == CALIB_ACTION_ABORT
+                     ? "motion calibration stopped: the mapper was closed; the previous calibration stays"
+                     : "motion calibration cancelled; the previous calibration stays");
         }
     }
 }
 
-/* Recenter: the attitude held now becomes level, faded in so the controls do not jump. */
-void core_motion_recenter(core_t *c, double now) {
-    motion_recenter(&c->motion);
+/* Recenter: the attitude held now becomes level, faded in so the controls do not jump.
+ * Refused, with nothing changed, when the controller cannot be read as a level (motion.c
+ * motion_recenter: face down, on its edge, or tilted past MOTION_LEVEL_MAX_DEG). */
+bool core_motion_recenter(core_t *c, double now) {
+    if (!motion_recenter(&c->motion)) {
+        dsxp_log("motion: not recentered - hold the controller the way you fly level");
+        return false;
+    }
     blend_owned(c, now);
     lamp_blink(c, now);
     dsxp_log("motion: recentered");
+    return true;
 }
 
 bool core_input_live(const core_t *c, double now) {
@@ -312,10 +330,10 @@ void core_set_trigger_source(core_t *c, int mode, double now) {
     c->s.trigger_source = want;
     if (want == TRIGGER_SRC_MANUAL) {
         /* hand-set effects come straight back: wind never touched them */
-        if (!c->suspended) { c->fx_out[0] = trig_effect(&c->s.fx_manual[0]); c->fx_out[1] = trig_effect(&c->s.fx_manual[1]); }
+        if (!c->suspended) fx_from_manual(c);
         snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Manual");
     } else {
-        c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+        c->fx_out[0] = c->fx_out[1] = TFX_NONE;
         snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Waiting for X-Plane");
     }
     out_mark(c);
@@ -356,8 +374,7 @@ void core_apply_config(core_t *c, const config_t *cfg, unsigned files, double no
     if (new_rm != old_rm) core_set_rumble_source(c, new_rm, now);
     if (files & CFB_FEEDBACK) {
         if (c->s.trigger_source == TRIGGER_SRC_MANUAL && !c->suspended) {
-            c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
-            c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+            fx_from_manual(c);
         }
         out_mark(c);
     }
@@ -418,15 +435,14 @@ void core_set_suspended(core_t *c, bool suspended, double now) {
         c->suspended = true;
         xp_disengage(c, now);
         c->rumble.left = c->rumble.right = 0;
-        c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+        c->fx_out[0] = c->fx_out[1] = TFX_NONE;
         out_mark(c);
         dsxp_log("suspended (system sleep)");
     } else if (!suspended && c->suspended) {
         c->suspended = false;
         c->force_gate = true;
         if (c->s.trigger_source == TRIGGER_SRC_MANUAL) {
-            c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
-            c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+            fx_from_manual(c);
         }
         out_mark(c);
         dsxp_log("resumed");
@@ -518,6 +534,10 @@ void core_apply_cmd(core_t *c, const cmd_t *cmd, double now) {
         calibrate_cmd(c, cmd->key, now);
         break;
     case CMD_MOTION_RECENTER:            /* not a setting: nothing is saved */
+        if (core_calibrating(c)) {       /* the routine measures from its own level */
+            dsxp_log("motion: not recentered - the calibration is running");
+            break;
+        }
         core_motion_recenter(c, now);
         break;
     default:
@@ -559,11 +579,21 @@ static void reports_tick(core_t *c, double now) {
  * long as any button bound to it is down.
  */
 static void dsxp_buttons(core_t *c, double now) {
-    /* the same freshness rule as xp_push: stale input releases every button */
-    bool fresh = c->have_report && now - c->last_report_at <= c->bridge.input_stale_s;
+    /* Stale input (the same rule as xp_push, a Bluetooth gap): every button keeps its
+     * last known state and nothing acts, so a press held through the gap is not taken for
+     * a new one (a toggle would flip twice) and a held clutch is not let go. Only once the
+     * input is lost (core_input_live) is a held clutch let go, without recentering (the
+     * attitude is unknown then), so motion is not frozen for good. */
+    if (!xp_input_fresh(c, now)) {
+        if (c->motion_hold && !core_input_live(c, now)) {
+            c->motion_hold = false;
+            blend_owned(c, now);                        /* fade from the frozen values   */
+        }
+        return;
+    }
     bool hold = false;                                  /* any hold button down now      */
     for (int i = 0; i < B_COUNT; i++) {
-        bool down = fresh && c->state.btn[i];
+        bool down = c->state.btn[i];
         bool was = c->dsxp_prev_btn[i];
         c->dsxp_prev_btn[i] = down;                     /* remember for the next tick    */
         const char *cmd = c->s.bind[i].cmd;
@@ -588,7 +618,8 @@ static void dsxp_buttons(core_t *c, double now) {
         memcpy(c->motion_frozen, c->motion.out, sizeof c->motion_frozen);
     } else if (!hold && c->motion_hold) {
         c->motion_hold = false;
-        core_motion_recenter(c, now);
+        if (!core_motion_recenter(c, now))              /* refused: the old level stays, */
+            blend_owned(c, now);                        /*   faded in from the frozen    */
     }
 }
 
@@ -616,7 +647,8 @@ static void motion_edges(core_t *c, double now) {
         blend_owned(c, now);
     }
     if (m->enabled != c->motion_was_enabled) {
-        if (m->enabled && m->calibrated)                /* level = the calibrated one     */
+        if (m->enabled && m->calibrated && !core_calibrating(c))   /* the calibrated level; */
+            /* during a calibration the routine's own level stays in use */
             motion_set_level(&c->motion, m->level_bank_deg, m->level_pitch_deg);
         lamp_blink(c, now);
         c->motion_was_enabled = m->enabled;

@@ -175,8 +175,8 @@ static const conf_key_t CONTROLS_KEYS[] = {
         "twist it flat to yaw. Hold it the way \"level\" should feel and press Recenter in the\n"
         "mapper (or a button bound to dsxp/motion/recenter). Each axis is flown by motion or by\n"
         "the sticks, never both; an axis left on sticks works exactly as set under Axes.\n"
-        "Yaw is hold-to-steer: twist to apply rudder and the twist eases back to center by\n"
-        "itself; turning the controller back never overshoots into opposite rudder.\n"
+        "Yaw is hold-to-steer: twist about the controller's face to apply rudder; it stays\n"
+        "where you leave it until you twist back, press Recenter or set the controller down.\n"
         "Face down or stood on its edge, the controller holds every motion axis neutral."),
     KX("motion.enabled", CT_BOOL, s.motion.enabled,
        "yes: the axes set to motion below follow the controller's tilt.\n"

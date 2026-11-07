@@ -33,11 +33,16 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>          /* memchr (text_next_line) */
 #include "dsxp_core.h"
 #include "tunables.h"
 #include "motion.h"          /* motion control: calibration and sensor fusion (pure) */
 
 /* ------------------------------------------------------------- constants */
+
+/* Degrees to radians and back (M_PI comes from <math.h> where these are used). */
+#define DEG_TO_RAD (M_PI / 180.0)
+#define RAD_TO_DEG (180.0 / M_PI)
 
 #define XP_IP         "127.0.0.1"
 #define XP_PORT       49000
@@ -48,7 +53,6 @@
 #define CMD_REPEAT_HZ 20.0
 #define MAX_CMDS      8192
 #define CMD_PATH_MAX  256
-#define CMD_DESC_MAX  256
 
 #define TICK_HZ                 60.0
 #define INPUT_STALE_SEC         0.25  /* center the yoke after this long without input */
@@ -153,6 +157,8 @@ typedef enum { TFX_OFF = 0, TFX_RESIST, TFX_WEAPON, TFX_VIBRATE } tfx_mode_t;
 typedef struct { int mode; unsigned char start, end, strength; } trigger_fx_t;   /* on the wire */
 /* What the user sets by hand. Vibrate's frequency has its own field; on the wire
  * it travels in trigger_fx_t.end (see trig_effect). */
+/* No trigger effect: free travel (what a manual "Off", quiet and suspend all send). */
+#define TFX_NONE ((trigger_fx_t){ TFX_OFF, 0, 0, 0 })
 typedef struct { int mode; unsigned char start, end, strength, freq; } trig_manual_t;
 typedef struct { bool active; double x, y; } touch_t;
 
@@ -180,7 +186,9 @@ typedef struct {
     bool   live;
     char   trigger_note[64];   /* trigger effects status (wind source) */
 } wx_t;
-typedef struct { char path[CMD_PATH_MAX]; char desc[CMD_DESC_MAX]; } xcmd_t;
+/* An X-Plane (or DSXP) command and its description. The strings live elsewhere: string
+ * literals (DSXP_COMMANDS) or the catalog's own block (commands.c). */
+typedef struct { const char *path; const char *desc; } xcmd_t;
 
 typedef struct {
     double raw01[S_COUNT];   /* 0..1 exactly as delivered  */
@@ -348,9 +356,13 @@ typedef enum {
     CMD_RUMBLE, CMD_RUMBLE_SOURCE, CMD_RUMBLEPATH,
     CMD_MOTION,             /* change motion settings (u.motion)                */
     CMD_MOTION_RECENTER,    /* the controller's attitude now becomes level      */
-    CMD_CALIBRATE           /* key: CALIB_ACTION_START or CALIB_ACTION_CLOSE    */
+    CMD_CALIBRATE           /* key: CALIB_ACTION_START, _CLOSE or _ABORT        */
 } cmd_kind_t;
-enum { CALIB_ACTION_START = 1, CALIB_ACTION_CLOSE = 2 };
+/* START: begin (again). CLOSE: the user closes the sheet, refused until the first
+ * calibration is done. ABORT: the mapper window closed, so nobody can see a calibration
+ * that is running: it is stopped even before the first one (the sheet comes back next
+ * time the mapper opens). */
+enum { CALIB_ACTION_START = 1, CALIB_ACTION_CLOSE = 2, CALIB_ACTION_ABORT = 3 };
 
 enum { LF_R = 1, LF_G = 2, LF_B = 4, LF_ON = 8, LF_PATTERN = 16, LF_SPEED = 32,
        LF_PLAYER = 64, LF_BRIGHT = 128, LF_SOURCE = 256 };
@@ -410,6 +422,28 @@ static inline uint32_t le32u(const unsigned char *p) {
            (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;  /* bytes 2 and 3: the high half */
 }
 
+/* Text files (config files, the legacy bindings file, X-Plane's Commands.txt). */
+
+/* Bytes of a UTF-8 byte-order mark at the start of `text` (3), or 0: editors may add one,
+ * and it must not become part of the first line's key. */
+static inline size_t text_bom(const char *text, size_t len) {
+    return len >= 3 && (unsigned char)text[0] == 0xEF && (unsigned char)text[1] == 0xBB &&
+           (unsigned char)text[2] == 0xBF ? 3 : 0;
+}
+
+/* The next line of `text` at *pos: where it starts and how long it is, without its '\n';
+ * *pos moves past it. False at the end. Each parser handles a trailing '\r', length
+ * limits and NUL bytes its own way. */
+static inline bool text_next_line(const char *text, size_t len, size_t *pos, size_t *start, size_t *n) {
+    if (*pos >= len) return false;
+    *start = *pos;
+    const char *nl = memchr(text + *pos, '\n', len - *pos);       /* end of this line     */
+    size_t end = nl ? (size_t)(nl - text) : len;
+    *n = end - *start;
+    *pos = nl ? end + 1 : len;                                      /* past the '\n'        */
+    return true;
+}
+
 /* Store v at p as an unsigned 32-bit value, low byte first. */
 static inline void put_le32(unsigned char *p, uint32_t v) {
     p[0] = (unsigned char)(v & 0xFF);                     /* low byte first               */
@@ -426,7 +460,6 @@ void   detect_gestures_cfg(const ds_state_t *st, gesture_t *g, double sens,
                            const gesture_cfg_t *gc, double now);
 bool   ds_decode_report_cfg(ds_state_t *st, gesture_t *g, const tuning_t *tune,
                             const gesture_cfg_t *gc, const unsigned char *r, long len, double now);
-void   detect_gestures(const ds_state_t *st, gesture_t *g, double sens, double now);
 bool   ds_decode_report(ds_state_t *st, gesture_t *g, const tuning_t *tune,
                         const unsigned char *r, long len, double now);
 
@@ -448,6 +481,7 @@ void     put_effect(unsigned char *p, const trigger_fx_t *fx);
 bool     fx_equal(const trigger_fx_t *a, const trigger_fx_t *b);   /* field-wise: the struct has padding */
 trigger_fx_t trig_effect(const trig_manual_t *m);              /* hand-set -> wire */
 void     out_build_report(const out_frame_t *f, unsigned char seq, unsigned char *rep);
+unsigned char clamp8(double v);                                 /* 0..255, NaN -> 0  */
 
 /* wind.c / rumble.c / light.c */
 void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg);                 /* cfg NULL = defaults */
@@ -480,9 +514,10 @@ bool   bindings_parse(settings_t *s, const char *text, size_t len);
  * writer of motion.full_deg (config_validate, the mapper's CMD_MOTION, the calibration) */
 void   motion_full_range(int axis, double *lo, double *hi);   /* MOTION_*_FULL_MIN / MAX  */
 bool   motion_full_fix(motion_cfg_t *m, int axis);            /* true if it had to change */
+double motion_full_room(int axis, double level_bank_deg, double level_pitch_deg);
 
 /* commands.c */
-int    commands_parse(const char *text, size_t len, xcmd_t **out);
+int    commands_parse(const char *text, size_t len, xcmd_t **out);   /* one block: free() */
 
 /* json.c */
 typedef struct { char *b; size_t len, cap; bool oom; } jbuf_t;
@@ -491,12 +526,15 @@ void   jb_free(jbuf_t *j);
 void   jb_printf(jbuf_t *j, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void   jb_str(jbuf_t *j, const char *s);                  /* "escaped" */
 size_t json_escape(const char *s, char *out, size_t n);
-void   url_decode(const char *in, char *out, size_t n);
+bool   url_decode(const char *in, char *out, size_t n);   /* false: %00, or does not fit */
+bool   qs_has(const char *qs, const char *key);             /* the key is in the query     */
 const char *qs_get(const char *qs, const char *key, char *out, size_t n);
 
 /* xplane.c */
 bool xp_axis_in_use(const settings_t *s, int target);
-void xp_wanted_overrides(const settings_t *s, bool want[OV_COUNT]);
+void xp_wanted_overrides(const settings_t *s, bool motion_flying, bool want[OV_COUNT]);
+bool xp_input_fresh(const core_t *c, double now);   /* reports recent enough to act on */
+void xp_release_now(core_t *c);                     /* send pending releases at once   */
 void xp_send_dref(core_t *c, const char *path, float value);
 void xp_send_cmnd(core_t *c, const char *cmd);
 void xp_engage(core_t *c, double now);
@@ -528,7 +566,7 @@ unsigned core_save_due(core_t *c, double now);      /* CFB_* mask due for saving
 void core_set_trigger_source(core_t *c, int mode, double now);
 void core_set_rumble_source(core_t *c, int mode, double now);
 void core_set_motion_cal(core_t *c, const motion_cal_t *cal, mcal_result_t r);
-void core_motion_recenter(core_t *c, double now);
+bool core_motion_recenter(core_t *c, double now);   /* false: refused, nothing changed */
 void core_calib_finish(core_t *c, double now);
 bool core_calibrating(const core_t *c);
 void out_tick(core_t *c, double now);
