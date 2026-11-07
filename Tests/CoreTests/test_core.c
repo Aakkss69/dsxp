@@ -516,7 +516,11 @@ static void runtime_smoke(void) {
     CHECK(access(data, F_OK) == 0);
     CHECK_INT(dsxp_start(&cfg), 0);                  /* restart after a clean stop */
     CHECK(wait_status(st_ticking, &st));
+    unsigned gen = runtime_dev_gen();
     CHECK(dsxp_stop(NAN));                            /* NaN timeout is clamped, not UB */
+    /* stopping retires the connection number, so a factory-calibration read still running
+     * from this run can never be taken by the next one (runtime_cal_drain) */
+    CHECK(runtime_dev_gen() != gen);
 
     char longp[1100];
     memset(longp, 'a', sizeof longp - 1);
