@@ -215,7 +215,10 @@ static void step_level(calib_t *c, motion_t *m, const motion_sample_t *s, double
  * coming back to center for CENTER_SECONDS finishes the step. */
 static void step_reach(calib_t *c, motion_t *m, const motion_sample_t *s, double dt, bool saturated) {
     if (saturated) {                                           /* past what the sensor reads */
-        enter(c, c->step);
+        double twist = c->twist;                               /* YAW: where it is now, from */
+        enter(c, c->step);                                     /*   the zero the step began  */
+        if (c->step == CALIB_YAW) c->twist = twist;            /*   at: the reach restarts,  */
+                                                               /*   not the zero             */
         say(c, "That was faster than the sensor can measure. Once more, a little slower.");
         return;
     }

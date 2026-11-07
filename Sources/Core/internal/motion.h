@@ -115,6 +115,8 @@ typedef struct {
     uint32_t last_ts;         /* previous sample's sensor clock                        */
     double   t;               /* seconds of sensor time fused since the last reset     */
     double   up[3];           /* estimated "up" in the controller frame, unit length   */
+    double   settle_until;    /* faster accelerometer correction until this time (seeded) */
+    bool     awaiting_seed;   /* a sample was not fit to seed: wait, keeping the yaw     */
     /* level reference */
     double   neutral[3];      /* the attitude that reads as level: the calibration's
                                  (motion_set_level) or the one Recenter captured        */

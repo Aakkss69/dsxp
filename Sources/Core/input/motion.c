@@ -39,6 +39,13 @@
 #define TAU_S     0.5     /* accelerometer correction time constant: lower trusts the
                              accelerometer more (steadier level, more wobble when moved)    */
 #define ACC_TRUST 0.10    /* skip the correction when |a| is this far from 1 g (shaking)    */
+/* Seeding "up" from one sample: only from one within SEED_TRUST of 1 g (a jolt or free
+ * fall reads far from it; a jolted seed read 39 deg of bank on a level controller), then
+ * SETTLE_S of a faster correction (time constant SETTLE_TAU_S), so a seed that a smaller
+ * jolt still bent fades in a tenth of a second instead of half a second. */
+#define SEED_TRUST    0.25
+#define SETTLE_S      0.5
+#define SETTLE_TAU_S  0.1
 #define DT_MAX_S  0.1     /* a longer gap is a break: re-seed from the accelerometer       */
 #define BIAS_WIN_S    1.0 /* still-window length for bias learning                          */
 #define BIAS_RANGE    1.5 /* deg/s: every gyro axis must stay within this range in a window */
@@ -93,6 +100,8 @@ void motion_reset(motion_t *m) {
     m->seeded = false;                           /* next sample seeds up[]          */
     m->have_ts = false;                          /* next sample has no time step    */
     m->t = 0;
+    m->settle_until = 0;
+    m->awaiting_seed = false;
     motion_yaw_reset(&m->yaw);                   /* a held twist ends with the stream */
     m->win_start = 0;
     m->win_n = 0;
@@ -240,11 +249,19 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
     double a_len = sqrt(dot3(a, a));                     /* 1 g when only gravity acts     */
 
     if (!m->seeded || !fresh || dt > DT_MAX_S) {         /* first sample, or a break        */
-        if (!normalize3(a)) return;                      /* no direction (free fall, junk) */
         if (m->seeded && fresh) motion_yaw_gap(&m->yaw, dt);   /* a break: kept if short   */
-        else motion_yaw_reset(&m->yaw);                  /* the first sample: from center   */
+        else if (!m->awaiting_seed) motion_yaw_reset(&m->yaw);  /* the first: from center */
+        /* only a sample showing gravity alone can seed "up"; until one comes the outputs
+         * stay as they were (a few samples at most when the controller is held) */
+        if (!(fabs(a_len - 1.0) <= SEED_TRUST) || !normalize3(a)) {
+            m->seeded = false;
+            m->awaiting_seed = true;                     /* keep the yaw for that sample   */
+            return;
+        }
+        m->awaiting_seed = false;
         memcpy(m->up, a, sizeof m->up);                  /* seed: trust the accelerometer   */
         m->seeded = true;
+        m->settle_until = m->t + SETTLE_S;               /* then settle quickly            */
         m->win_n = 0;
         m->rest_n = 0;
         refresh_attitude(m);
@@ -269,7 +286,8 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
     /* Step 2b: pull toward the accelerometer, unless the controller is being shaken
      * (then the accelerometer is not showing gravity alone). */
     if (fabs(a_len - 1.0) <= ACC_TRUST && normalize3(a)) {
-        double k = fmin(1.0, dt / TAU_S);                /* share of the gap closed now     */
+        double tau = m->t < m->settle_until ? SETTLE_TAU_S : TAU_S;   /* just seeded: fast */
+        double k = fmin(1.0, dt / tau);                  /* share of the gap closed now     */
         for (int i = 0; i < 3; i++) m->up[i] += k * (a[i] - m->up[i]);
     }
     if (!normalize3(m->up)) {                            /* cannot happen in practice        */

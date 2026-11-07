@@ -168,6 +168,10 @@ void core_on_device(core_t *c, bool bluetooth, bool added) {
         /* the filter and any held yaw belong to the stream that just ended; the captured
          * level, the learned bias and the calibration stay (same hands, same controller) */
         motion_reset(&c->motion);
+        /* so does a touch in progress: kept, the first report after a reconnect would end
+         * it against the old position and fire a swipe nobody made */
+        memset(&c->gest, 0, sizeof c->gest);
+        for (int i = 0; i < 2; i++) c->state.touch[i].active = false;
     }
 }
 

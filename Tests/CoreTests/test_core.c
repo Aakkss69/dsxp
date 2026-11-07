@@ -847,8 +847,11 @@ static void motion_control(void) {
     core_set_motion_cal(&C, &cal, MCAL_OK);
     CHECK_INT(C.motion_cal_src, MOTION_CAL_FACTORY);
     double n1 = C.motion.neutral[0];
+    C.gest.was = true;                                    /* a touch in progress ...       */
+    C.state.touch[0].active = true;
     core_on_device(&C, true, false);
     CHECK(!C.motion.seeded);
+    CHECK(!C.gest.was && !C.state.touch[0].active);       /* ... ends with the stream      */
     CHECK_NEAR(C.motion.neutral[0], n1, 1e-12);
     CHECK_INT(C.motion_cal_src, MOTION_CAL_FACTORY);
     core_set_motion_cal(&C, &cal, MCAL_BAD_CRC);

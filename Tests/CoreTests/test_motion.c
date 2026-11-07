@@ -327,6 +327,20 @@ void test_motion_calib(void) {
     calib_run(&k, &m, &s, &cfg, 0, 0, 30, 1.0, false);           /* done: nothing changes */
     CHECK_INT(k.step, CALIB_DONE);
 
+    /* a clipped reading during the twist restarts the reach, but not its zero: the
+     * twist still counts from where the step began */
+    calib_start(&k);
+    k.step = CALIB_YAW; k.min_reach = 10;
+    motion_init(&m);
+    sim_init(&s, 9000);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 0.2, false);
+    calib_run(&k, &m, &s, &cfg, 0, -40, 0, 0.5, false);         /* 20 deg right          */
+    double before_clip = k.twist;
+    CHECK(before_clip > 15);
+    calib_run(&k, &m, &s, &cfg, 0, 0, 0, 1.0 / SIM_HZ, true);    /* clipped               */
+    CHECK(k.note[0] != 0 && k.hi == 0 && k.lo == 0);
+    CHECK_NEAR(k.twist, before_clip, 1e-9);                      /* the zero stays        */
+
     /* a reach is kept inside the axis's range, pitch also inside what can be read */
     calib_start(&k);
     k.step = CALIB_PITCH; k.min_reach = 10; k.level_pitch = 30;
@@ -613,6 +627,28 @@ void test_motion(void) {
     motion_update(&m, &zero, &cfg, false);
     CHECK(!m.seeded);
     for (int i = 0; i < 3; i++) CHECK_NEAR(m.out[i], 0, 1e-12);
+
+    /* after a gap, a jolted sample (1.28 g, sideways) does not seed "up" (it used to:
+     * 39 deg of bank on a level controller); the next calm one does, held twist kept */
+    start(&m, &s, &cfg);
+    run(&m, &s, &cfg, 0, -40, 0, 0.25);              /* 10 deg of twist, held             */
+    double held_twist = m.yaw.deg;
+    s.ts += (uint32_t)(0.2 * MOTION_TICKS_PER_SEC);  /* a 0.2 s gap ...                   */
+    motion_sample_t jolt = { { 0, 0, 0 }, { 0.8, 1.0, 0 }, s.ts };
+    motion_update(&m, &jolt, &cfg, false);           /* ... then a jolt                   */
+    CHECK(!m.seeded);
+    run(&m, &s, &cfg, 0, 0, 0, 1.0 / SIM_HZ);        /* calm, level                       */
+    CHECK(m.seeded);
+    CHECK_NEAR(m.bank_deg, 0, 0.5);
+    CHECK_NEAR(m.yaw.deg, held_twist, 1e-9);
+    /* a smaller jolt within 0.25 g still seeds, bent, and fades in a tenth of a second
+     * (it took a second at the normal correction) */
+    s.ts += (uint32_t)(0.2 * MOTION_TICKS_PER_SEC);
+    motion_sample_t nudge = { { 0, 0, 0 }, { 0.5, 0.9, 0 }, s.ts };
+    motion_update(&m, &nudge, &cfg, false);
+    CHECK(m.seeded && m.bank_deg < -20);
+    run(&m, &s, &cfg, 0, 0, 0, 0.25);
+    CHECK_NEAR(m.bank_deg, 0, 2.5);
 
     /* a reconnect keeps the captured level and the bias, and restarts the rest */
     start(&m, &s, &cfg);
