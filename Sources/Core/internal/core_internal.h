@@ -40,6 +40,10 @@
 
 /* ------------------------------------------------------------- constants */
 
+/* Degrees to radians and back (M_PI comes from <math.h> where these are used). */
+#define DEG_TO_RAD (M_PI / 180.0)
+#define RAD_TO_DEG (180.0 / M_PI)
+
 #define XP_IP         "127.0.0.1"
 #define XP_PORT       49000
 #define DS_VID        0x054C
@@ -49,7 +53,6 @@
 #define CMD_REPEAT_HZ 20.0
 #define MAX_CMDS      8192
 #define CMD_PATH_MAX  256
-#define CMD_DESC_MAX  256
 
 #define TICK_HZ                 60.0
 #define INPUT_STALE_SEC         0.25  /* center the yoke after this long without input */
@@ -154,6 +157,8 @@ typedef enum { TFX_OFF = 0, TFX_RESIST, TFX_WEAPON, TFX_VIBRATE } tfx_mode_t;
 typedef struct { int mode; unsigned char start, end, strength; } trigger_fx_t;   /* on the wire */
 /* What the user sets by hand. Vibrate's frequency has its own field; on the wire
  * it travels in trigger_fx_t.end (see trig_effect). */
+/* No trigger effect: free travel (what a manual "Off", quiet and suspend all send). */
+#define TFX_NONE ((trigger_fx_t){ TFX_OFF, 0, 0, 0 })
 typedef struct { int mode; unsigned char start, end, strength, freq; } trig_manual_t;
 typedef struct { bool active; double x, y; } touch_t;
 
@@ -181,7 +186,9 @@ typedef struct {
     bool   live;
     char   trigger_note[64];   /* trigger effects status (wind source) */
 } wx_t;
-typedef struct { char path[CMD_PATH_MAX]; char desc[CMD_DESC_MAX]; } xcmd_t;
+/* An X-Plane (or DSXP) command and its description. The strings live elsewhere: string
+ * literals (DSXP_COMMANDS) or the catalog's own block (commands.c). */
+typedef struct { const char *path; const char *desc; } xcmd_t;
 
 typedef struct {
     double raw01[S_COUNT];   /* 0..1 exactly as delivered  */
@@ -453,7 +460,6 @@ void   detect_gestures_cfg(const ds_state_t *st, gesture_t *g, double sens,
                            const gesture_cfg_t *gc, double now);
 bool   ds_decode_report_cfg(ds_state_t *st, gesture_t *g, const tuning_t *tune,
                             const gesture_cfg_t *gc, const unsigned char *r, long len, double now);
-void   detect_gestures(const ds_state_t *st, gesture_t *g, double sens, double now);
 bool   ds_decode_report(ds_state_t *st, gesture_t *g, const tuning_t *tune,
                         const unsigned char *r, long len, double now);
 
@@ -475,6 +481,7 @@ void     put_effect(unsigned char *p, const trigger_fx_t *fx);
 bool     fx_equal(const trigger_fx_t *a, const trigger_fx_t *b);   /* field-wise: the struct has padding */
 trigger_fx_t trig_effect(const trig_manual_t *m);              /* hand-set -> wire */
 void     out_build_report(const out_frame_t *f, unsigned char seq, unsigned char *rep);
+unsigned char clamp8(double v);                                 /* 0..255, NaN -> 0  */
 
 /* wind.c / rumble.c / light.c */
 void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg);                 /* cfg NULL = defaults */
@@ -510,7 +517,7 @@ bool   motion_full_fix(motion_cfg_t *m, int axis);            /* true if it had 
 double motion_full_room(int axis, double level_bank_deg, double level_pitch_deg);
 
 /* commands.c */
-int    commands_parse(const char *text, size_t len, xcmd_t **out);
+int    commands_parse(const char *text, size_t len, xcmd_t **out);   /* one block: free() */
 
 /* json.c */
 typedef struct { char *b; size_t len, cap; bool oom; } jbuf_t;

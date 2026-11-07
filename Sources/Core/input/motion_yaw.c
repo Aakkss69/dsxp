@@ -33,9 +33,9 @@
  * motion.c also calls motion_yaw_rest() when the controller has been set down, and
  * motion_yaw_gap() after a gap in the reports.
  *
- * Depends on: shape() (decode.c) for the deadzone and clamp the sticks use too.
+ * Depends on: motion_axis_output() (motion.c), the deadzone and clamp the sticks use too.
  */
-#include "core_internal.h"   /* motion_yaw.h (through motion.h), shape()                 */
+#include "core_internal.h"   /* motion_yaw.h, motion_axis_output() (through motion.h)    */
 #include <math.h>
 #include <string.h>
 
@@ -220,8 +220,6 @@ void motion_yaw_update(motion_yaw_t *y, const double gyro_dps[3], const double b
 /* The yaw as X-Plane's yaw, -1..1: the angle over the full-deflection angle, through the
  * yaw's own deadzone (motion.yaw.deadzone), clamped, inverted if asked. */
 double motion_yaw_output(const motion_yaw_t *y, const motion_cfg_t *cfg) {
-    double full = cfg->full_deg[MOTION_YAW];
-    if (!(full > 0)) return 0;                        /* misconfigured: fly nothing    */
-    double v = shape(y->deg / full, cfg->yaw_deadzone_deg / full, 1.0);   /* NaN -> 0  */
-    return cfg->invert[MOTION_YAW] ? -v : v;
+    return motion_axis_output(y->deg, cfg->full_deg[MOTION_YAW], cfg->yaw_deadzone_deg,
+                              cfg->invert[MOTION_YAW]);
 }

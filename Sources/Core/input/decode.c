@@ -53,10 +53,6 @@ static void fire(gesture_t *g, int slot, double pulse_s, double now) { g->pulse[
 
 /* Tap vs swipe, decided on release. Sensitivity shortens the swipe a gesture
  * needs to travel: 0.0 wants a deliberate stroke, 1.0 triggers on a flick. */
-void detect_gestures(const ds_state_t *st, gesture_t *g, double sens, double now) {
-    detect_gestures_cfg(st, g, sens, NULL, now);
-}
-
 void detect_gestures_cfg(const ds_state_t *st, gesture_t *g, double sens,
                          const gesture_cfg_t *gc, double now) {
     if (!gc) gc = &GESTURE_DEFAULTS;
@@ -86,7 +82,7 @@ void detect_gestures_cfg(const ds_state_t *st, gesture_t *g, double sens,
                 B_TP_SWIPE_R,  B_TP_SWIPE_DR, B_TP_SWIPE_D,  B_TP_SWIPE_DL,
                 B_TP_SWIPE_L,  B_TP_SWIPE_UL, B_TP_SWIPE_U,  B_TP_SWIPE_UR,
             };
-            double deg = atan2(dy, dx) * 180.0 / M_PI;
+            double deg = atan2(dy, dx) * RAD_TO_DEG;
             if (deg < 0) deg += 360.0;
             int sec = ((int)((deg + 22.5) / 45.0)) & 7;
             fire(g, SECTOR[sec], gc->pulse_s, now);

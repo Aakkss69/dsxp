@@ -35,7 +35,6 @@
 
 /* ------------------------------------------------------------------ tuning */
 
-#define DEG       (M_PI / 180.0)   /* degrees -> radians                                    */
 #define TAU_S     0.5     /* accelerometer correction time constant: lower trusts the
                              accelerometer more (steadier level, more wobble when moved)    */
 #define ACC_TRUST 0.10    /* skip the correction when |a| is this far from 1 g (shaking)    */
@@ -104,9 +103,9 @@ void motion_reset(motion_t *m) {
     m->awaiting_seed = false;
     motion_yaw_reset(&m->yaw);                   /* a held twist ends with the stream */
     m->win_start = 0;
-    m->win_n = 0;
+    m->win.n = 0;
     m->quiet_until = 0;
-    m->rest_n = 0;
+    m->rest.n = 0;
     m->resting = false;
     m->bank_deg = m->pitch_deg = 0;
     m->out_of_range = false;
@@ -118,7 +117,7 @@ void motion_reset(motion_t *m) {
  * inverse of motion_roll_bank_deg, bank = atan2(-x, y), and motion_pitch_deg,
  * pitch = atan2(-z, hypot(x, y))). */
 void motion_set_level(motion_t *m, double bank_deg, double pitch_deg) {
-    double b = bank_deg * DEG, p = pitch_deg * DEG;
+    double b = bank_deg * DEG_TO_RAD, p = pitch_deg * DEG_TO_RAD;
     m->neutral[0] = -sin(b) * cos(p);            /* leans toward -x when banked right  */
     m->neutral[1] =  cos(b) * cos(p);            /* through the face                    */
     m->neutral[2] = -sin(p);                     /* toward -z when the nose is up       */
@@ -146,6 +145,32 @@ bool motion_recenter(motion_t *m) {
     return true;
 }
 
+/* ------------------------------------------------------------- shared steps */
+
+/* Add one gyro reading to a stretch; returns the largest range any axis now spans. A
+ * stretch with n == 0 starts at this reading. */
+double motion_spread_add(motion_spread_t *s, const double v[3]) {
+    double widest = 0;
+    for (int i = 0; i < 3; i++) {
+        if (s->n == 0) s->lo[i] = s->hi[i] = v[i];       /* a new stretch starts here     */
+        if (v[i] < s->lo[i]) s->lo[i] = v[i];            /* widen it                      */
+        if (v[i] > s->hi[i]) s->hi[i] = v[i];
+        widest = fmax(widest, s->hi[i] - s->lo[i]);
+    }
+    s->n++;
+    return widest;
+}
+
+/* An angle as an X-Plane axis value, -1..1: over the full-deflection angle, through the
+ * deadzone (shape(), the same as the sticks), clamped, inverted if asked. A full angle at
+ * or below zero (never valid after config_validate) flies nothing. Each movement's file
+ * (motion_roll.c, motion_pitch.c, motion_yaw.c) calls it with its own settings. */
+double motion_axis_output(double angle_deg, double full_deg, double deadzone_deg, bool invert) {
+    if (!(full_deg > 0)) return 0;                       /* misconfigured: fly nothing    */
+    double v = shape(angle_deg / full_deg, deadzone_deg / full_deg, 1.0);   /* NaN -> 0   */
+    return invert ? -v : v;
+}
+
 /* ------------------------------------------------------------- the steps */
 
 /* Step 5: gyro bias. A window of still samples (every axis inside BIAS_RANGE) whose mean
@@ -154,55 +179,38 @@ bool motion_recenter(motion_t *m) {
  * QUIET_HOLD_S after. */
 static void learn_bias(motion_t *m, const motion_sample_t *s, bool quiet) {
     if (quiet) m->quiet_until = m->t + QUIET_HOLD_S;     /* our motors or a vibrating trigger */
-    if (m->t < m->quiet_until) { m->win_n = 0; return; } /* not yet: drop the window      */
-    if (m->win_n == 0) {                                 /* first sample of a window      */
+    if (m->t < m->quiet_until) { m->win.n = 0; return; } /* not yet: drop the window      */
+    if (m->win.n == 0) {                                 /* first sample of a window      */
         m->win_start = m->t;
-        for (int i = 0; i < 3; i++) {
-            m->win_min[i] = m->win_max[i] = s->gyro_dps[i];
-            m->win_sum[i] = 0;
-        }
+        for (int i = 0; i < 3; i++) m->win_sum[i] = 0;
     }
-    bool still = true;
-    for (int i = 0; i < 3; i++) {
-        double g = s->gyro_dps[i];
-        if (g < m->win_min[i]) m->win_min[i] = g;        /* widen the window's range     */
-        if (g > m->win_max[i]) m->win_max[i] = g;
-        m->win_sum[i] += g;
-        if (m->win_max[i] - m->win_min[i] > BIAS_RANGE) still = false;
-    }
-    m->win_n++;
-    if (!still) { m->win_n = 0; return; }                /* moved: start over             */
+    bool still = motion_spread_add(&m->win, s->gyro_dps) <= BIAS_RANGE;   /* every axis   */
+    for (int i = 0; i < 3; i++) m->win_sum[i] += s->gyro_dps[i];
+    if (!still) { m->win.n = 0; return; }                /* moved: start over             */
     if (m->t - m->win_start < BIAS_WIN_S) return;        /* window not full yet           */
     double mean[3];
     bool near = true;
     for (int i = 0; i < 3; i++) {
-        mean[i] = m->win_sum[i] / m->win_n;
+        mean[i] = m->win_sum[i] / m->win.n;
         if (fabs(mean[i] - m->bias[i]) > BIAS_NEAR) near = false;   /* a real slow turn */
     }
     if (near) {
         for (int i = 0; i < 3; i++) m->bias[i] += BIAS_RATE * (mean[i] - m->bias[i]);
         m->bias_learned = true;
     }
-    m->win_n = 0;                                        /* next window                   */
+    m->win.n = 0;                                        /* next window                   */
 }
 
 /* Step 5b: set down. A stretch of REST_S with every gyro axis within REST_P2P_DPS is
  * stiller than any hand: nobody is steering, so the yaw eases to center (once per
  * stretch; any movement starts a new one). Raw rates: the bias does not matter here. */
 static void watch_rest(motion_t *m, const motion_sample_t *s) {
-    if (m->rest_n == 0) {                                /* a new stretch starts here     */
-        m->rest_start = m->t;
-        for (int i = 0; i < 3; i++) m->rest_min[i] = m->rest_max[i] = s->gyro_dps[i];
+    if (m->rest.n == 0) m->rest_start = m->t;            /* a new stretch starts here     */
+    if (motion_spread_add(&m->rest, s->gyro_dps) > REST_P2P_DPS) {   /* picked up, or held */
+        m->rest.n = 0;
+        m->resting = false;
+        return;
     }
-    bool still = true;
-    for (int i = 0; i < 3; i++) {
-        double g = s->gyro_dps[i];
-        if (g < m->rest_min[i]) m->rest_min[i] = g;      /* widen the stretch's range     */
-        if (g > m->rest_max[i]) m->rest_max[i] = g;
-        if (m->rest_max[i] - m->rest_min[i] > REST_P2P_DPS) still = false;
-    }
-    m->rest_n++;
-    if (!still) { m->rest_n = 0; m->resting = false; return; }   /* picked up, or held  */
     if (!m->resting && m->t - m->rest_start >= REST_S) {
         m->resting = true;
         motion_yaw_rest(&m->yaw);                        /* motion_yaw.c: ease to center  */
@@ -262,8 +270,8 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
         memcpy(m->up, a, sizeof m->up);                  /* seed: trust the accelerometer   */
         m->seeded = true;
         m->settle_until = m->t + SETTLE_S;               /* then settle quickly            */
-        m->win_n = 0;
-        m->rest_n = 0;
+        m->win.n = 0;
+        m->rest.n = 0;
         refresh_attitude(m);
         refresh_outputs(m, cfg);
         return;
@@ -279,7 +287,7 @@ void motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cf
      * from the turning controller, turns the opposite way: du/dt = -(w x u). Checked
      * against the measured frame: rolling left (gyro z > 0) gives du/dt = +x. */
     double w[3], wxu[3];
-    for (int i = 0; i < 3; i++) w[i] = (s->gyro_dps[i] - m->bias[i]) * DEG;   /* bias removed, rad/s */
+    for (int i = 0; i < 3; i++) w[i] = (s->gyro_dps[i] - m->bias[i]) * DEG_TO_RAD;   /* bias removed, rad/s */
     cross3(w, m->up, wxu);
     for (int i = 0; i < 3; i++) m->up[i] -= wxu[i] * dt;
 

@@ -25,11 +25,6 @@
  * each one does when flying. */
 #define KT_TO_MS 0.514444
 
-static unsigned char clamp8(double v) {
-    if (!isfinite(v) || v < 0) return 0;
-    if (v > 255) return 255;
-    return (unsigned char)(v + 0.5);
-}
 
 void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg) {
     if (!cfg) cfg = &WIND_DEFAULTS;
@@ -40,7 +35,7 @@ void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg) {
     wx->load = q;
 
     /* crosswind component, positive = blowing from the right */
-    double rel = (wx->wind_dir - wx->heading) * M_PI / 180.0;
+    double rel = (wx->wind_dir - wx->heading) * DEG_TO_RAD;
     double xw = wx->wind_ms * sin(rel);
     if (!isfinite(xw)) xw = 0;
     wx->crosswind = xw;
@@ -64,8 +59,8 @@ void wind_apply(wx_t *wx, trigger_fx_t fx[2], const wind_cfg_t *cfg) {
         fx[1] = (trigger_fx_t){ TFX_VIBRATE, at, hz, amp };
         snprintf(wx->trigger_note, sizeof wx->trigger_note, "Buffet, turbulence %.1f", wx->turb);
     } else if (ias < cfg->no_airflow_kt) {
-        fx[0] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
-        fx[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+        fx[0] = TFX_NONE;
+        fx[1] = TFX_NONE;
         snprintf(wx->trigger_note, sizeof wx->trigger_note, "No airflow");
     } else {
         unsigned char free_play = clamp8(cfg->free_play * 255.0);

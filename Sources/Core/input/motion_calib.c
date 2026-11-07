@@ -120,20 +120,13 @@ static void step_flat(calib_t *c, motion_t *m, const motion_sample_t *s, double 
     }
     double a = sqrt(s->acc_g[0] * s->acc_g[0] + s->acc_g[1] * s->acc_g[1] + s->acc_g[2] * s->acc_g[2]);
     bool face_up = a > 0.5 && s->acc_g[1] / a >= FLAT_FACE_UP;    /* gravity through the face */
-    bool still = true;
     if (c->n == 0) {                                           /* a new streak starts here   */
-        for (int i = 0; i < 3; i++) {
-            c->min_g[i] = c->max_g[i] = s->gyro_dps[i];
-            c->sum_g[i] = c->sum_a[i] = 0;
-        }
+        c->spread.n = 0;
+        for (int i = 0; i < 3; i++) c->sum_g[i] = c->sum_a[i] = 0;
     }
-    for (int i = 0; i < 3; i++) {                              /* widen the streak's range   */
-        if (s->gyro_dps[i] < c->min_g[i]) c->min_g[i] = s->gyro_dps[i];
-        if (s->gyro_dps[i] > c->max_g[i]) c->max_g[i] = s->gyro_dps[i];
-        if (c->max_g[i] - c->min_g[i] > FLAT_STILL_P2P_DPS) still = false;
-        /* a steady turn has no spread, but no resting drift is this large either */
-        if (fabs(s->gyro_dps[i]) > MOTION_BIAS_MAX_DPS) still = false;
-    }
+    bool still = motion_spread_add(&c->spread, s->gyro_dps) <= FLAT_STILL_P2P_DPS;
+    for (int i = 0; i < 3; i++)        /* a steady turn has no spread, but no resting drift */
+        if (fabs(s->gyro_dps[i]) > MOTION_BIAS_MAX_DPS) still = false;   /* is this large */
     if (!face_up) { say(c, "Lay it face up on a flat surface."); c->n = 0; c->hold_s = 0; return; }
     if (!still)   { say(c, "Keep your hands off it until the bar is full."); c->n = 0; c->hold_s = 0; return; }
     for (int i = 0; i < 3; i++) { c->sum_g[i] += s->gyro_dps[i]; c->sum_a[i] += s->acc_g[i]; }
@@ -170,7 +163,7 @@ static bool hand_holds(calib_t *c, const motion_t *m, double w, double dt) {
     c->tremor += k * (fmin(w, TREMOR_CLIP_DPS) - c->tremor);   /* running average of |rate|  */
     double along = c->rest_up[0] * m->up[0] + c->rest_up[1] * m->up[1] + c->rest_up[2] * m->up[2];
     return w > PICKUP_DPS                                      /* turned                     */
-        || along < cos(PICKUP_TILT_DEG * M_PI / 180.0)         /* tilted from where it lay   */
+        || along < cos(PICKUP_TILT_DEG * DEG_TO_RAD)         /* tilted from where it lay   */
         || c->tremor > PICKUP_TREMOR_DPS;                      /* a hand's tremor            */
 }
 

@@ -13,6 +13,12 @@
 
 static void apply_saved_calibration(core_t *c);   /* below, with the calibration helpers */
 
+/* Both triggers to the effects set by hand (trigger.source = manual). */
+static void fx_from_manual(core_t *c) {
+    c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
+    c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+}
+
 void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     memset(c, 0, sizeof *c);
     c->s = *s;
@@ -23,8 +29,7 @@ void core_init(core_t *c, const settings_t *s, const core_sinks_t *sinks) {
     snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "%s",
              c->s.trigger_source == TRIGGER_SRC_WIND ? "Waiting for X-Plane" : "Manual");
     if (c->s.trigger_source == TRIGGER_SRC_MANUAL) {
-        c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
-        c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+        fx_from_manual(c);
     }
     c->out_dirty = true;
     c->force_gate = true;
@@ -87,7 +92,7 @@ static void out_send(core_t *c) {
     f.player_force = c->lamp_blinking;
     f.r = c->eff_r; f.g = c->eff_g; f.b = c->eff_b;
     for (int i = 0; i < 2; i++)                  /* resistance stays; only Vibrate is held off */
-        f.fx[i] = hush && c->fx_out[i].mode == TFX_VIBRATE ? (trigger_fx_t){ TFX_OFF, 0, 0, 0 }
+        f.fx[i] = hush && c->fx_out[i].mode == TFX_VIBRATE ? TFX_NONE
                                                           : c->fx_out[i];
     unsigned char rep[OUT_REPORT_LEN];
     out_build_report(&f, c->out_seq++, rep);
@@ -116,7 +121,7 @@ void out_tick(core_t *c, double now) {
 /* Leave the controller quiet: no resistance, no buzzing, bar and lamps off.
  * The user's saved light settings are not touched. */
 void out_quiet(core_t *c) {
-    c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+    c->fx_out[0] = c->fx_out[1] = TFX_NONE;
     c->rumble.left = c->rumble.right = 0;
     c->eff_r = c->eff_g = c->eff_b = 0;
     if (!c->sinks.out_report || !c->have_output_device) return;
@@ -325,10 +330,10 @@ void core_set_trigger_source(core_t *c, int mode, double now) {
     c->s.trigger_source = want;
     if (want == TRIGGER_SRC_MANUAL) {
         /* hand-set effects come straight back: wind never touched them */
-        if (!c->suspended) { c->fx_out[0] = trig_effect(&c->s.fx_manual[0]); c->fx_out[1] = trig_effect(&c->s.fx_manual[1]); }
+        if (!c->suspended) fx_from_manual(c);
         snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Manual");
     } else {
-        c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+        c->fx_out[0] = c->fx_out[1] = TFX_NONE;
         snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Waiting for X-Plane");
     }
     out_mark(c);
@@ -369,8 +374,7 @@ void core_apply_config(core_t *c, const config_t *cfg, unsigned files, double no
     if (new_rm != old_rm) core_set_rumble_source(c, new_rm, now);
     if (files & CFB_FEEDBACK) {
         if (c->s.trigger_source == TRIGGER_SRC_MANUAL && !c->suspended) {
-            c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
-            c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+            fx_from_manual(c);
         }
         out_mark(c);
     }
@@ -431,15 +435,14 @@ void core_set_suspended(core_t *c, bool suspended, double now) {
         c->suspended = true;
         xp_disengage(c, now);
         c->rumble.left = c->rumble.right = 0;
-        c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+        c->fx_out[0] = c->fx_out[1] = TFX_NONE;
         out_mark(c);
         dsxp_log("suspended (system sleep)");
     } else if (!suspended && c->suspended) {
         c->suspended = false;
         c->force_gate = true;
         if (c->s.trigger_source == TRIGGER_SRC_MANUAL) {
-            c->fx_out[0] = trig_effect(&c->s.fx_manual[0]);
-            c->fx_out[1] = trig_effect(&c->s.fx_manual[1]);
+            fx_from_manual(c);
         }
         out_mark(c);
         dsxp_log("resumed");

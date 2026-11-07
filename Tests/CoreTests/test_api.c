@@ -10,11 +10,10 @@ static void a_snap(void *ctx, dsxp_snap_t *o) { (void)ctx; core_snapshot(&AC, AT
 static bool a_submit(void *ctx, const cmd_t *c) { (void)ctx; core_apply_cmd(&AC, c, AT); return true; }
 static void a_cat(void *ctx, void (*fn)(void *, const xcmd_t *, int), void *arg) {
     (void)ctx;
-    static xcmd_t cm[2];
-    snprintf(cm[0].path, CMD_PATH_MAX, "sim/a/b");
-    snprintf(cm[0].desc, CMD_DESC_MAX, "Desc with \"quotes\" and \\ backslash\t tab");
-    snprintf(cm[1].path, CMD_PATH_MAX, "sim/c");
-    snprintf(cm[1].desc, CMD_DESC_MAX, "plain");
+    static const xcmd_t cm[2] = {
+        { "sim/a/b", "Desc with \"quotes\" and \\ backslash\t tab" },
+        { "sim/c", "plain" },
+    };
     fn(arg, cm, 2);
 }
 static void a_app(void *ctx, jbuf_t *j) { (void)ctx; jb_printf(j, "{\"access\":\"granted\"}"); }

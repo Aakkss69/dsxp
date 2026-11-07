@@ -139,6 +139,20 @@ double now_sec(void) {
     return (double)clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) / 1e9;
 }
 
+/* Wait on `cv` (with `mx` held) until *flag is set or `secs` have passed. Relative waits
+ * on the monotonic clock, so a wall-clock step can neither cut the wait short nor
+ * stretch it (F13). Returns *flag. */
+static bool wait_flag(pthread_cond_t *cv, pthread_mutex_t *mx, const bool *flag, double secs) {
+    double deadline = now_sec() + secs;
+    while (!*flag) {
+        double left = deadline - now_sec();
+        if (left <= 0) break;
+        struct timespec rel = { (time_t)left, (long)((left - (double)(time_t)left) * 1e9) };
+        pthread_cond_timedwait_relative_np(cv, mx, &rel);
+    }
+    return *flag;
+}
+
 /* ---------------------------------------------------------------- sinks */
 
 static void sink_udp(void *ctx, const unsigned char *buf, size_t len) {
@@ -538,14 +552,7 @@ static void shutdown_core(void) {
     pthread_mutex_lock(&R.w_lock);
     R.w_stop = true;
     pthread_cond_broadcast(&R.w_cv);
-    double deadline = now_sec() + 0.3;
-    while (!R.w_done) {
-        double left = deadline - now_sec();
-        if (left <= 0) break;
-        struct timespec rel = { (time_t)left, (long)((left - (double)(time_t)left) * 1e9) };
-        pthread_cond_timedwait_relative_np(&R.w_cv, &R.w_lock, &rel);
-    }
-    bool writer_done = R.w_done;
+    bool writer_done = wait_flag(&R.w_cv, &R.w_lock, &R.w_done, 0.3);
     pthread_mutex_unlock(&R.w_lock);
     if (writer_done) pthread_join(R.out_th, NULL);
     else {
@@ -940,14 +947,7 @@ bool dsxp_stop(double timeout_sec) {
     double secs = isfinite(timeout_sec) ? timeout_sec : 1.0;
     if (secs < 0.1) secs = 0.1;
     if (secs > 10.0) secs = 10.0;
-    double deadline = now_sec() + secs;
-    while (!R.thread_done) {
-        double left = deadline - now_sec();
-        if (left <= 0) break;
-        struct timespec rel = { (time_t)left, (long)((left - (double)(time_t)left) * 1e9) };
-        pthread_cond_timedwait_relative_np(&R.life_cv, &R.life, &rel);
-    }
-    bool done = R.thread_done;
+    bool done = wait_flag(&R.life_cv, &R.life, &R.thread_done, secs);
     /* Clean up before letting go of R.life: a dsxp_start on another thread waits for the
      * lock, so it can never have its log, run loop or socket undone by this stop. (The
      * core thread has already let go of R.life when it set thread_done, so the join does
