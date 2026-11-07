@@ -349,9 +349,13 @@ typedef enum {
     CMD_RUMBLE, CMD_RUMBLE_SOURCE, CMD_RUMBLEPATH,
     CMD_MOTION,             /* change motion settings (u.motion)                */
     CMD_MOTION_RECENTER,    /* the controller's attitude now becomes level      */
-    CMD_CALIBRATE           /* key: CALIB_ACTION_START or CALIB_ACTION_CLOSE    */
+    CMD_CALIBRATE           /* key: CALIB_ACTION_START, _CLOSE or _ABORT        */
 } cmd_kind_t;
-enum { CALIB_ACTION_START = 1, CALIB_ACTION_CLOSE = 2 };
+/* START: begin (again). CLOSE: the user closes the sheet, refused until the first
+ * calibration is done. ABORT: the mapper window closed, so nobody can see a calibration
+ * that is running: it is stopped even before the first one (the sheet comes back next
+ * time the mapper opens). */
+enum { CALIB_ACTION_START = 1, CALIB_ACTION_CLOSE = 2, CALIB_ACTION_ABORT = 3 };
 
 enum { LF_R = 1, LF_G = 2, LF_B = 4, LF_ON = 8, LF_PATTERN = 16, LF_SPEED = 32,
        LF_PLAYER = 64, LF_BRIGHT = 128, LF_SOURCE = 256 };

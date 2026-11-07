@@ -240,14 +240,17 @@ static void calibrate_cmd(core_t *c, int action, double now) {
         c->motion_hold = false;
         out_mark(c);                                           /* silence DSXP's vibration now */
         dsxp_log("motion calibration started");
-    } else if (action == CALIB_ACTION_CLOSE && (c->s.motion.calibrated || c->calib.step == CALIB_DONE)) {
+    } else if ((action == CALIB_ACTION_CLOSE && (c->s.motion.calibrated || c->calib.step == CALIB_DONE)) ||
+               action == CALIB_ACTION_ABORT) {
         bool was_running = core_calibrating(c);
         calib_cancel(&c->calib);
         if (was_running) {                                     /* abandoned: back to the saved */
             apply_saved_calibration(c);
             blend_owned(c, now);
             out_mark(c);                                       /* vibration may resume        */
-            dsxp_log("motion calibration cancelled; the previous calibration stays");
+            dsxp_log(action == CALIB_ACTION_ABORT
+                     ? "motion calibration stopped: the mapper was closed; the previous calibration stays"
+                     : "motion calibration cancelled; the previous calibration stays");
         }
     }
 }

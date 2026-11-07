@@ -145,6 +145,9 @@ void test_api(void) {
     CHECK_INT(call("POST", "/api/calibrate", "action=later"), 400);
     CHECK_INT(call("POST", "/api/calibrate", "action=start"), 200);
     CHECK(body_has("GET", "/api/state", "", "\"calibration\":{\"step\":\"flat\"", NULL));
+    CHECK_INT(call("POST", "/api/calibrate", "action=abort"), 200);  /* allowed even before */
+    CHECK(body_has("GET", "/api/state", "", "\"calibration\":{\"step\":\"idle\"", NULL));   /* the first one */
+    CHECK_INT(call("POST", "/api/calibrate", "action=start"), 200);
     AC.s.motion.calibrated = true;                                 /* as if it finished */
     CHECK_INT(call("POST", "/api/calibrate", "action=close"), 200);
     CHECK(body_has("GET", "/api/state", "", "\"calibration\":{\"step\":\"idle\"", NULL));

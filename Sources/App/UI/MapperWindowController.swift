@@ -116,6 +116,10 @@ final class MapperWindowController: NSObject, NSWindowDelegate, WKUIDelegate, WK
     func windowWillClose(_ notification: Notification) {
         // the motor test buttons keep running until Stop; closing the window stops them
         _ = CoreBridge.shared.api(method: "POST", path: "/api/rumble", query: "left=0&right=0")
+        // so does a motion calibration: with the window gone nobody can see it, and left
+        // running it keeps motion's axes on the sticks, mutes DSXP's rumble and could save
+        // a calibration taken from ordinary flying (the core restores the previous one)
+        _ = CoreBridge.shared.api(method: "POST", path: "/api/calibrate", query: "action=abort")
         colorObservers.forEach(NotificationCenter.default.removeObserver)
         colorObservers.removeAll()
         appearanceObservation = nil

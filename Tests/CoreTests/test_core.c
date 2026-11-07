@@ -958,6 +958,14 @@ static void motion_control(void) {
     core_apply_cmd(&C, &close_cmd, 1.3);
     CHECK(!core_calibrating(&C));
     CHECK_NEAR(C.motion.bias[0], C.s.motion.gyro_bias_dps[0], 1e-12);
+    /* the mapper's window closed: abort stops a calibration even before the first one is
+     * done (close is refused then), so it never runs on where nobody can see it */
+    C.s.motion.calibrated = false;
+    core_apply_cmd(&C, &cal_cmd, 1.4);
+    CHECK(core_calibrating(&C));
+    cmd_t abort_cmd = { .kind = CMD_CALIBRATE, .key = CALIB_ACTION_ABORT };
+    core_apply_cmd(&C, &abort_cmd, 1.5);
+    CHECK(!core_calibrating(&C) && !C.s.motion.calibrated);
 
     /* the runtime's hand-over: a result is applied only for the connection it was read
      * for; one from an earlier connection is dropped (core_thread.c runtime_cal_drain) */

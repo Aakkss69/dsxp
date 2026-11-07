@@ -402,7 +402,8 @@ static void api_motion(const api_env_t *env, const dsxp_snap_t *snap, const char
     submit(env, &c, out);
 }
 
-/* The calibration routine: start it (again), or close it. */
+/* The calibration routine: start it (again), close it, or abort it (the mapper's window
+ * closed while it ran: core_internal.h CALIB_ACTION_ABORT). */
 static void api_calibrate(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
                           dsxp_response_t *out) {
     char action[16];
@@ -415,7 +416,8 @@ static void api_calibrate(const api_env_t *env, const dsxp_snap_t *snap, const c
             return;
         }
         c.key = CALIB_ACTION_CLOSE;
-    } else { respond(out, 400, CT_TEXT, "bad action"); return; }
+    } else if (!strcmp(action, "abort")) c.key = CALIB_ACTION_ABORT;
+    else { respond(out, 400, CT_TEXT, "bad action"); return; }
     submit(env, &c, out);
 }
 
