@@ -101,6 +101,10 @@ typedef struct {
     bool zombie;                /* a stop timed out: threads may still be alive */
     atomic_int want_suspend;    /* -1 none, 0 resume, 1 suspend (F21) */
     atomic_uint cmds_gen;       /* bumped on every catalog load (F17) */
+    atomic_uint save_failed;    /* config files whose background save failed (1 << f),
+                                   set on dsxp.io, taken by the core thread             */
+    unsigned save_retry;        /* core thread: files to save again ...                  */
+    double save_retry_at;       /*   ... once this time has come (SAVE_RETRY_SEC apart)  */
 
     /* factory calibration (report 0x05): read on dsxp.cal, handed to the core thread */
     dispatch_queue_t cal_q;
@@ -161,13 +165,21 @@ static void sink_out(void *ctx, const unsigned char *rep) {
     pthread_mutex_unlock(&R.w_lock);
 }
 
-typedef struct { char path[1100]; char *data; size_t len; } save_job_t;
+/* A background save that failed is tried again this long after (not at once: a full or
+ * read-only disk would otherwise fill the log). */
+#define SAVE_RETRY_SEC 10.0
+
+typedef struct { char path[1100]; char *data; size_t len; int file; } save_job_t;
 static void save_job_noop(void *arg) { (void)arg; }
 
 static void save_job_run(void *arg) {
     save_job_t *j = arg;
-    if (!file_write_atomic(j->path, j->data, j->len, 0644))
+    if (!file_write_atomic(j->path, j->data, j->len, 0644)) {
         dsxp_log("cannot write %s", j->path);
+        /* the store already counts this text as saved; tell the core thread, which
+         * forgets that and saves the file again (config_tick) */
+        if (j->file >= 0) atomic_fetch_or(&R.save_failed, 1u << j->file);
+    }
     free(j->data);
     free(j);
 }
@@ -189,6 +201,9 @@ static bool store_write(void *ctx, const char *path, const char *text, size_t le
     memcpy(j->data, text, len);
     j->len = len;
     snprintf(j->path, sizeof j->path, "%s", path);
+    j->file = -1;                                  /* which config file, to retry it    */
+    for (int f = 0; f < CF_COUNT; f++)
+        if (!strcmp(path, R.store.path[f])) j->file = f;
     dispatch_async_f(R.io, j, save_job_run);
     return true;
 }
@@ -542,7 +557,7 @@ static void shutdown_core(void) {
     if (c->cfg_dirty_mask) {
         static config_t live;
         core_get_config(c, &live);
-        cfg_store_flush(&R.store, &live, c->cfg_dirty_mask, wall_now(), true);
+        cfg_store_flush(&R.store, &live, c->cfg_dirty_mask, wall_now(), true, NULL);
         c->cfg_dirty_mask = 0;
     }
     dsxp_log("stopped. %ld reports processed.", c->reports_total + c->reports_window);
@@ -601,23 +616,39 @@ static void apply_bridge_runtime(core_t *c, const bridge_cfg_t *old, double now)
  * the mapper changed once save_delay has passed. */
 static void config_tick(core_t *c, double now) {
     static config_t live;
+    /* a background save that failed: forget its hash (or the retry would be skipped as
+     * "nothing changed") and save that file again, SAVE_RETRY_SEC apart */
+    unsigned failed = atomic_exchange(&R.save_failed, 0);
+    for (int f = 0; f < CF_COUNT; f++)
+        if (failed & (1u << f)) R.store.hash[f] = 0;
+    R.save_retry |= failed;
+    if (R.save_retry && now >= R.save_retry_at) {
+        core_mark_dirty(c, now, R.save_retry);
+        R.save_retry = 0;
+        R.save_retry_at = now + SAVE_RETRY_SEC;
+    }
     if (now - R.last_cfg_poll >= CONFIG_POLL_SEC) {
         R.last_cfg_poll = now;
         core_get_config(c, &live);
         bridge_cfg_t old = c->bridge;
+        unsigned gen = R.store.gen;
         unsigned ch = cfg_store_poll(&R.store, &live, c->cfg_dirty_mask, wall_now());
         if (ch) {
             core_apply_config(c, &live, ch, now);
             if (ch & CFB_BRIDGE) apply_bridge_runtime(c, &old, now);
-            publish_config();
         }
+        if (ch || R.store.gen != gen) publish_config();   /* warnings too (unreadable file) */
     }
     unsigned due = core_save_due(c, now);
     if (due) {
         core_get_config(c, &live);
-        unsigned ch = cfg_store_flush(&R.store, &live, due, wall_now(), false);
+        bridge_cfg_t old = c->bridge;
+        unsigned later = 0;
+        unsigned ch = cfg_store_flush(&R.store, &live, due, wall_now(), false, &later);
+        if (later) core_mark_dirty(c, now, later);   /* an edit still landing: save after it */
         if (ch) {                            /* an outside edit was merged in */
             core_apply_config(c, &live, ch, now);
+            if (ch & CFB_BRIDGE) apply_bridge_runtime(c, &old, now);
             publish_config();
         }
     }
@@ -794,6 +825,9 @@ int dsxp_start(const dsxp_config_t *cfg) {
     R.last_gate = 0;
     atomic_store(&R.access, (int)DSXP_ACCESS_UNKNOWN);
     memset(&R.status, 0, sizeof R.status);
+    R.save_retry = 0;                       /* nothing left over from an earlier run   */
+    R.save_retry_at = 0;
+    atomic_store(&R.save_failed, 0);
     snprintf(R.data_dir, sizeof R.data_dir, "%s", cfg->data_dir);
     snprintf(R.log_dir, sizeof R.log_dir, "%s", cfg->log_dir);
     R.on_event = cfg->on_event; R.event_ctx = cfg->event_ctx;

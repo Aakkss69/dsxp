@@ -93,6 +93,8 @@ typedef struct {
     unsigned   gen;                   /* bumped whenever a file was applied      */
     int        last_reload;           /* file applied from an outside edit + 1   */
     bool       imported_prototype, migrated_v2;
+    unsigned   unwritable;            /* files deleted that could not be written back
+                                         (said once in the log), 1 << conf_file_t */
     conf_write_fn write;
     void      *write_ctx;
 } cfg_store_t;
@@ -101,7 +103,10 @@ uint64_t conf_hash(const char *text, size_t len);
 int      cfg_store_open(cfg_store_t *st, const char *dir, const char *prototype,
                         config_t *out, double wall, conf_write_fn write, void *ctx);
 unsigned cfg_store_poll(cfg_store_t *st, config_t *live, unsigned dirty, double wall);
-unsigned cfg_store_flush(cfg_store_t *st, config_t *live, unsigned files, double wall, bool sync);
+/* *later (may be NULL): files not saved because an outside edit is still landing;
+ * save them again shortly. */
+unsigned cfg_store_flush(cfg_store_t *st, config_t *live, unsigned files, double wall, bool sync,
+                         unsigned *later);
 double   wall_now(void);
 
 #endif /* DSXP_CONFIG_H */

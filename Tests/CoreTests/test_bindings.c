@@ -38,6 +38,16 @@ static void parse_str(settings_t *s, const char *text) {
 void test_bindings(void) {
     settings_t a, b;
     char buf[16384];
+    /* a byte-order mark does not swallow the first line; an overlong command is skipped,
+     * never bound cut short */
+    parse_str(&a, "\xEF\xBB\xBFtune deadzone 0.2\n");
+    CHECK_NEAR(a.tune.deadzone, 0.2, 1e-12);
+    char lng[400];
+    int at = snprintf(lng, sizeof lng, "button 1 0 sim/");
+    memset(lng + at, 'a', 300);
+    lng[at + 300] = '\n'; lng[at + 301] = 0;
+    parse_str(&a, lng);
+    CHECK(a.bind[1].cmd[0] == 0);
 
     /* the defaults: D-pad Up deliberately unbound */
     load_defaults(&a);

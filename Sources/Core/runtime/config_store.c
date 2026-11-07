@@ -3,13 +3,15 @@
  *
  *   open   first run writes the three files; settings from an older DSXP
  *          (bindings.conf) or the prototype are imported once
- *   poll   every 2 s: a file someone edited is parsed and applied; a file
- *          younger than 1 s is left for the next poll (an editor may still be
- *          writing it); a file only touched (same bytes) is ignored; a file
- *          missing for two polls in a row is written back with its defaults
+ *   poll   every 2 s: a file someone edited is parsed and applied, and the whole
+ *          configuration is checked again (accept_edit); a file younger than 1 s
+ *          is left for the next poll (an editor may still be writing it); a file
+ *          only touched (same bytes) is ignored; a file missing for two polls in a
+ *          row is written back with its defaults (its folder made again if gone)
  *   flush  saves what the mapper changed. If the file was edited meanwhile,
  *          keys the mapper changed win and every other key keeps the file's
- *          value, so neither side's change is lost.
+ *          value, so neither side's change is lost; an edit still landing makes
+ *          the save wait.
  */
 #include "core_internal.h"
 #include <errno.h>
@@ -139,6 +141,39 @@ int cfg_store_open(cfg_store_t *st, const char *dir, const char *prototype, conf
     return 0;
 }
 
+/* An edit from outside DSXP has just been applied to `live` (file f; its parse warnings
+ * in `parsed`). A rule can span keys the edit did not touch, or another file
+ * (gesture.pulse against bridge.conf's tick rate), so the whole configuration is checked
+ * again and each correction is kept as a warning on the file it belongs to. Returns the
+ * files whose values in `live` changed: f, and any other file a rule corrected. */
+static unsigned accept_edit(cfg_store_t *st, conf_file_t f, config_t *live,
+                            const conf_warns_t *parsed, const char *how) {
+    static conf_warns_t vw[CF_COUNT];               /* core thread only; too big for the stack */
+    memset(vw, 0, sizeof vw);
+    config_validate(live, vw);                      /* the merged result, every rule   */
+    st->warns[f] = *parsed;
+    unsigned changed = 1u << f;
+    for (int g = 0; g < CF_COUNT; g++) {
+        for (int i = 0; i < vw[g].n; i++) conf_warn(&st->warns[g], 0, vw[g].w[i].key, "%s", vw[g].w[i].msg);
+        if (vw[g].n) changed |= 1u << g;            /* a rule changed this file's values */
+    }
+    st->gen++;
+    st->last_reload = (int)f + 1;
+    for (int i = 0; i < parsed->n; i++)
+        dsxp_log("config: %s line %d %s: %s", conf_schema(f)->file, parsed->w[i].line,
+                 parsed->w[i].key, parsed->w[i].msg);
+    for (int g = 0; g < CF_COUNT; g++)
+        for (int i = 0; i < vw[g].n; i++)
+            dsxp_log("config: %s %s: %s", conf_schema((conf_file_t)g)->file, vw[g].w[i].key, vw[g].w[i].msg);
+    dsxp_log("applied your edit to %s%s", conf_schema(f)->file, how);
+    return changed;
+}
+
+/* Seconds since the file was last written (by anyone), from its signature. */
+static double age_of(const file_sig_t *s, double wall) {
+    return wall - ((double)s->mtime.tv_sec + s->mtime.tv_nsec / 1e9);
+}
+
 unsigned cfg_store_poll(cfg_store_t *st, config_t *live, unsigned dirty, double wall) {
     unsigned changed = 0;
     static config_t theirs, def;
@@ -146,74 +181,81 @@ unsigned cfg_store_poll(cfg_store_t *st, config_t *live, unsigned dirty, double 
         conf_file_t f = (conf_file_t)fi;
         file_sig_t s = sig_of(st->path[f]);
         if (!s.exists) {
-            if (++st->missing_polls[f] >= 2) {      /* deleted: reset to defaults */
-                config_defaults(&def);
+            if (++st->missing_polls[f] < 2) continue;   /* gone for one poll: may be a save */
+            st->missing_polls[f] = 0;
+            /* deleted: written back with its defaults, and only then are the defaults
+             * used. The whole folder may be gone too, so it is made again first; a file
+             * that still cannot be written keeps the settings in use (said once). */
+            config_defaults(&def);
+            mkdir_p(st->dir, 0700);
+            st->hash[f] = 0;
+            if (write_file(st, f, &def, true)) {
                 config_copy_file(live, &def, f);
                 config_copy_file(&st->base, &def, f);
-                st->hash[f] = 0;
-                write_file(st, f, live, true);
                 st->sig[f] = sig_of(st->path[f]);
-                st->missing_polls[f] = 0;
                 memset(&st->warns[f], 0, sizeof st->warns[f]);
+                st->unwritable &= ~(1u << f);
                 dsxp_log("%s was deleted: wrote it back with defaults", conf_schema(f)->file);
                 changed |= 1u << f;
+            } else if (!(st->unwritable & (1u << f))) {
+                st->unwritable |= 1u << f;
+                dsxp_log("%s was deleted and cannot be written back; the settings in use stay",
+                         conf_schema(f)->file);
             }
             continue;
         }
         st->missing_polls[f] = 0;
         if (sig_eq(&s, &st->sig[f])) continue;
-        double mtime = (double)s.mtime.tv_sec + s.mtime.tv_nsec / 1e9;
-        if (wall - mtime < CONF_FRESH_SEC) continue;       /* may still be mid-save */
+        if (age_of(&s, wall) < CONF_FRESH_SEC) continue;   /* may still be mid-save */
 
         theirs = st->base;
         conf_warns_t w;
         memset(&w, 0, sizeof w);
         uint64_t h; bool same;
-        if (!read_parse(st, f, &theirs, &w, &h, &same)) { st->sig[f] = s; continue; }
+        bool read = read_parse(st, f, &theirs, &w, &h, &same);
         st->sig[f] = s;
+        if (!read) {                                        /* cannot be read: say so  */
+            if (w.n) {
+                st->warns[f] = w;
+                st->gen++;
+                dsxp_log("config: %s: %s", conf_schema(f)->file, w.w[0].msg);
+            }
+            continue;
+        }
         if (same) continue;                                 /* touched, not edited */
-        conf_warns_t vw[CF_COUNT];
-        memset(vw, 0, sizeof vw);
-        config_validate(&theirs, vw);
-        for (int i = 0; i < vw[f].n; i++) conf_warn(&w, 0, vw[f].w[i].key, "%s", vw[f].w[i].msg);
         if (dirty & (1u << f)) conf_merge(f, &st->base, live, &theirs, live);
         else config_copy_file(live, &theirs, f);
         config_copy_file(&st->base, &theirs, f);
         st->hash[f] = h;
-        st->warns[f] = w;
-        st->gen++;
-        st->last_reload = f + 1;
-        for (int i = 0; i < w.n; i++)
-            dsxp_log("config: %s line %d %s: %s", conf_schema(f)->file, w.w[i].line, w.w[i].key, w.w[i].msg);
-        dsxp_log("applied your edit to %s", conf_schema(f)->file);
-        changed |= 1u << f;
+        changed |= accept_edit(st, f, live, &w, "");
     }
     return changed;
 }
 
-unsigned cfg_store_flush(cfg_store_t *st, config_t *live, unsigned files, double wall, bool sync) {
-    (void)wall;
+unsigned cfg_store_flush(cfg_store_t *st, config_t *live, unsigned files, double wall, bool sync,
+                         unsigned *later) {
     unsigned changed = 0;
+    if (later) *later = 0;
     static config_t theirs;
     for (int fi = 0; fi < CF_COUNT; fi++) {
         conf_file_t f = (conf_file_t)fi;
         if (!(files & (1u << f)) || !conf_schema(f)->rewritten) continue;
         file_sig_t s = sig_of(st->path[f]);
         if (s.exists && !sig_eq(&s, &st->sig[f])) {
-            /* edited outside DSXP since we last looked: keep both sides' changes */
+            /* edited outside DSXP since we last looked: keep both sides' changes. An edit
+             * younger than CONF_FRESH_SEC may still be being written: the save waits for
+             * it (*later) rather than merging half a file, except at quit (sync). */
+            if (!sync && later && age_of(&s, wall) < CONF_FRESH_SEC) {
+                *later |= 1u << f;
+                continue;
+            }
             theirs = st->base;
             conf_warns_t w;
             memset(&w, 0, sizeof w);
             uint64_t h; bool same;
             if (read_parse(st, f, &theirs, &w, &h, &same) && !same) {
                 conf_merge(f, &st->base, live, &theirs, live);
-                st->warns[f] = w;
-                st->gen++;
-                st->last_reload = f + 1;
-                for (int i = 0; i < w.n; i++)
-                    dsxp_log("config: %s line %d %s: %s", conf_schema(f)->file, w.w[i].line, w.w[i].key, w.w[i].msg);
-                dsxp_log("applied your edit to %s (merged with the mapper's changes)", conf_schema(f)->file);
-                changed |= 1u << f;
+                changed |= accept_edit(st, f, live, &w, " (merged with the mapper's changes)");
             }
         }
         if (write_file(st, f, live, sync)) {

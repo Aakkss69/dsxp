@@ -33,6 +33,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>          /* memchr (text_next_line) */
 #include "dsxp_core.h"
 #include "tunables.h"
 #include "motion.h"          /* motion control: calibration and sensor fusion (pure) */
@@ -410,6 +411,28 @@ static inline uint32_t le32u(const unsigned char *p) {
            (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;  /* bytes 2 and 3: the high half */
 }
 
+/* Text files (config files, the legacy bindings file, X-Plane's Commands.txt). */
+
+/* Bytes of a UTF-8 byte-order mark at the start of `text` (3), or 0: editors may add one,
+ * and it must not become part of the first line's key. */
+static inline size_t text_bom(const char *text, size_t len) {
+    return len >= 3 && (unsigned char)text[0] == 0xEF && (unsigned char)text[1] == 0xBB &&
+           (unsigned char)text[2] == 0xBF ? 3 : 0;
+}
+
+/* The next line of `text` at *pos: where it starts and how long it is, without its '\n';
+ * *pos moves past it. False at the end. Each parser handles a trailing '\r', length
+ * limits and NUL bytes its own way. */
+static inline bool text_next_line(const char *text, size_t len, size_t *pos, size_t *start, size_t *n) {
+    if (*pos >= len) return false;
+    *start = *pos;
+    const char *nl = memchr(text + *pos, '\n', len - *pos);       /* end of this line     */
+    size_t end = nl ? (size_t)(nl - text) : len;
+    *n = end - *start;
+    *pos = nl ? end + 1 : len;                                      /* past the '\n'        */
+    return true;
+}
+
 /* Store v at p as an unsigned 32-bit value, low byte first. */
 static inline void put_le32(unsigned char *p, uint32_t v) {
     p[0] = (unsigned char)(v & 0xFF);                     /* low byte first               */
@@ -492,7 +515,8 @@ void   jb_free(jbuf_t *j);
 void   jb_printf(jbuf_t *j, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void   jb_str(jbuf_t *j, const char *s);                  /* "escaped" */
 size_t json_escape(const char *s, char *out, size_t n);
-void   url_decode(const char *in, char *out, size_t n);
+bool   url_decode(const char *in, char *out, size_t n);   /* false: %00, or does not fit */
+bool   qs_has(const char *qs, const char *key);             /* the key is in the query     */
 const char *qs_get(const char *qs, const char *key, char *out, size_t n);
 
 /* xplane.c */

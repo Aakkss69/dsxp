@@ -246,7 +246,8 @@ static void api_bind(const api_env_t *env, const char *qs, dsxp_response_t *out)
     }
     get_long(qs, "repeat", &rep);
     char cmdbuf[1024];
-    qs_get(qs, "cmd", cmdbuf, sizeof cmdbuf);
+    bool got = qs_get(qs, "cmd", cmdbuf, sizeof cmdbuf) != NULL;
+    if (!got && qs_has(qs, "cmd")) { respond(out, 400, CT_TEXT, "bad command"); return; }   /* %00, too long */
     if (cmdbuf[0] && !cmd_valid(cmdbuf)) { respond(out, 400, CT_TEXT, "bad command"); return; }
     cmd_t c = { .kind = CMD_BIND, .key = (int)slot };
     snprintf(c.u.bind.cmd, sizeof c.u.bind.cmd, "%s", cmdbuf);   /* cmd_valid: < 256 chars */

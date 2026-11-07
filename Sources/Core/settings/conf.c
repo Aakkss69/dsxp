@@ -243,8 +243,10 @@ static bool set_value(const conf_key_t *k, config_t *c, char *v, int line, conf_
     case CT_COLOR: {
         unsigned r, g, b;
         char tail;
-        if (nw == 1 && strlen(words[0]) == 7 &&
-            sscanf(words[0], "#%2x%2x%2x%c", &r, &g, &b, &tail) == 3) {
+        bool hex = nw == 1 && strlen(words[0]) == 7 && words[0][0] == '#';
+        for (int i = 1; hex && i < 7; i++)          /* six hex digits: %x alone would also */
+            hex = isxdigit((unsigned char)words[0][i]) != 0;   /* take a sign (#-1-1-1) */
+        if (hex && sscanf(words[0], "#%2x%2x%2x%c", &r, &g, &b, &tail) == 3) {
             unsigned char *rgb = FIELD(c, k, unsigned char);
             rgb[0] = (unsigned char)r; rgb[1] = (unsigned char)g; rgb[2] = (unsigned char)b;
             return true;
@@ -272,7 +274,9 @@ static bool set_value(const conf_key_t *k, config_t *c, char *v, int line, conf_
         return false;
     case CT_BUTTON: {
         binding_t *b = FIELD(c, k, binding_t);
-        if (nw == 0 || (nw == 1 && (!strcasecmp(words[0], "none") || !strcmp(words[0], "sim/none/none")))) {
+        if (nw == 0 || !strcasecmp(words[0], "none") || !strcmp(words[0], "sim/none/none")) {
+            if (nw > 1)                              /* "none hold": unbound all the same */
+                conf_warn(w, line, k->key, "none takes no hold or once; the button is unbound");
             b->cmd[0] = 0; b->repeat = false;
             return true;
         }
@@ -328,10 +332,24 @@ static bool retired_key(const char *key) {
     return false;
 }
 
+/* The key a line names, read from its start up to '=' (NULL if none is found there): so
+ * a line too long or broken to use can still keep its key's previous value. */
+static const conf_key_t *line_key(conf_file_t f, const char *text, size_t n) {
+    char key[128];
+    size_t k = 0;
+    for (size_t i = 0; i < n && text[i] != '=' && text[i] != 0; i++) {
+        if (k + 1 >= sizeof key) return NULL;            /* no key is this long          */
+        key[k++] = text[i];
+    }
+    if (k == n || text[k] != '=') return NULL;           /* no '=' before the end or a NUL */
+    key[k] = 0;
+    return conf_find(f, trim(key));
+}
+
 bool conf_parse(conf_file_t f, const char *text, size_t len, config_t *io, conf_warns_t *w) {
     const conf_schema_t *sc = conf_schema(f);
     if (!sc || !text) return false;
-    static config_t prev, def;              /* too big for the stack of every caller */
+    static config_t prev, def, kept;        /* too big for the stack of every caller */
     static pthread_mutex_t lk = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&lk);
     prev = *io;
@@ -339,21 +357,24 @@ bool conf_parse(conf_file_t f, const char *text, size_t len, config_t *io, conf_
     config_copy_file(io, &def, f);          /* a key that is not in the file: default */
     bool seen[256] = { false };
 
-    size_t i = 0;
-    if (len >= 3 && (unsigned char)text[0] == 0xEF && (unsigned char)text[1] == 0xBB &&
-        (unsigned char)text[2] == 0xBF) i = 3;
+    size_t i = text_bom(text, len), start, n;
     int line = 0;
-    while (i < len) {
-        size_t start = i;
-        while (i < len && text[i] != '\n') i++;
-        size_t n = i - start;
-        if (i < len) i++;
+    while (text_next_line(text, len, &i, &start, &n)) {
         line++;
-        if (n >= 1024) { conf_warn(w, line, "", "line is too long; ignored"); continue; }
+        if (n >= 1024 || memchr(text + start, 0, n)) {    /* unusable: its key keeps its  */
+            const conf_key_t *lk2 = line_key(f, text + start, n);   /* previous value     */
+            if (lk2) {
+                conf_copy_key(io, &prev, lk2);
+                int at = (int)(lk2 - sc->keys);
+                if (at >= 0 && at < 256) seen[at] = true;
+            }
+            conf_warn(w, line, lk2 ? lk2->key : "", n >= 1024 ? "line is too long; ignored"
+                                                        : "line contains a NUL byte; ignored");
+            continue;
+        }
         char buf[1024];
         memcpy(buf, text + start, n);
         buf[n] = 0;
-        if (strlen(buf) != n) { conf_warn(w, line, "", "line contains a NUL byte; ignored"); continue; }
         if (n && buf[n - 1] == '\r') buf[--n] = 0;
         char *s = trim(buf);
         if (!*s || *s == '#') continue;
@@ -376,11 +397,15 @@ bool conf_parse(conf_file_t f, const char *text, size_t len, config_t *io, conf_
             continue;
         }
         int idx = (int)(k - sc->keys);
+        bool again = idx >= 0 && idx < 256 && seen[idx];   /* set by an earlier line too   */
         if (idx >= 0 && idx < 256) {
-            if (seen[idx]) conf_warn(w, line, k->key, "set more than once; the last one wins");
+            if (again) conf_warn(w, line, k->key, "set more than once; the last one wins");
             seen[idx] = true;
         }
-        if (!set_value(k, io, val, line, w)) conf_copy_key(io, &prev, k);
+        conf_copy_key(&kept, io, k);                       /* the value before this line   */
+        /* a value that cannot be used keeps the one before it: an earlier line's in this
+         * file, or else the value from before the file was read */
+        if (!set_value(k, io, val, line, w)) conf_copy_key(io, again ? &kept : &prev, k);
     }
     pthread_mutex_unlock(&lk);
     return true;
@@ -518,8 +543,11 @@ void config_validate(config_t *c, conf_warns_t w[CF_COUNT]) {
     }
     double min_pulse = 1.5 / b->tick_hz;
     if (c->s.gesture.pulse_s < min_pulse) {
-        conf_warn(&w[CF_CONTROLS], 0, "gesture.pulse", "must last 1.5 ticks; using %.0f ms", min_pulse * 1000);
-        c->s.gesture.pulse_s = min_pulse;
+        /* rounded up to the whole milliseconds the file holds, so the value written back
+         * passes this check next time (21.43 ms written as 21 failed it on every reload) */
+        double fixed = ceil(min_pulse * 1000) / 1000;
+        conf_warn(&w[CF_CONTROLS], 0, "gesture.pulse", "must last 1.5 ticks; using %.0f ms", fixed * 1000);
+        c->s.gesture.pulse_s = fixed;
     }
     if (c->s.gesture.swipe_length_at0 <= c->s.gesture.tap_wander_at0) {
         conf_warn(&w[CF_CONTROLS], 0, "gesture.swipe_length_at_0", "must be longer than tap_wander_at_0");
