@@ -125,7 +125,8 @@ minute and finishes each step by itself:
    stays on the sheet until the end).
 2. **Hold level**: pick it up (a turn, a tilt or simply your hand's tremor shows it),
    then hold it the way you fly, steady, for 2 seconds. That attitude is level from
-   now on. Tilted more than 55° toward you leaves no room to pitch, so hold it flatter.
+   now on. Banked or tilted more than 55° leaves no room for full control, so hold it
+   flatter.
 3. **Bank**, 4. **Pitch**, 5. **Twist**: as far as is comfortable each way, then back.
    Each axis's full deflection becomes 90 % of your smaller side, so full control is
    reachable without straining.
@@ -133,10 +134,12 @@ minute and finishes each step by itself:
 The results are saved in `controls.conf` (`motion.calibrated`, `motion.level.*`,
 `motion.gyro_bias.*` and the full-deflection angles). Run it again any time with
 **Calibrate…** in the Motion control panel; Cancel keeps the previous calibration.
-While it runs, your sticks fly every axis (motion's included) and DSXP pauses its own
-rumble and vibrating triggers, which would shake the gyro.
+While it runs, your sticks fly every axis (motion's included; an axis with no stick on
+it goes back to X-Plane) and DSXP pauses its own rumble and vibrating triggers, which
+would shake the gyro. Closing the mapper stops a calibration that is running.
 Then switch motion control on in the panel (or `motion.enabled = yes`). **Recenter**
 makes the way you hold the controller now level until you switch motion off or restart.
+It does nothing while the controller is face down, on its edge, or tilted past 55°.
 
 - **Roll**: bank the controller. **Pitch**: raise the top edge (the triggers) to pull,
   lower it to push. **Yaw**: twist the controller about its face, like a steering
@@ -161,13 +164,16 @@ makes the way you hold the controller now level until you switch motion off or r
 - Tick **Motion** for each axis it should fly. An axis on motion ignores every stick
   set to it (yaw also ignores the rudder triggers); the others work as set under Axes.
 - **Full deflection at** is the angle that gives full control (40° bank, 30° pitch,
-  30° twist by default); lower is more sensitive. A small deadzone (2°, yaw 4°) hides
-  hand tremor.
+  30° twist by default); lower is more sensitive. Bank and pitch stay reachable: your
+  level plus full deflection is kept within 65°, short of where the controller can no
+  longer be read (bank tops out at 65°). A small deadzone (2°, yaw 4°) hides hand
+  tremor.
 - Bind DSXP's own commands to buttons like any X-Plane command; they come first in
   the command list: `dsxp/motion/recenter`, `dsxp/motion/toggle`, and
   `dsxp/motion/hold` (a clutch: the controls freeze while held, and the attitude you
   let go at becomes level). They work whether or not DSXP is flying, and the player
-  lamps flash to confirm.
+  lamps flash to confirm. A button held through a Bluetooth hiccup (or while DSXP hands
+  X-Plane its controls back and takes them again) counts as one press, never two.
 - Face down or stood on its edge, the controller holds every motion axis neutral.
 - DSXP reads the controller's factory calibration (feature report 0x05) when it
   connects and keeps refining the gyro's drift whenever the controller is still.

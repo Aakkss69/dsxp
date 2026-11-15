@@ -179,11 +179,62 @@ static void staleness(void) {
     drefs(DR_ROLL, &v);
     CHECK_NEAR(v, 0.0, 0);                          /* held neutral, not replayed */
     CHECK_INT(cmnds("sim/engines/throttle_down"), 0);
-    CHECK(!C.prev_btn[B_CROSS]);
+    CHECK(C.prev_btn[B_CROSS]);                     /* kept: a gap is not a release */
     core_tick(&C, 10.0 + INPUT_LOST_SEC + 0.1);
     CHECK(C.force_gate);                            /* gate re-runs immediately */
     core_set_gate(&C, true, false, true, "X-Plane", 10.0 + INPUT_LOST_SEC + 0.1);
     CHECK(!C.engaged);
+}
+
+/* A button held through a Bluetooth gap, or while DSXP disengages and engages again,
+ * fires its one-shot X-Plane command once (a held gear toggle used to fire 3 times). */
+#define GEAR "sim/flight_controls/landing_gear_toggle"
+static void button_gaps(void) {
+    fresh();
+    snprintf(C.s.bind[B_CROSS].cmd, CMD_PATH_MAX, "%s", GEAR);
+    C.s.bind[B_CROSS].repeat = false;
+    feed(&C, 128, 0x08, 10.0); tele(&C, 10.0);
+    core_set_gate(&C, true, false, true, "X-Plane", 10.0);
+    CHECK(C.engaged);
+    reset_cap();
+    feed(&C, 128, 0x08 | 0x20, 10.1); core_tick(&C, 10.1);      /* Cross pressed          */
+    CHECK_INT(cmnds(GEAR), 1);
+    core_tick(&C, 10.1 + INPUT_STALE_SEC + 0.05);                 /* a gap, still held      */
+    feed(&C, 128, 0x08 | 0x20, 10.5); core_tick(&C, 10.5);        /* reports back, held     */
+    CHECK_INT(cmnds(GEAR), 1);
+    core_set_gate(&C, true, false, false, "", 10.6);              /* X-Plane gone ...       */
+    CHECK(!C.engaged);
+    feed(&C, 128, 0x08 | 0x20, 10.7); tele(&C, 10.7);
+    core_set_gate(&C, true, false, true, "X-Plane", 10.7);        /* ... and back, held     */
+    CHECK(C.engaged);
+    core_tick(&C, 10.7);
+    CHECK_INT(cmnds(GEAR), 1);
+    feed(&C, 128, 0x08, 10.8); core_tick(&C, 10.8);               /* released ...           */
+    feed(&C, 128, 0x08 | 0x20, 10.9); core_tick(&C, 10.9);        /* ... pressed again      */
+    CHECK_INT(cmnds(GEAR), 2);
+}
+
+/* Toe brakes: the override takes both brakes, so with only L2 on the left brake the
+ * right one is written too (released), never left frozen; xp_release_now sends every
+ * pending release at once (before an X-Plane port change). */
+static void brakes_and_releases(void) {
+    fresh();
+    for (int i = 0; i < S_COUNT; i++) C.s.axis[i].target = AX_NONE;
+    C.s.axis[S_L2].target = AX_BRAKE_L;
+    feed(&C, 128, 0x08, 10.0); tele(&C, 10.0);
+    core_set_gate(&C, true, false, true, "X-Plane", 10.0);
+    reset_cap();
+    core_tick(&C, 10.0);
+    float v = 1;
+    CHECK(drefs(DR_LBRK, &v) >= 1);
+    CHECK(drefs(DR_RBRK, &v) >= 1);
+    CHECK_NEAR(v, 0, 1e-12);                                      /* right: released        */
+    core_set_gate(&C, true, false, false, "", 10.1);              /* disengaged: releases   */
+    CHECK(C.ov_release_left[OV_BRAKES_I] > 0);                    /*   pending, spread out  */
+    reset_cap();
+    xp_release_now(&C);
+    CHECK_INT(drefs_with(OV_BRK, 0.0f), C.bridge.override_release_repeats);
+    CHECK_INT(C.ov_release_left[OV_BRAKES_I], 0);
 }
 
 static void telemetry_and_triggers(void) {
@@ -465,7 +516,11 @@ static void runtime_smoke(void) {
     CHECK(access(data, F_OK) == 0);
     CHECK_INT(dsxp_start(&cfg), 0);                  /* restart after a clean stop */
     CHECK(wait_status(st_ticking, &st));
+    unsigned gen = runtime_dev_gen();
     CHECK(dsxp_stop(NAN));                            /* NaN timeout is clamped, not UB */
+    /* stopping retires the connection number, so a factory-calibration read still running
+     * from this run can never be taken by the next one (runtime_cal_drain) */
+    CHECK(runtime_dev_gen() != gen);
 
     char longp[1100];
     memset(longp, 'a', sizeof longp - 1);
@@ -556,18 +611,72 @@ static void motion_control(void) {
     load_defaults(&s);
     s.axis[S_LX].target = AX_NONE;
     bool w[OV_COUNT];
-    xp_wanted_overrides(&s, w);
+    xp_wanted_overrides(&s, true, w);
     CHECK(!w[OV_ROLL_I]);
     s.motion.enabled = true;
-    xp_wanted_overrides(&s, w);
+    xp_wanted_overrides(&s, true, w);
     CHECK(!w[OV_ROLL_I]);                                 /* not calibrated: still not wanted */
     s.motion.calibrated = true;
-    xp_wanted_overrides(&s, w);
+    xp_wanted_overrides(&s, true, w);
     CHECK(w[OV_ROLL_I] && w[OV_PITCH_I]);
     s.motion.use[MOTION_YAW] = true;
     s.axis[S_RX].target = s.axis[S_L2].target = s.axis[S_R2].target = AX_NONE;
-    xp_wanted_overrides(&s, w);
+    xp_wanted_overrides(&s, true, w);
     CHECK(w[OV_HEADING_I]);
+    xp_wanted_overrides(&s, false, w);                    /* calibrating: the sticks fly,  */
+    CHECK(!w[OV_ROLL_I] && !w[OV_HEADING_I]);             /*   so unmapped axes go back    */
+
+    /* ... and so in flight: calibrating with no stick on roll releases its override
+     * instead of pinning roll at 0 under it */
+    motion_fresh(false, 20);
+    C.s.axis[S_LX].target = AX_NONE;
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 1.02);
+    core_tick(&C, 1.02);
+    CHECK(drefs_with(OV_ROLL, 1.0f) >= 1);
+    cmd_t cal_go = { .kind = CMD_CALIBRATE, .key = CALIB_ACTION_START };
+    core_apply_cmd(&C, &cal_go, 1.05);
+    reset_cap();
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 1.1);
+    core_tick(&C, 1.1);
+    CHECK(drefs_with(OV_ROLL, 0.0f) >= 1);                /* handed back to X-Plane        */
+    reset_cap();
+    feed_m(&C, 128, 0, 0, 0x08, 0, 20, 1.2);
+    core_tick(&C, 1.2);
+    float rv = 0;
+    CHECK_INT(drefs(DR_ROLL, &rv), 0);                    /* nothing pins roll any more    */
+    /* ... and the routine's level cannot be moved by a Recenter meanwhile */
+    double lv[3];
+    memcpy(lv, C.motion.neutral, sizeof lv);
+    cmd_t rc = { .kind = CMD_MOTION_RECENTER };
+    core_apply_cmd(&C, &rc, 1.25);
+    CHECK(lv[0] == C.motion.neutral[0] && lv[1] == C.motion.neutral[1] && lv[2] == C.motion.neutral[2]);
+
+    /* Recenter is refused when the controller cannot be a level: face down (it used to
+     * make level upside down, then full aileron held level) or tilted past 55 deg */
+    motion_fresh(false, 0);
+    memcpy(lv, C.motion.neutral, sizeof lv);
+    double down[3] = { 0, -1, 0 }, tilted[3] = { -0.866, 0.5, 0 }, banked[3] = { -0.5, 0.866, 0 };
+    memcpy(C.motion.up, down, sizeof down);
+    C.motion.out_of_range = true;
+    CHECK(!core_motion_recenter(&C, 1.3));
+    memcpy(C.motion.up, tilted, sizeof tilted);           /* banked 60 deg                 */
+    C.motion.out_of_range = false;
+    CHECK(!core_motion_recenter(&C, 1.3));
+    CHECK(lv[0] == C.motion.neutral[0] && lv[1] == C.motion.neutral[1] && lv[2] == C.motion.neutral[2]);
+    memcpy(C.motion.up, banked, sizeof banked);           /* banked 30 deg: a fine level   */
+    CHECK(core_motion_recenter(&C, 1.3));
+    CHECK_NEAR(C.motion.neutral[0], -0.5, 1e-12);
+
+    /* full deflection stays reachable from the level: level + full within 65 deg */
+    motion_cfg_t room = MOTION_DEFAULTS;
+    room.level_pitch_deg = 30; room.full_deg[MOTION_PITCH] = 60;
+    room.level_bank_deg = -20; room.full_deg[MOTION_ROLL] = 65;
+    CHECK(motion_full_fix(&room, MOTION_PITCH) && motion_full_fix(&room, MOTION_ROLL));
+    CHECK_NEAR(room.full_deg[MOTION_PITCH], 35, 1e-12);
+    CHECK_NEAR(room.full_deg[MOTION_ROLL], 45, 1e-12);
+    room.level_pitch_deg = 15.3; room.full_deg[MOTION_PITCH] = 60;
+    motion_full_fix(&room, MOTION_PITCH);
+    CHECK_NEAR(room.full_deg[MOTION_PITCH], 49, 1e-12);   /* whole degrees: 65 - 15.3      */
 
     /* yaw by motion: the rudder triggers are ignored (nothing twisted: yaw 0) */
     motion_fresh(true, 0);
@@ -626,6 +735,27 @@ static void motion_control(void) {
     feed_m(&C, 128, 0, 0, 0x18, 0, 0, 1.12);              /* still held: no second toggle   */
     core_tick(&C, 1.12);
     CHECK(!C.s.motion.enabled);
+    core_tick(&C, 1.12 + INPUT_STALE_SEC + 0.05);         /* a Bluetooth gap, still held    */
+    feed_m(&C, 128, 0, 0, 0x18, 0, 0, 1.5);
+    core_tick(&C, 1.5);
+    CHECK(!C.s.motion.enabled);                           /* one press, one toggle          */
+
+    /* the clutch held through a gap stays held (no recenter); once the input is lost
+     * it lets go, without recentering on an attitude nobody read */
+    motion_fresh(false, 20);
+    snprintf(C.s.bind[B_L1].cmd, CMD_PATH_MAX, "%s", DSXP_CMD_HOLD);
+    feed_m(&C, 128, 0, 0, 0x08, 0x01, 20, 1.1);
+    core_tick(&C, 1.1);
+    CHECK(C.motion_hold);
+    double clutch_lvl = C.motion.neutral[0];
+    core_tick(&C, 1.1 + INPUT_STALE_SEC + 0.05);
+    CHECK(C.motion_hold);
+    feed_m(&C, 128, 0, 0, 0x08, 0x01, 20, 1.45);
+    core_tick(&C, 1.45);
+    CHECK(C.motion_hold);
+    core_tick(&C, 1.45 + INPUT_LOST_SEC + 0.1);
+    CHECK(!C.motion_hold);
+    CHECK_NEAR(C.motion.neutral[0], clutch_lvl, 1e-12);   /* not recentered                 */
 
     /* hold: the controls freeze while held; on release the pose is level and the
      * controls fade from the frozen value */
@@ -677,7 +807,7 @@ static void motion_control(void) {
     mc.u.motion.use_mask = 1u << MOTION_YAW; mc.u.motion.use[MOTION_YAW] = true;
     mc.u.motion.inv_mask = 1u << MOTION_PITCH; mc.u.motion.inv[MOTION_PITCH] = true;
     core_apply_cmd(&C, &mc, 2.0);
-    CHECK_NEAR(C.s.motion.full_deg[MOTION_ROLL], 90, 1e-12);
+    CHECK_NEAR(C.s.motion.full_deg[MOTION_ROLL], MOTION_ROLL_FULL_MAX, 1e-12);
     CHECK_NEAR(C.s.motion.full_deg[MOTION_PITCH], 10, 1e-12);
     CHECK_NEAR(C.s.motion.full_deg[MOTION_YAW], 5, 1e-12);       /* 4.4 -> 4 -> range min 5; deadzone 4 + 1 */
     CHECK(C.s.motion.use[MOTION_YAW] && C.s.motion.invert[MOTION_PITCH]);
@@ -721,8 +851,11 @@ static void motion_control(void) {
     core_set_motion_cal(&C, &cal, MCAL_OK);
     CHECK_INT(C.motion_cal_src, MOTION_CAL_FACTORY);
     double n1 = C.motion.neutral[0];
+    C.gest.was = true;                                    /* a touch in progress ...       */
+    C.state.touch[0].active = true;
     core_on_device(&C, true, false);
     CHECK(!C.motion.seeded);
+    CHECK(!C.gest.was && !C.state.touch[0].active);       /* ... ends with the stream      */
     CHECK_NEAR(C.motion.neutral[0], n1, 1e-12);
     CHECK_INT(C.motion_cal_src, MOTION_CAL_FACTORY);
     core_set_motion_cal(&C, &cal, MCAL_BAD_CRC);
@@ -825,6 +958,14 @@ static void motion_control(void) {
     core_apply_cmd(&C, &close_cmd, 1.3);
     CHECK(!core_calibrating(&C));
     CHECK_NEAR(C.motion.bias[0], C.s.motion.gyro_bias_dps[0], 1e-12);
+    /* the mapper's window closed: abort stops a calibration even before the first one is
+     * done (close is refused then), so it never runs on where nobody can see it */
+    C.s.motion.calibrated = false;
+    core_apply_cmd(&C, &cal_cmd, 1.4);
+    CHECK(core_calibrating(&C));
+    cmd_t abort_cmd = { .kind = CMD_CALIBRATE, .key = CALIB_ACTION_ABORT };
+    core_apply_cmd(&C, &abort_cmd, 1.5);
+    CHECK(!core_calibrating(&C) && !C.s.motion.calibrated);
 
     /* the runtime's hand-over: a result is applied only for the connection it was read
      * for; one from an earlier connection is dropped (core_thread.c runtime_cal_drain) */
@@ -858,6 +999,8 @@ void test_core(void) {
     guard_packets();
     gate_and_overrides();
     staleness();
+    button_gaps();
+    brakes_and_releases();
     telemetry_and_triggers();
     light_sim_alone();
     saves_and_output();

@@ -216,6 +216,29 @@ static void odd_input(void) {
     CHECK(strstr(w.w[2].msg, "feedback.conf") != NULL);
     CHECK(has_warn(&w, "", 5));
     CHECK(A.s.light.on);                             /* not applied from the wrong file */
+    /* a repeated key whose last value is bad keeps the earlier good one (both were lost) */
+    parse(CF_CONTROLS, "stick.curve = 2.00\nstick.curve = abc\n", &A, &w);
+    CHECK_NEAR(A.s.tune.curve, 2.0, 1e-12);
+    /* a line too long to use keeps its key's previous value, not the default */
+    {
+        static char longl[1300];
+        int at = snprintf(longl, sizeof longl, "stick.curve = 1.50   # ");
+        memset(longl + at, 'x', 1100);
+        longl[at + 1100] = '\n'; longl[at + 1101] = 0;
+        config_defaults(&A);
+        A.s.tune.curve = 2.0;
+        memset(&w, 0, sizeof w);
+        conf_parse(CF_CONTROLS, longl, strlen(longl), &A, &w);
+        CHECK_NEAR(A.s.tune.curve, 2.0, 1e-12);
+        CHECK(w.n == 1 && !strcmp(w.w[0].key, "stick.curve"));
+    }
+    /* a color with a sign is not a color (%x took "#-1-1-1" as white) */
+    parse(CF_FEEDBACK, "light.color = #-1-1-1\n", &A, &w);
+    CHECK_INT(w.n, 1);
+    CHECK_INT(A.s.light.r, D.s.light.r);
+    /* "none hold" unbinds the button (it bound a command called "none") */
+    parse(CF_CONTROLS, "button.cross = none hold\n", &A, &w);
+    CHECK(A.s.bind[B_CROSS].cmd[0] == 0 && w.n == 1);
     /* a key DSXP once wrote and no longer uses: read without a warning */
     CHECK_INT(parse(CF_CONTROLS, "motion.yaw_return = 4.0 s\nmotion.yaw.full = 25 deg\n", &A, &w), 0);
     CHECK_NEAR(A.s.motion.full_deg[MOTION_YAW], 25, 1e-12);
@@ -266,7 +289,7 @@ static void odd_input(void) {
     conf_parse(CF_CONTROLS, nul, sizeof nul - 1, &A, &w);
     CHECK_NEAR(A.s.tune.curve, 1.0, 1e-12);
     CHECK_NEAR(A.s.tune.deadzone, 0.09, 1e-12);
-    CHECK(has_warn(&w, "", 1));
+    CHECK(has_warn(&w, "stick.curve", 1));          /* the line's key, read up to '='  */
     char *big = malloc(3000);
     memset(big, ' ', 2000);
     memcpy(big, "stick.curve = 2.0", 17);

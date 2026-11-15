@@ -20,11 +20,6 @@
 
 /* Thresholds come from feedback.conf (rumble_cfg_t). */
 
-static unsigned char clamp8(double v) {
-    if (!isfinite(v) || v < 0) return 0;
-    if (v > 255) return 255;
-    return (unsigned char)(v + 0.5);
-}
 
 static double unit(double v) {
     if (!isfinite(v) || v < 0) return 0;

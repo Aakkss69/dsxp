@@ -115,8 +115,8 @@ void sim_release(core_t *c, const char *why) {
     memset(c->stall_el, 0, sizeof c->stall_el);
     if (c->s.rumble_source == RUMBLE_SRC_SIM) c->rumble.left = c->rumble.right = 0;
     if (c->s.trigger_source == TRIGGER_SRC_WIND) {
-        c->fx_out[0] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
-        c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+        c->fx_out[0] = TFX_NONE;
+        c->fx_out[1] = TFX_NONE;
     }
     snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "%s", why);
     if (c->s.rumble_source == RUMBLE_SRC_SIM) snprintf(c->rumble_note, sizeof c->rumble_note, "%s", why);
@@ -216,7 +216,7 @@ void telemetry_tick(core_t *c, double now) {
             out_mark(c);
         }
         if (c->s.trigger_source == TRIGGER_SRC_WIND && (c->fx_out[0].mode != TFX_OFF || c->fx_out[1].mode != TFX_OFF)) {
-            c->fx_out[0] = c->fx_out[1] = (trigger_fx_t){ TFX_OFF, 0, 0, 0 };
+            c->fx_out[0] = c->fx_out[1] = TFX_NONE;
             out_mark(c);
         }
         snprintf(c->wx.trigger_note, sizeof c->wx.trigger_note, "Paused");

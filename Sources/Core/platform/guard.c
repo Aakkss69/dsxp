@@ -14,6 +14,7 @@
  * controller and exits.
  */
 #include "core_internal.h"
+#include "hid.h"             /* the DualSense through IOKit, shared with core_thread.c */
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/hid/IOHIDManager.h>
 #include <arpa/inet.h>
@@ -146,42 +147,25 @@ static void release_xplane(int sock, int port) {
     if (sock < 0) close(g.sock);
 }
 
+/* hid_each_device: send a Bluetooth DualSense the all-off report (no rumble, no trigger
+ * effect, no light), so it is not left buzzing when DSXP died. */
+static bool quiet_one(IOHIDDeviceRef d, void *arg) {
+    (void)arg;
+    char tb[64];
+    if (!hid_transport(d, tb, sizeof tb) || strcmp(tb, "Bluetooth") != 0) return true;
+    out_frame_t f;
+    memset(&f, 0, sizeof f);                         /* everything off                 */
+    unsigned char rep[OUT_REPORT_LEN];
+    out_build_report(&f, 0, rep);
+    IOHIDDeviceSetReport(d, kIOHIDReportTypeOutput, BT_REPORT_ID, rep, sizeof rep);
+    return true;                                     /* every one of them              */
+}
+
 static void quiet_controller(void) {
-    IOHIDManagerRef mgr = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
+    IOHIDManagerRef mgr = hid_dualsense_manager();   /* platform/hid.c                */
     if (!mgr) return;
-    int vid = DS_VID, pid = DS_PID;
-    CFMutableDictionaryRef m = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
-        &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-    CFNumberRef vn = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &vid);
-    CFNumberRef pn = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &pid);
-    CFDictionarySetValue(m, CFSTR(kIOHIDVendorIDKey), vn);
-    CFDictionarySetValue(m, CFSTR(kIOHIDProductIDKey), pn);
-    IOHIDManagerSetDeviceMatching(mgr, m);
-    CFRelease(vn); CFRelease(pn); CFRelease(m);
     if (IOHIDManagerOpen(mgr, kIOHIDOptionsTypeNone) == kIOReturnSuccess) {
-        CFSetRef devs = IOHIDManagerCopyDevices(mgr);
-        if (devs) {
-            CFIndex n = CFSetGetCount(devs);
-            const void **arr = malloc(sizeof(void *) * (size_t)(n ? n : 1));
-            if (arr) {
-                CFSetGetValues(devs, arr);
-                for (CFIndex i = 0; i < n; i++) {
-                    IOHIDDeviceRef d = (IOHIDDeviceRef)arr[i];
-                    CFTypeRef tr = IOHIDDeviceGetProperty(d, CFSTR(kIOHIDTransportKey));
-                    char tb[64] = "";
-                    if (tr && CFGetTypeID(tr) == CFStringGetTypeID())
-                        CFStringGetCString((CFStringRef)tr, tb, sizeof tb, kCFStringEncodingUTF8);
-                    if (strcmp(tb, "Bluetooth") != 0) continue;
-                    out_frame_t f;
-                    memset(&f, 0, sizeof f);
-                    unsigned char rep[OUT_REPORT_LEN];
-                    out_build_report(&f, 0, rep);
-                    IOHIDDeviceSetReport(d, kIOHIDReportTypeOutput, BT_REPORT_ID, rep, sizeof rep);
-                }
-                free(arr);
-            }
-            CFRelease(devs);
-        }
+        hid_each_device(mgr, quiet_one, NULL);
         IOHIDManagerClose(mgr, kIOHIDOptionsTypeNone);
     }
     CFRelease(mgr);

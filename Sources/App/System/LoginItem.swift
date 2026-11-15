@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import ServiceManagement
 
 /// Launch at Login through SMAppService. Only offered for a copy installed in
@@ -27,13 +27,24 @@ enum LoginItem {
             return
         case .on:
             do { try SMAppService.mainApp.unregister() }
-            catch { NSLog("DSXP: login item unregister failed: \(error.localizedDescription)") }
+            catch { report("turn off", error) }
         case .off:
             do { try SMAppService.mainApp.register() }
-            catch { NSLog("DSXP: login item register failed: \(error.localizedDescription)") }
+            catch { report("turn on", error) }
             if SMAppService.mainApp.status == .requiresApproval {
                 SMAppService.openSystemSettingsLoginItems()
             }
         }
+    }
+
+    /// A failed change is shown, not only logged: the menu item simply staying as it was
+    /// would leave the user guessing.
+    private static func report(_ what: String, _ error: Error) {
+        NSLog("DSXP: login item \(what) failed: \(error.localizedDescription)")
+        let alert = NSAlert()
+        alert.messageText = "Could not \(what) Launch at Login"
+        alert.informativeText = error.localizedDescription
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }

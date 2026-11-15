@@ -86,36 +86,50 @@ static int hexval(char c) {
     return -1;
 }
 
-void url_decode(const char *in, char *out, size_t n) {
-    if (n == 0) return;
+/* Decode %XX and '+' from `in` into `out` (n bytes, always NUL-terminated). False when
+ * the value cannot be taken as it is: an encoded NUL (%00), which would silently cut it
+ * short ("sim%00junk" read as "sim"), or a value that does not fit in `out`. */
+bool url_decode(const char *in, char *out, size_t n) {
+    if (n == 0) return false;
     size_t o = 0;
-    for (const char *p = in; *p && o + 1 < n; p++) {
+    const char *p = in;
+    for (; *p && o + 1 < n; p++) {
         int h1, h2;
         if (*p == '%' && (h1 = hexval(p[1])) >= 0 && (h2 = hexval(p[2])) >= 0) {
+            if (h1 == 0 && h2 == 0) { out[0] = 0; return false; }   /* %00: refused     */
             out[o++] = (char)(h1 * 16 + h2);
             p += 2;
         } else if (*p == '+') out[o++] = ' ';
         else out[o++] = *p;
     }
     out[o] = 0;
+    if (*p) { out[0] = 0; return false; }                 /* did not fit: refused, not cut */
+    return true;
 }
 
-/* Only a match at the start or right after '&' counts, so "inv=" cannot be
- * satisfied by the tail of some other parameter name. */
-const char *qs_get(const char *qs, const char *key, char *out, size_t n) {
-    if (n) out[0] = 0;
+/* Where `key`'s value starts in the query string, or NULL. Only a match at the start or
+ * right after '&' counts, so "inv=" cannot be satisfied by the tail of another name. */
+static const char *qs_find(const char *qs, const char *key) {
     if (!qs) return NULL;
     char pat[64];
     snprintf(pat, sizeof pat, "%s=", key);
     const char *p = strstr(qs, pat);
     while (p && p != qs && p[-1] != '&') p = strstr(p + 1, pat);
+    return p ? p + strlen(pat) : NULL;
+}
+
+bool qs_has(const char *qs, const char *key) { return qs_find(qs, key) != NULL; }
+
+/* `key`'s decoded value into `out`; NULL when the key is absent, or its value is too
+ * long or not valid (url_decode), so a bad value is never used cut short. */
+const char *qs_get(const char *qs, const char *key, char *out, size_t n) {
+    if (n) out[0] = 0;
+    const char *p = qs_find(qs, key);
     if (!p) return NULL;
-    p += strlen(pat);
     const char *e = strchr(p, '&');
     size_t len = e ? (size_t)(e - p) : strlen(p);
     char raw[1024];
-    if (len >= sizeof raw) len = sizeof raw - 1;
+    if (len >= sizeof raw) return NULL;                   /* too long: refused, not cut   */
     memcpy(raw, p, len); raw[len] = 0;
-    url_decode(raw, out, n);
-    return out;
+    return url_decode(raw, out, n) ? out : NULL;
 }

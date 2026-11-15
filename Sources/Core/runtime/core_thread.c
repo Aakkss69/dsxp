@@ -20,6 +20,7 @@
  * published snapshot (out). No lock is ever held across I/O.
  */
 #include "core_internal.h"
+#include "hid.h"             /* the DualSense through IOKit, shared with guard.c */
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/hid/IOHIDManager.h>
 #include <IOKit/hidsystem/IOHIDLib.h>
@@ -101,6 +102,10 @@ typedef struct {
     bool zombie;                /* a stop timed out: threads may still be alive */
     atomic_int want_suspend;    /* -1 none, 0 resume, 1 suspend (F21) */
     atomic_uint cmds_gen;       /* bumped on every catalog load (F17) */
+    atomic_uint save_failed;    /* config files whose background save failed (1 << f),
+                                   set on dsxp.io, taken by the core thread             */
+    unsigned save_retry;        /* core thread: files to save again ...                  */
+    double save_retry_at;       /*   ... once this time has come (SAVE_RETRY_SEC apart)  */
 
     /* factory calibration (report 0x05): read on dsxp.cal, handed to the core thread */
     dispatch_queue_t cal_q;
@@ -134,6 +139,20 @@ double now_sec(void) {
     return (double)clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) / 1e9;
 }
 
+/* Wait on `cv` (with `mx` held) until *flag is set or `secs` have passed. Relative waits
+ * on the monotonic clock, so a wall-clock step can neither cut the wait short nor
+ * stretch it (F13). Returns *flag. */
+static bool wait_flag(pthread_cond_t *cv, pthread_mutex_t *mx, const bool *flag, double secs) {
+    double deadline = now_sec() + secs;
+    while (!*flag) {
+        double left = deadline - now_sec();
+        if (left <= 0) break;
+        struct timespec rel = { (time_t)left, (long)((left - (double)(time_t)left) * 1e9) };
+        pthread_cond_timedwait_relative_np(cv, mx, &rel);
+    }
+    return *flag;
+}
+
 /* ---------------------------------------------------------------- sinks */
 
 static void sink_udp(void *ctx, const unsigned char *buf, size_t len) {
@@ -161,13 +180,21 @@ static void sink_out(void *ctx, const unsigned char *rep) {
     pthread_mutex_unlock(&R.w_lock);
 }
 
-typedef struct { char path[1100]; char *data; size_t len; } save_job_t;
+/* A background save that failed is tried again this long after (not at once: a full or
+ * read-only disk would otherwise fill the log). */
+#define SAVE_RETRY_SEC 10.0
+
+typedef struct { char path[1100]; char *data; size_t len; int file; } save_job_t;
 static void save_job_noop(void *arg) { (void)arg; }
 
 static void save_job_run(void *arg) {
     save_job_t *j = arg;
-    if (!file_write_atomic(j->path, j->data, j->len, 0644))
+    if (!file_write_atomic(j->path, j->data, j->len, 0644)) {
         dsxp_log("cannot write %s", j->path);
+        /* the store already counts this text as saved; tell the core thread, which
+         * forgets that and saves the file again (config_tick) */
+        if (j->file >= 0) atomic_fetch_or(&R.save_failed, 1u << j->file);
+    }
     free(j->data);
     free(j);
 }
@@ -189,6 +216,9 @@ static bool store_write(void *ctx, const char *path, const char *text, size_t le
     memcpy(j->data, text, len);
     j->len = len;
     snprintf(j->path, sizeof j->path, "%s", path);
+    j->file = -1;                                  /* which config file, to retry it    */
+    for (int f = 0; f < CF_COUNT; f++)
+        if (!strcmp(path, R.store.path[f])) j->file = f;
     dispatch_async_f(R.io, j, save_job_run);
     return true;
 }
@@ -229,13 +259,6 @@ static void *writer_main(void *arg) {
 }
 
 /* ------------------------------------------------------------------ HID */
-
-static bool transport(IOHIDDeviceRef dev, char *out, size_t n) {
-    out[0] = 0;
-    CFTypeRef tr = IOHIDDeviceGetProperty(dev, CFSTR(kIOHIDTransportKey));
-    if (!tr || CFGetTypeID(tr) != CFStringGetTypeID()) return false;
-    return CFStringGetCString((CFStringRef)tr, out, (CFIndex)n, kCFStringEncodingUTF8);
-}
 
 static void report_cb(void *ctx, IOReturn res, void *sender, IOHIDReportType type,
                       uint32_t reportID, uint8_t *report, CFIndex len) {
@@ -335,25 +358,40 @@ static void request_calibration(IOHIDDeviceRef dev) {
     dispatch_async_f(R.cal_q, j, cal_job_run);
 }
 
-static void device_cb(void *ctx, IOReturn res, void *sender, IOHIDDeviceRef dev) {
-    (void)ctx; (void)res; (void)sender;
-    char tb[64];
-    transport(dev, tb, sizeof tb);
-    if (strcmp(tb, "Bluetooth") != 0) {
-        dsxp_log("DualSense on %s - ignoring (USB works natively in X-Plane)", tb[0] ? tb : "?");
-        core_on_device(&R.core, false, true);
-        return;
-    }
-    if (R.bt_dev) {
-        dsxp_log("a second Bluetooth DualSense was ignored - only one is supported");
-        return;
-    }
+/* Start using `dev`, a Bluetooth DualSense: its reports, its output, its calibration. */
+static void adopt_bluetooth(IOHIDDeviceRef dev) {
     R.bt_dev = (IOHIDDeviceRef)CFRetain(dev);
     IOHIDDeviceRegisterInputReportCallback(dev, g_bt_buf, sizeof g_bt_buf, report_cb, NULL);
     set_writer_device(dev);
     core_on_device(&R.core, true, true);
     request_calibration(dev);
     dsxp_log("DualSense on Bluetooth - listening for report 0x%02X", BT_REPORT_ID);
+}
+
+static void device_cb(void *ctx, IOReturn res, void *sender, IOHIDDeviceRef dev) {
+    (void)ctx; (void)res; (void)sender;
+    char tb[64];
+    hid_transport(dev, tb, sizeof tb);
+    if (strcmp(tb, "Bluetooth") != 0) {
+        dsxp_log("DualSense on %s - ignoring (USB works natively in X-Plane)", tb[0] ? tb : "?");
+        core_on_device(&R.core, false, true);
+        return;
+    }
+    if (R.bt_dev) {
+        dsxp_log("a second Bluetooth DualSense waits - only one is used at a time");
+        return;
+    }
+    adopt_bluetooth(dev);
+}
+
+/* hid_each_device: the first Bluetooth DualSense that is not the one just removed. */
+static bool take_other_bluetooth(IOHIDDeviceRef dev, void *removed) {
+    char tb[64];
+    if (dev == (IOHIDDeviceRef)removed || !hid_transport(dev, tb, sizeof tb) || strcmp(tb, "Bluetooth"))
+        return true;                                 /* not it: keep looking           */
+    dsxp_log("using the other Bluetooth DualSense");
+    adopt_bluetooth(dev);
+    return false;                                    /* found: stop                    */
 }
 
 static void removal_cb(void *ctx, IOReturn res, void *sender, IOHIDDeviceRef dev) {
@@ -369,40 +407,33 @@ static void removal_cb(void *ctx, IOReturn res, void *sender, IOHIDDeviceRef dev
     atomic_fetch_add(&R.dev_gen, 1);             /* a calibration read still running is stale */
     core_on_device(&R.core, true, false);
     dsxp_log("DualSense removed");
+    /* a second Bluetooth DualSense waiting (device_cb): use it now. IOKit does not report
+     * a device it already reported, so without this it would sit unused until it
+     * reconnected. */
+    hid_each_device(R.mgr, take_other_bluetooth, dev);
+}
+
+/* hid_each_device: note each transport seen (arg: bool[2], Bluetooth then USB). */
+static bool note_transport(IOHIDDeviceRef dev, void *arg) {
+    bool *seen = arg;
+    char tb[64];
+    if (hid_transport(dev, tb, sizeof tb)) {
+        if (!strcmp(tb, "Bluetooth")) seen[0] = true;
+        else if (!strcmp(tb, "USB")) seen[1] = true;
+    }
+    return true;                                     /* every device                   */
 }
 
 static void rescan_transports(bool *bt, bool *usb) {
-    *bt = *usb = false;
-    if (!R.mgr) return;
-    CFSetRef devs = IOHIDManagerCopyDevices(R.mgr);
-    if (!devs) return;
-    CFIndex n = CFSetGetCount(devs);
-    const void **arr = malloc(sizeof(void *) * (size_t)(n ? n : 1));
-    if (arr) {
-        CFSetGetValues(devs, arr);
-        for (CFIndex i = 0; i < n; i++) {
-            char tb[64];
-            if (!transport((IOHIDDeviceRef)arr[i], tb, sizeof tb)) continue;
-            if (!strcmp(tb, "Bluetooth")) *bt = true;
-            else if (!strcmp(tb, "USB")) *usb = true;
-        }
-        free(arr);
-    }
-    CFRelease(devs);
+    bool seen[2] = { false, false };
+    hid_each_device(R.mgr, note_transport, seen);    /* nothing when R.mgr is NULL     */
+    *bt = seen[0];
+    *usb = seen[1];
 }
 
 static IOHIDManagerRef open_hid(CFRunLoopRef rl, int *result) {
-    IOHIDManagerRef mgr = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
+    IOHIDManagerRef mgr = hid_dualsense_manager();   /* platform/hid.c                */
     if (!mgr) { *result = -1; return NULL; }
-    int vid = DS_VID, pid = DS_PID;
-    CFMutableDictionaryRef m = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
-        &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-    CFNumberRef vn = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &vid);
-    CFNumberRef pn = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &pid);
-    CFDictionarySetValue(m, CFSTR(kIOHIDVendorIDKey),  vn);
-    CFDictionarySetValue(m, CFSTR(kIOHIDProductIDKey), pn);
-    IOHIDManagerSetDeviceMatching(mgr, m);
-    CFRelease(vn); CFRelease(pn); CFRelease(m);
 
     IOHIDManagerRegisterDeviceMatchingCallback(mgr, device_cb, NULL);
     IOHIDManagerRegisterDeviceRemovalCallback(mgr, removal_cb, NULL);
@@ -521,14 +552,7 @@ static void shutdown_core(void) {
     pthread_mutex_lock(&R.w_lock);
     R.w_stop = true;
     pthread_cond_broadcast(&R.w_cv);
-    double deadline = now_sec() + 0.3;
-    while (!R.w_done) {
-        double left = deadline - now_sec();
-        if (left <= 0) break;
-        struct timespec rel = { (time_t)left, (long)((left - (double)(time_t)left) * 1e9) };
-        pthread_cond_timedwait_relative_np(&R.w_cv, &R.w_lock, &rel);
-    }
-    bool writer_done = R.w_done;
+    bool writer_done = wait_flag(&R.w_cv, &R.w_lock, &R.w_done, 0.3);
     pthread_mutex_unlock(&R.w_lock);
     if (writer_done) pthread_join(R.out_th, NULL);
     else {
@@ -542,7 +566,7 @@ static void shutdown_core(void) {
     if (c->cfg_dirty_mask) {
         static config_t live;
         core_get_config(c, &live);
-        cfg_store_flush(&R.store, &live, c->cfg_dirty_mask, wall_now(), true);
+        cfg_store_flush(&R.store, &live, c->cfg_dirty_mask, wall_now(), true, NULL);
         c->cfg_dirty_mask = 0;
     }
     dsxp_log("stopped. %ld reports processed.", c->reports_total + c->reports_window);
@@ -576,8 +600,10 @@ static void publish_config(void) {
 /* bridge.conf changed while running: apply what needs more than a new value. */
 static void apply_bridge_runtime(core_t *c, const bridge_cfg_t *old, double now) {
     if (c->bridge.port != old->port) {
-        /* hand X-Plane back on the old port before talking to the new one */
+        /* hand X-Plane back on the old port before talking to the new one: every
+         * release repeat goes out now, while the address is still the old one */
         xp_disengage(c, now);
+        xp_release_now(c);
         telemetry_unsubscribe(c);
         sim_release(c, "X-Plane port changed");
         R.xp.sin_port = htons((uint16_t)c->bridge.port);
@@ -599,23 +625,39 @@ static void apply_bridge_runtime(core_t *c, const bridge_cfg_t *old, double now)
  * the mapper changed once save_delay has passed. */
 static void config_tick(core_t *c, double now) {
     static config_t live;
+    /* a background save that failed: forget its hash (or the retry would be skipped as
+     * "nothing changed") and save that file again, SAVE_RETRY_SEC apart */
+    unsigned failed = atomic_exchange(&R.save_failed, 0);
+    for (int f = 0; f < CF_COUNT; f++)
+        if (failed & (1u << f)) R.store.hash[f] = 0;
+    R.save_retry |= failed;
+    if (R.save_retry && now >= R.save_retry_at) {
+        core_mark_dirty(c, now, R.save_retry);
+        R.save_retry = 0;
+        R.save_retry_at = now + SAVE_RETRY_SEC;
+    }
     if (now - R.last_cfg_poll >= CONFIG_POLL_SEC) {
         R.last_cfg_poll = now;
         core_get_config(c, &live);
         bridge_cfg_t old = c->bridge;
+        unsigned gen = R.store.gen;
         unsigned ch = cfg_store_poll(&R.store, &live, c->cfg_dirty_mask, wall_now());
         if (ch) {
             core_apply_config(c, &live, ch, now);
             if (ch & CFB_BRIDGE) apply_bridge_runtime(c, &old, now);
-            publish_config();
         }
+        if (ch || R.store.gen != gen) publish_config();   /* warnings too (unreadable file) */
     }
     unsigned due = core_save_due(c, now);
     if (due) {
         core_get_config(c, &live);
-        unsigned ch = cfg_store_flush(&R.store, &live, due, wall_now(), false);
+        bridge_cfg_t old = c->bridge;
+        unsigned later = 0;
+        unsigned ch = cfg_store_flush(&R.store, &live, due, wall_now(), false, &later);
+        if (later) core_mark_dirty(c, now, later);   /* an edit still landing: save after it */
         if (ch) {                            /* an outside edit was merged in */
             core_apply_config(c, &live, ch, now);
+            if (ch & CFB_BRIDGE) apply_bridge_runtime(c, &old, now);
             publish_config();
         }
     }
@@ -690,6 +732,8 @@ static void *core_main(void *arg) {
     }
     set_writer_device(NULL);
     if (R.bt_dev) { CFRelease(R.bt_dev); R.bt_dev = NULL; }
+    atomic_fetch_add(&R.dev_gen, 1);             /* a calibration read still running belongs
+                                                    to this run: never taken by the next one */
 
     pthread_mutex_lock(&R.life);
     R.thread_done = true;
@@ -726,6 +770,14 @@ static void cmds_job_run(void *arg) {
     cmds_job_t *j = arg;
     load_commands_now(j->path);
     free(j);
+    /* the status the app reads on this event must already count the new list (publish()
+     * would only catch up on the next tick) */
+    pthread_rwlock_rdlock(&R.cmds_lock);
+    int n = R.ncmds;
+    pthread_rwlock_unlock(&R.cmds_lock);
+    pthread_mutex_lock(&R.snap_lock);
+    R.status.ncmds = n;
+    pthread_mutex_unlock(&R.snap_lock);
     if (R.on_event) R.on_event(R.event_ctx, DSXP_EV_COMMANDS_LOADED);
 }
 
@@ -792,6 +844,9 @@ int dsxp_start(const dsxp_config_t *cfg) {
     R.last_gate = 0;
     atomic_store(&R.access, (int)DSXP_ACCESS_UNKNOWN);
     memset(&R.status, 0, sizeof R.status);
+    R.save_retry = 0;                       /* nothing left over from an earlier run   */
+    R.save_retry_at = 0;
+    atomic_store(&R.save_failed, 0);
     snprintf(R.data_dir, sizeof R.data_dir, "%s", cfg->data_dir);
     snprintf(R.log_dir, sizeof R.log_dir, "%s", cfg->log_dir);
     R.on_event = cfg->on_event; R.event_ctx = cfg->event_ctx;
@@ -892,26 +947,22 @@ bool dsxp_stop(double timeout_sec) {
     double secs = isfinite(timeout_sec) ? timeout_sec : 1.0;
     if (secs < 0.1) secs = 0.1;
     if (secs > 10.0) secs = 10.0;
-    double deadline = now_sec() + secs;
-    while (!R.thread_done) {
-        double left = deadline - now_sec();
-        if (left <= 0) break;
-        struct timespec rel = { (time_t)left, (long)((left - (double)(time_t)left) * 1e9) };
-        pthread_cond_timedwait_relative_np(&R.life_cv, &R.life, &rel);
-    }
-    bool done = R.thread_done;
-    R.running = false;
-    if (!done) R.zombie = true;
-    pthread_mutex_unlock(&R.life);
-
+    bool done = wait_flag(&R.life_cv, &R.life, &R.thread_done, secs);
+    /* Clean up before letting go of R.life: a dsxp_start on another thread waits for the
+     * lock, so it can never have its log, run loop or socket undone by this stop. (The
+     * core thread has already let go of R.life when it set thread_done, so the join does
+     * not wait on this lock.) */
     if (done) {
         pthread_join(R.core_th, NULL);
         if (R.rl) { CFRelease(R.rl); R.rl = NULL; }
         if (R.sock >= 0) { close(R.sock); R.sock = -1; }
     } else {
+        R.zombie = true;
         dsxp_log("core thread did not stop within %.1f s", secs);
     }
     log_shutdown();
+    R.running = false;                              /* only now may a start begin       */
+    pthread_mutex_unlock(&R.life);
     return done && !R.zombie;
 }
 
@@ -951,7 +1002,9 @@ static bool runtime_submit(void *ctx, const cmd_t *cmd) {
 void dsxp_set_suspended(bool suspended) {
     /* an atomic, not the command ring: a full ring must never lose a resume (F21) */
     atomic_store(&R.want_suspend, suspended ? 1 : 0);
-    if (R.rl) CFRunLoopWakeUp(R.rl);
+    pthread_mutex_lock(&R.life);                    /* R.rl is released by dsxp_stop    */
+    if (R.running && R.rl) CFRunLoopWakeUp(R.rl);
+    pthread_mutex_unlock(&R.life);
 }
 
 dsxp_access_t dsxp_input_access(bool request) {
@@ -1001,9 +1054,12 @@ static void runtime_app_info(void *ctx, jbuf_t *j) {
               st.input_live ? "true" : "false", st.hid_open_result, st.report_hz,
               st.suspended ? "true" : "false");
     jb_str(j, R.data_dir);
-    static conf_warns_t w[CF_COUNT];
+    /* this caller's own copy: dsxp_api may run on several threads at once (20 KB, so on
+     * the heap, not the stack) */
+    conf_warns_t *w = calloc(CF_COUNT, sizeof *w);
+    if (!w) { jb_printf(j, ",\"gen\":0,\"reloaded\":\"\",\"warnings\":[],\"dropped\":0}}"); return; }
     pthread_mutex_lock(&R.snap_lock);
-    memcpy(w, R.pub_warns, sizeof w);
+    memcpy(w, R.pub_warns, CF_COUNT * sizeof *w);
     unsigned gen = R.pub_gen;
     int last = R.pub_last_reload;
     pthread_mutex_unlock(&R.snap_lock);
@@ -1024,6 +1080,7 @@ static void runtime_app_info(void *ctx, jbuf_t *j) {
         }
     }
     jb_printf(j, "],\"dropped\":%d}}", dropped);
+    free(w);
 }
 
 void dsxp_api(const char *method, const char *path, const char *query, dsxp_response_t *out) {

@@ -4,47 +4,64 @@
  * spaces, then <text>. That file is what makes the mapper searchable in plain
  * English. The file belongs to X-Plane and is read from the user's install at
  * runtime; it is never bundled. Pure.
+ *
+ * Memory: the catalog is one block holding the records (two pointers each) followed by
+ * every path and description packed end to end, sized exactly in a first pass. X-Plane
+ * 12's 3,159 commands take about 230 KB this way; fixed 512-byte records for the most
+ * there could be (MAX_CMDS) took 4 MB for the life of the app.
  */
 #include "core_internal.h"
 #include <stdlib.h>
 #include <string.h>
 
+/* One line of Commands.txt, split: the path and the description (pointers into `line`).
+ * False for a line that holds no command: empty, an embedded NUL, or a path too long to
+ * be bound (CMD_PATH_MAX; the longest in X-Plane 12.4 is 50). */
+static bool split_line(const char *line, size_t ll, const char **path, size_t *plen,
+                       const char **desc, size_t *dlen) {
+    if (ll && line[ll - 1] == '\r') ll--;                /* CRLF line ends            */
+    if (ll == 0 || memchr(line, 0, ll)) return false;
+    /* Command paths never contain spaces, so the path ends at the first space or tab.
+     * (Most lines use two or more spaces, but a few - e.g. Commands.txt lines 1672 and
+     * 1847 in X-Plane 12.4 - use only one.) */
+    size_t p = 0;
+    while (p < ll && line[p] != ' ' && line[p] != '\t') p++;
+    if (p == 0 || p >= CMD_PATH_MAX) return false;
+    size_t d = p;
+    while (d < ll && (line[d] == ' ' || line[d] == '\t')) d++;   /* the gap           */
+    *path = line; *plen = p;
+    *desc = line + d; *dlen = ll - d;
+    return true;
+}
+
 int commands_parse(const char *text, size_t len, xcmd_t **out) {
     *out = NULL;
     if (!text || !len) return 0;
-    xcmd_t *cmds = calloc(MAX_CMDS, sizeof(xcmd_t));
+    /* pass 1: how many commands, and how many bytes their strings need (with NULs) */
+    size_t n = 0, bytes = 0, pos = 0, start, ll, plen, dlen;
+    const char *path, *desc;
+    while (n < MAX_CMDS && text_next_line(text, len, &pos, &start, &ll))
+        if (split_line(text + start, ll, &path, &plen, &desc, &dlen)) {
+            n++;
+            bytes += plen + 1 + dlen + 1;
+        }
+    if (n == 0) return 0;
+    /* pass 2: one block, the records first and the strings after them */
+    xcmd_t *cmds = malloc(n * sizeof *cmds + bytes);
     if (!cmds) return 0;
-    int n = 0;
-    size_t i = 0;
-    while (i < len && n < MAX_CMDS) {
-        size_t start = i;
-        while (i < len && text[i] != '\n' && text[i] != '\r') i++;
-        size_t ll = i - start;
-        while (i < len && (text[i] == '\n' || text[i] == '\r')) i++;
-        if (ll == 0) continue;
-        const char *line = text + start;
-
-        /* Command paths never contain spaces, so the path ends at the first space or
-         * tab. (Most lines use two or more spaces, but a few - e.g. Commands.txt
-         * lines 1672 and 1847 in X-Plane 12.4 - use only one.) */
-        size_t plen = ll;
-        for (size_t k = 0; k < ll; k++)
-            if (line[k] == ' ' || line[k] == '\t') { plen = k; break; }
-        if (plen == 0) continue;
-        if (plen >= CMD_PATH_MAX) plen = CMD_PATH_MAX - 1;
-        memcpy(cmds[n].path, line, plen);
-        cmds[n].path[plen] = 0;
-        if (memchr(cmds[n].path, 0, plen)) continue;   /* embedded NUL */
-
-        size_t d = plen;
-        while (d < ll && (line[d] == ' ' || line[d] == '\t')) d++;
-        size_t dlen = ll - d;
-        if (dlen >= CMD_DESC_MAX) dlen = CMD_DESC_MAX - 1;
-        memcpy(cmds[n].desc, line + d, dlen);
-        cmds[n].desc[dlen] = 0;
-        n++;
+    char *s = (char *)(cmds + n);                        /* where the strings go       */
+    size_t k = 0;
+    pos = 0;
+    while (k < n && text_next_line(text, len, &pos, &start, &ll)) {
+        if (!split_line(text + start, ll, &path, &plen, &desc, &dlen)) continue;
+        memcpy(s, path, plen); s[plen] = 0;
+        cmds[k].path = s;
+        s += plen + 1;
+        memcpy(s, desc, dlen); s[dlen] = 0;
+        cmds[k].desc = s;
+        s += dlen + 1;
+        k++;
     }
-    if (n == 0) { free(cmds); return 0; }
-    *out = cmds;
-    return n;
+    *out = cmds;                                         /* one free() releases it all */
+    return (int)k;
 }

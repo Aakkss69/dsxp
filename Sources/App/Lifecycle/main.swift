@@ -11,10 +11,19 @@ if let i = arguments.firstIndex(of: "--dsxp-guard"), i + 3 < arguments.count,
     exit(dsxp_guard_main(pipeFD, sockFD, port))
 }
 
-// One bridge at a time. A second launch asks the running one to show its mapper.
-guard SingleInstance.acquire() else {
-    SingleInstance.signalRunningInstance()
-    exit(0)
+// One bridge at a time. A second launch asks the running app to show its mapper. When the
+// lock is held but no other copy of the app runs, it is an instance still quitting (wait a
+// moment) or dsxp-cli (say so rather than vanishing).
+if !SingleInstance.acquire() {
+    if SingleInstance.otherAppIsRunning() {
+        SingleInstance.signalRunningInstance()
+        exit(0)
+    }
+    if !SingleInstance.acquire(waitingUpTo: 2.0) {
+        _ = NSApplication.shared
+        SingleInstance.reportBusy()
+        exit(1)
+    }
 }
 
 let delegate = AppDelegate()

@@ -152,8 +152,15 @@ void test_json(void) {
     CHECK(json_valid(j.b, j.len));
     jb_free(&j);
 
-    url_decode("%41%zz+b%4", out, sizeof out);
+    CHECK(url_decode("%41%zz+b%4", out, sizeof out));
     CHECK(!strcmp(out, "A%zz b%4"));
+    /* an encoded NUL, or a value that does not fit, is refused (it used to be cut short:
+     * "sim%00junk" read as "sim") */
+    CHECK(!url_decode("sim%00junk", out, sizeof out) && out[0] == 0);
+    char small[4];
+    CHECK(!url_decode("abcdef", small, sizeof small) && small[0] == 0);
+    CHECK(qs_get("cmd=sim%00junk", "cmd", out, sizeof out) == NULL);
+    CHECK(qs_has("cmd=sim%00junk", "cmd") && !qs_has("xcmd=1", "cmd"));
     CHECK(!strcmp(qs_get("xinv=1&inv=0", "inv", out, sizeof out), "0"));
     CHECK(qs_get("xinv=1", "inv", out, sizeof out) == NULL);
     CHECK(!strcmp(qs_get("cmd=sim%2Fa%2Fb", "cmd", out, sizeof out), "sim/a/b"));

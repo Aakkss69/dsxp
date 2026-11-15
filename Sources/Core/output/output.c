@@ -15,7 +15,16 @@
  * Get the CRC wrong and the controller silently discards the packet.
  */
 #include "core_internal.h"
+#include <math.h>
 #include <string.h>
+
+/* A level (rumble strength, a trigger's force) as the byte the report carries: rounded,
+ * held to 0..255, and 0 for anything that is not a number. Shared by wind.c and rumble.c. */
+unsigned char clamp8(double v) {
+    if (!isfinite(v) || v < 0) return 0;
+    if (v > 255) return 255;
+    return (unsigned char)(v + 0.5);
+}
 
 #define COMMON       3
 #define OFF_VALID0   (COMMON + 0)

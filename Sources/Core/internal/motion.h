@@ -107,6 +107,13 @@ const char   *motion_cal_result_name(mcal_result_t r);
 #define MOTION_TICKS_PER_SEC 3000000.0  /* sensor clock: 0.33 us ticks (:1416)           */
 #define MOTION_BLEND_SEC     0.3        /* crossfade length when an axis changes source  */
 
+/* How far each gyro axis has moved over a stretch of samples: the "is it still?" test
+ * that bias learning, the set-down check and the calibration's FLAT step all use. */
+typedef struct {
+    double lo[3], hi[3];     /* each axis's lowest and highest reading in the stretch   */
+    int    n;                /* samples in it; 0 starts a new stretch with the next one */
+} motion_spread_t;
+
 /* Fusion state. motion_init() once; motion_reset() when the controller reconnects. */
 typedef struct {
     /* the filter */
@@ -115,6 +122,8 @@ typedef struct {
     uint32_t last_ts;         /* previous sample's sensor clock                        */
     double   t;               /* seconds of sensor time fused since the last reset     */
     double   up[3];           /* estimated "up" in the controller frame, unit length   */
+    double   settle_until;    /* faster accelerometer correction until this time (seeded) */
+    bool     awaiting_seed;   /* a sample was not fit to seed: wait, keeping the yaw     */
     /* level reference */
     double   neutral[3];      /* the attitude that reads as level: the calibration's
                                  (motion_set_level) or the one Recenter captured        */
@@ -124,13 +133,12 @@ typedef struct {
     double   bias[3];         /* deg/s subtracted from the gyro                         */
     bool     bias_learned;    /* at least one still window has been folded in            */
     double   win_start;       /* sensor time the current still window began              */
-    double   win_min[3], win_max[3], win_sum[3];   /* raw gyro extremes and sum in it     */
-    int      win_n;           /* samples in the window                                    */
+    motion_spread_t win;      /* raw gyro spread over the window (win.n: its samples)     */
+    double   win_sum[3];      /* raw gyro sum over it                                     */
     double   quiet_until;     /* learning paused until this sensor time (own vibration)  */
     /* set down: lying as still as on a table (centers the yaw) */
     double   rest_start;      /* sensor time the current still stretch began             */
-    double   rest_min[3], rest_max[3];   /* raw gyro extremes in it                       */
-    int      rest_n;          /* samples in it (0: none yet)                              */
+    motion_spread_t rest;     /* raw gyro spread over it (rest.n 0: none yet)             */
     bool     resting;         /* the stretch has lasted long enough: lying down           */
     /* results, refreshed by every motion_update() */
     double   bank_deg;        /* relative to neutral; right wing down is positive        */
@@ -146,10 +154,12 @@ typedef struct { bool active; double from, t0; } motion_blend_t;
 void   motion_init(motion_t *m);
 void   motion_reset(motion_t *m);
 void   motion_update(motion_t *m, const motion_sample_t *s, const motion_cfg_t *cfg, bool quiet);
-void   motion_recenter(motion_t *m);
+bool   motion_recenter(motion_t *m);   /* false: refused (no data, or not a level) */
 void   motion_set_level(motion_t *m, double bank_deg, double pitch_deg);
 void   motion_attitude(const double up[3], double *bank_deg, double *pitch_deg);
 void   motion_blend_start(motion_blend_t *b, double from, double now);
+double motion_spread_add(motion_spread_t *s, const double v[3]);  /* largest axis range */
+double motion_axis_output(double angle_deg, double full_deg, double deadzone_deg, bool invert);
 double motion_blend(motion_blend_t *b, double target, double now);
 
 /* True when motion, not the sticks, flies this axis (MOTION_ROLL / PITCH / YAW). Never
@@ -186,7 +196,8 @@ typedef struct {
     char   warning[112];         /* worth knowing until the end (gravity off 1 g), or ""      */
     /* working values (not shown) */
     double last_t;               /* fusion time of the previous sample, for time steps       */
-    double sum_g[3], min_g[3], max_g[3], sum_a[3];  /* FLAT: the still streak's gyro, accel */
+    motion_spread_t spread;      /* FLAT: the still streak's gyro spread                     */
+    double sum_g[3], sum_a[3];   /* FLAT: the still streak's gyro and accel sums             */
     double sum_up[3];            /* LEVEL: the steady streak's "up" vectors                  */
     double rest_up[3];           /* LEVEL: "up" as it lay in FLAT, to notice it being lifted */
     double tremor;               /* LEVEL: running average of the rotation rate, deg/s       */

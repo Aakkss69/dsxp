@@ -246,7 +246,8 @@ static void api_bind(const api_env_t *env, const char *qs, dsxp_response_t *out)
     }
     get_long(qs, "repeat", &rep);
     char cmdbuf[1024];
-    qs_get(qs, "cmd", cmdbuf, sizeof cmdbuf);
+    bool got = qs_get(qs, "cmd", cmdbuf, sizeof cmdbuf) != NULL;
+    if (!got && qs_has(qs, "cmd")) { respond(out, 400, CT_TEXT, "bad command"); return; }   /* %00, too long */
     if (cmdbuf[0] && !cmd_valid(cmdbuf)) { respond(out, 400, CT_TEXT, "bad command"); return; }
     cmd_t c = { .kind = CMD_BIND, .key = (int)slot };
     snprintf(c.u.bind.cmd, sizeof c.u.bind.cmd, "%s", cmdbuf);   /* cmd_valid: < 256 chars */
@@ -401,7 +402,8 @@ static void api_motion(const api_env_t *env, const dsxp_snap_t *snap, const char
     submit(env, &c, out);
 }
 
-/* The calibration routine: start it (again), or close it. */
+/* The calibration routine: start it (again), close it, or abort it (the mapper's window
+ * closed while it ran: core_internal.h CALIB_ACTION_ABORT). */
 static void api_calibrate(const api_env_t *env, const dsxp_snap_t *snap, const char *qs,
                           dsxp_response_t *out) {
     char action[16];
@@ -414,7 +416,8 @@ static void api_calibrate(const api_env_t *env, const dsxp_snap_t *snap, const c
             return;
         }
         c.key = CALIB_ACTION_CLOSE;
-    } else { respond(out, 400, CT_TEXT, "bad action"); return; }
+    } else if (!strcmp(action, "abort")) c.key = CALIB_ACTION_ABORT;
+    else { respond(out, 400, CT_TEXT, "bad action"); return; }
     submit(env, &c, out);
 }
 

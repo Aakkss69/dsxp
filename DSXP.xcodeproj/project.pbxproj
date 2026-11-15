@@ -36,6 +36,7 @@
 		70F124BBA31FFFEE94D0D932 /* ConfigFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 290C411DEEE9F484A0A2CB7A /* ConfigFiles.swift */; };
 		7210E72C7C669D1E78BA5EB1 /* runner.c in Sources */ = {isa = PBXBuildFile; fileRef = 60FE23D149AA8EF847C89233 /* runner.c */; };
 		7A6F62E9F9D5BBB68F0FDE89 /* CoreBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27DA0FD85535B3669D2EB47A /* CoreBridge.swift */; };
+		7F88AE6175053D4380267E94 /* hid.c in Sources */ = {isa = PBXBuildFile; fileRef = 511EE86997E84C1FF339DAA9 /* hid.c */; };
 		8278BEB4C8C89F4BAFA8B112 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72A8EDAE4788923AED068B9E /* CoreFoundation.framework */; };
 		84E1DEBB602FE4F198C83F21 /* guard.c in Sources */ = {isa = PBXBuildFile; fileRef = 3B0F49CEF2F3168715A24DE1 /* guard.c */; };
 		862FF71419FC8D404220842B /* Paths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC2DFB993B9DD616AA69897 /* Paths.swift */; };
@@ -43,6 +44,7 @@
 		88D1AC9DCE951EB3048E27A2 /* conf.c in Sources */ = {isa = PBXBuildFile; fileRef = CE2F512C1732C71A3DF350E3 /* conf.c */; };
 		8ABDCAC5C82E3C786337F586 /* output.c in Sources */ = {isa = PBXBuildFile; fileRef = 12952A221DF21A79D2902963 /* output.c */; };
 		8F340CE59EED45B21A41315F /* CoreTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 71DC65F09F3E439E29FE56E2 /* CoreTests.m */; };
+		94E01EE120440CAD2DF4066C /* hid.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 18FB27EAA0EB4B9A4C565F95 /* hid.h */; };
 		95AEFA60AF578142022B61ED /* test_core.c in Sources */ = {isa = PBXBuildFile; fileRef = 6C396E705CF6F207B918F8BC /* test_core.c */; };
 		98C09553DA09C7011F5C25DA /* xp_packets.c in Sources */ = {isa = PBXBuildFile; fileRef = 90C28191C0E3D3396C80F4DD /* xp_packets.c */; };
 		9D85F7325217B012E7E04E4C /* test_input.c in Sources */ = {isa = PBXBuildFile; fileRef = BC92844BB3C5698354333F21 /* test_input.c */; };
@@ -117,6 +119,7 @@
 				9E8B0F17944C3016F078D30F /* config.h in CopyFiles */,
 				B34359F0202EF122FAD64CE0 /* core_internal.h in CopyFiles */,
 				B9EB06A45C0F4A4DB96B5688 /* dsxp_core.h in CopyFiles */,
+				94E01EE120440CAD2DF4066C /* hid.h in CopyFiles */,
 				0DD3E8453890E75C1FA34720 /* module.modulemap in CopyFiles */,
 				34B6724830107E04110A93C3 /* motion.h in CopyFiles */,
 				B77F12A571AFDE418A897407 /* motion_pitch.h in CopyFiles */,
@@ -135,6 +138,7 @@
 		12952A221DF21A79D2902963 /* output.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = output.c; sourceTree = "<group>"; };
 		1316E52EC301AC97F4F0462A /* DSXP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DSXP.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		17B4466C1096BD01498E6992 /* motion_pitch.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion_pitch.c; sourceTree = "<group>"; };
+		18FB27EAA0EB4B9A4C565F95 /* hid.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hid.h; sourceTree = "<group>"; };
 		1925CF2FB0EB58185A5FA4C1 /* motion_roll.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion_roll.c; sourceTree = "<group>"; };
 		1C78598F8AA8AC3911A6FDDA /* json.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = json.c; sourceTree = "<group>"; };
 		1EEFF885B880EF0AE9897CDB /* SchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemeHandler.swift; sourceTree = "<group>"; };
@@ -153,6 +157,7 @@
 		4AF1934402A0453BC90D4EB7 /* StatusMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenuController.swift; sourceTree = "<group>"; };
 		4CC809A1D42A2B91FD1ECB3F /* motion.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = motion.c; sourceTree = "<group>"; };
 		4EC385A39844B9E08FD8D2D9 /* motion_yaw.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = motion_yaw.h; sourceTree = "<group>"; };
+		511EE86997E84C1FF339DAA9 /* hid.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = hid.c; sourceTree = "<group>"; };
 		515963606003856BE268ED18 /* motion_pitch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = motion_pitch.h; sourceTree = "<group>"; };
 		5410869D92A5612DBF70B2F8 /* core_thread.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = core_thread.c; sourceTree = "<group>"; };
 		54A50BD476384BB513E06473 /* api.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = api.c; sourceTree = "<group>"; };
@@ -421,6 +426,7 @@
 				418DB24306AB6E921DDC9364 /* fileio.c */,
 				E862B95012569681D49E0684 /* gate.c */,
 				3B0F49CEF2F3168715A24DE1 /* guard.c */,
+				511EE86997E84C1FF339DAA9 /* hid.c */,
 				9D24135E2D0614620A84B6AB /* log.c */,
 			);
 			path = platform;
@@ -431,6 +437,7 @@
 			children = (
 				5D38BD40D0DB50B2C60BE855 /* config.h */,
 				237F0DCEA8ECC2130CBD1956 /* core_internal.h */,
+				18FB27EAA0EB4B9A4C565F95 /* hid.h */,
 				515963606003856BE268ED18 /* motion_pitch.h */,
 				462C6A6C02AD1FA3BB2EC6AC /* motion_roll.h */,
 				4EC385A39844B9E08FD8D2D9 /* motion_yaw.h */,
@@ -714,6 +721,7 @@
 				9E4FA9FEDED4ADC05D0879AB /* fileio.c in Sources */,
 				4D81372753BAC05286274FAB /* gate.c in Sources */,
 				84E1DEBB602FE4F198C83F21 /* guard.c in Sources */,
+				7F88AE6175053D4380267E94 /* hid.c in Sources */,
 				B35143899A29D54DB430BE7D /* json.c in Sources */,
 				1C9FD23FF51A6902607D0C9A /* light.c in Sources */,
 				D9002C6F9F9AC5560BF2A085 /* log.c in Sources */,

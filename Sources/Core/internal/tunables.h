@@ -71,15 +71,21 @@ typedef struct {
  * Arrays are indexed by the X-Plane axis: MOTION_ROLL, MOTION_PITCH, MOTION_YAW. */
 enum { MOTION_ROLL = 0, MOTION_PITCH, MOTION_YAW, MOTION_AXES };
 /* Allowed full-deflection angles per axis, degrees (controls.conf ranges, the mapper's
- * sliders and the calibration all use these). Pitch stops at 60: past 70 deg the
- * controller is near vertical and bank can no longer be measured (motion.c). */
+ * sliders and the calibration all use these). Roll and pitch must stay inside what the
+ * fusion can read (motion.c's out-of-range cut-offs: pitch past 70 deg; bank past about
+ * 78 deg held flat, 70 deg at a 55 deg level pitch), so level + full deflection is kept
+ * within MOTION_ATTITUDE_LIMIT_DEG (settings.c motion_full_room). */
+#define MOTION_ATTITUDE_LIMIT_DEG 65  /* |level| + full stays this far: 5 deg inside the cut-offs */
 #define MOTION_ROLL_FULL_MIN   10
-#define MOTION_ROLL_FULL_MAX   90
+#define MOTION_ROLL_FULL_MAX   65
 #define MOTION_PITCH_FULL_MIN  10
 #define MOTION_PITCH_FULL_MAX  60
 #define MOTION_YAW_FULL_MIN     5
 #define MOTION_YAW_FULL_MAX    90
-#define MOTION_LEVEL_MAX_DEG   60   /* a calibrated level held further over than this is refused */
+/* A level (calibrated, Recenter, or controls.conf) banked or pitched further than this
+ * is refused: it would leave less than the smallest full-deflection angle (10 deg)
+ * before MOTION_ATTITUDE_LIMIT_DEG. */
+#define MOTION_LEVEL_MAX_DEG   (MOTION_ATTITUDE_LIMIT_DEG - MOTION_PITCH_FULL_MIN)   /* 55 */
 #define MOTION_BIAS_MAX_DPS    10   /* a resting gyro drift above this means a faulty sensor      */
 typedef struct {
     bool   enabled;                 /* motion control on                                      */
